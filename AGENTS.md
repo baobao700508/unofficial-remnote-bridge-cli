@@ -73,6 +73,10 @@ RemNote SDK
 - **禁止**：remnote-cli 依赖 remnote-skills 或 remnote-mcp
 - **允许**：接入层（remnote-skills、remnote-mcp）可同时依赖 remnote-cli
 
+### 2.2 SDK 文档时效性（强约束）
+
+`docs/RemNote API Reference/INDEX.md` 头部记录了爬取时间。若距上次爬取超过 **7 天**，必须先执行 `./scripts/crawl-remnote-docs.sh` 更新文档，再继续开发任务。
+
 ---
 
 ## 3. 经验
@@ -96,7 +100,7 @@ remnote-bridge-cli/
 ├── remnote-mcp/              # MCP Server - Python/FastMCP（待开发）
 ├── scripts/                  # 脚本工具
 ├── docs/                     # 项目文档
-│   └── RemNote API Reference/  # RemNote API 参考
+│   └── RemNote API Reference/  # RemNote Plugin SDK 文档（151 页）
 ├── reference_repository/     # 参考项目（只读，已 gitignore）
 ├── AGENTS.md                 # 本文件（Agent 导航地图）
 ├── .gitignore
@@ -107,7 +111,12 @@ remnote-bridge-cli/
     └── skills/
 ```
 
-### 4.2 Agent 信息获取指南（重要）
+### 4.2 RemNote Plugin SDK 文档
+
+> 完整索引已通过符号链接自动加载：`.claude/rules/REMNOTE-SDK-INDEX.md` → `docs/RemNote API Reference/INDEX.md`
+> 文档位于 `docs/RemNote API Reference/`，共 151 页，用 `Glob`/`Grep` 按需查找。更新命令：`./scripts/crawl-remnote-docs.sh`
+
+### 4.3 Agent 信息获取指南（重要）
 
 > **核心原则**：本文档只记录**长期不变的架构惯例和约束**。具体模块清单、文件路径、函数签名等**易变信息**，Agent 必须通过工具实时获取，**禁止**依赖文档中的静态列表或凭记忆猜测。
 

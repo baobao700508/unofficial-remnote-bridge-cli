@@ -1,5 +1,5 @@
 <!-- source: https://plugins.remnote.com/CHANGELOG -->
-<!-- crawled: 20260302_163700 -->
+<!-- crawled: 20260302_170143 -->
 
 -   [](/)
 -   Changelog
