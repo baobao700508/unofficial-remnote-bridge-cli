@@ -8,7 +8,7 @@
 ## 1. 宏观信息
 
 - **项目是什么**：RemNote 自动化桥接工具集（remnote-bridge-cli），将 RemNote 知识库能力暴露给 AI Agent。
-- **核心架构**：四个子模块分层协作——remnote-plugin（桥接层）→ remnote-cli（命令层）→ remnote-skills / remnote-mcp（Agent 接入层）。
+- **核心架构**：三层协作——remnote-plugin（桥接层）→ remnote-cli（命令层）→ remnote-skills / remnote-mcp（接入层）。
 - **参考项目**：`reference_repository/`（[remnote-mcp-bridge](https://github.com/robert7/remnote-mcp-bridge) 克隆，已 gitignore）。
 - **数据流向**：
 
@@ -26,12 +26,12 @@ remnote-skills (Markdown Skills)  +  remnote-mcp (FastMCP Server)
 
 - **技术栈总览**：
 
-| 子模块 | 语言/框架 | 状态 |
+| 层 | 语言/框架 | 状态 |
 |:--|:--|:--|
 | remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 待开发 |
-| remnote-cli | 待定 | 待讨论 |
+| remnote-cli | Node.js / TypeScript / Commander.js | 待开发 |
 | remnote-skills | Markdown (SKILL.md) | 待开发 |
-| remnote-mcp | Python / FastMCP | 待开发 |
+| remnote-mcp | Node.js / TypeScript / FastMCP | 待开发 |
 
 - **我应该从哪里开始看**：
   - 约束红线：见本文件第 2 节
@@ -44,11 +44,11 @@ remnote-skills (Markdown Skills)  +  remnote-mcp (FastMCP Server)
 
 > **红线** = 一票否决，违反即退回；**强约束** = 必须遵守，特殊情况需说明理由。
 
-### 2.1 模块边界（红线）
+### 2.1 层边界（红线）
 
 #### 2.1.1 职责划分
 
-| 模块 | 职责 | 禁止事项 |
+| 层 | 职责 | 禁止事项 |
 |:--|:--|:--|
 | remnote-plugin | 通过 RemNote SDK 与知识库交互，暴露 WebSocket API | 禁止包含 CLI 逻辑或 MCP 协议代码 |
 | remnote-cli | 封装 RemNote 操作为统一命令接口 | 禁止直接调用 RemNote SDK（必须通过 remnote-plugin） |
@@ -97,7 +97,7 @@ remnote-bridge-cli/
 ├── remnote-cli/              # 核心命令行工具（待开发）
 ├── remnote-plugin/           # RemNote 官方框架插件（待开发）
 ├── remnote-skills/           # Agent Skills - Markdown 格式（待开发）
-├── remnote-mcp/              # MCP Server - Python/FastMCP（待开发）
+├── remnote-mcp/              # MCP Server - Node.js/TypeScript/FastMCP（待开发）
 ├── scripts/                  # 脚本工具
 ├── docs/                     # 项目文档
 │   └── RemNote API Reference/  # RemNote Plugin SDK 文档（151 页）
@@ -133,6 +133,16 @@ remnote-bridge-cli/
 1. **开始任务前**：用 `codebase-retrieval` 搜索相关代码，了解现状
 2. **编辑文件前**：用 `codebase-retrieval` 查询涉及的所有符号和依赖
 3. **大范围修改 / 重构**：用 `codebase-retrieval` + `Glob`/`Grep` 确认完整影响范围
-4. **不确定当前有哪些模块**：用 `Glob` 扫描目录结构
+4. **不确定当前有哪些层**：用 `Glob` 扫描目录结构
 
-**禁止**：跳过搜索直接猜测代码结构、模块列表或实现方式。
+**禁止**：跳过搜索直接猜测代码结构、层列表或实现方式。
+
+### 4.4 命名约定
+
+本项目中 remnote-plugin、remnote-cli、remnote-skills、remnote-mcp 统一称为**"层"**，不称"模块"。因为它们是横向分割的架构分层，不是纵向分割的功能模块。
+
+| 称呼 | 对应目录 | 角色 |
+|:--|:--|:--|
+| 桥接层 | `remnote-plugin/` | 通过 RemNote SDK 与知识库交互 |
+| 命令层 | `remnote-cli/` | 封装操作为统一 CLI 命令 |
+| 接入层 | `remnote-skills/` + `remnote-mcp/` | 暴露给 AI Agent（Skills / MCP） |

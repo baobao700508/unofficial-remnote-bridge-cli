@@ -1,0 +1,4 @@
+node_modules/
+dist/
+PluginZip.zip
+schema.json

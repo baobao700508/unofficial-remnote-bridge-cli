@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "id": "remnote_bridge",
+  "name": "RemNote Bridge",
+  "author": "",
+  "repoUrl": "",
+  "version": {
+    "major": 0,
+    "minor": 1,
+    "patch": 0
+  },
+  "theme": [],
+  "enableOnMobile": false,
+  "description": "RemNote Bridge 桥接插件：通过 WebSocket 将 RemNote API 暴露给外部 CLI/MCP 调用",
+  "requestNative": false,
+  "requiredScopes": [
+    {
+      "type": "All",
+      "level": "ReadCreateModifyDelete"
+    }
+  ]
+}
