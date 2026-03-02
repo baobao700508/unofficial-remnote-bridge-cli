@@ -1,0 +1,65 @@
+<!-- source: https://plugins.remnote.com/api/interfaces/PluginDropdownSetting -->
+<!-- crawled: 20260302_163700 -->
+
+-   [](/)
+-   API Reference
+-   All Internals
+-   Interfaces
+-   PluginDropdownSetting
+
+On this page
+
+# Interface: PluginDropdownSetting
+
+## Hierarchy[​](#hierarchy "Direct link to heading")
+
+-   [`PluginSettingBase`](/api/interfaces/PluginSettingBase)<`string`\>
+    
+    ↳ **`PluginDropdownSetting`**
+    
+
+## Properties[​](#properties "Direct link to heading")
+
+### defaultValue[​](#defaultvalue "Direct link to heading")
+
+• `Optional` **defaultValue**: `string`
+
+#### Inherited from[​](#inherited-from "Direct link to heading")
+
+[PluginSettingBase](/api/interfaces/PluginSettingBase).[defaultValue](/api/interfaces/PluginSettingBase#defaultvalue)
+
+* * *
+
+### description[​](#description "Direct link to heading")
+
+• `Optional` **description**: `string`
+
+#### Inherited from[​](#inherited-from-1 "Direct link to heading")
+
+[PluginSettingBase](/api/interfaces/PluginSettingBase).[description](/api/interfaces/PluginSettingBase#description)
+
+* * *
+
+### id[​](#id "Direct link to heading")
+
+• **id**: `string`
+
+#### Inherited from[​](#inherited-from-2 "Direct link to heading")
+
+[PluginSettingBase](/api/interfaces/PluginSettingBase).[id](/api/interfaces/PluginSettingBase#id)
+
+* * *
+
+### options[​](#options "Direct link to heading")
+
+• **options**: `SettingsDropdownOption`\[\]
+
+* * *
+
+### title[​](#title "Direct link to heading")
+
+• **title**: `string`
+
+#### Inherited from[​](#inherited-from-3 "Direct link to heading")
+
+[PluginSettingBase](/api/interfaces/PluginSettingBase).[title](/api/interfaces/PluginSettingBase#title)

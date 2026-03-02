@@ -8,18 +8,18 @@
 ## 1. 宏观信息
 
 - **项目是什么**：RemNote 自动化桥接工具集（remnote-bridge-cli），将 RemNote 知识库能力暴露给 AI Agent。
-- **核心架构**：四个子模块分层协作——REMNOTE-PLUGIN（桥接层）→ CLI（命令层）→ PROJECT-SKILLS / MCP-PROJECT（Agent 接入层）。
+- **核心架构**：四个子模块分层协作——remnote-plugin（桥接层）→ remnote-cli（命令层）→ remnote-skills / remnote-mcp（Agent 接入层）。
 - **参考项目**：`reference_repository/`（[remnote-mcp-bridge](https://github.com/robert7/remnote-mcp-bridge) 克隆，已 gitignore）。
 - **数据流向**：
 
 ```text
 AI Assistants (Claude Code / OpenClaw / etc.)
     ↕
-PROJECT-SKILLS (Markdown Skills)  +  MCP-PROJECT (FastMCP Server)
+remnote-skills (Markdown Skills)  +  remnote-mcp (FastMCP Server)
     ↕                                    ↕
-                    CLI (核心命令层)
+                  remnote-cli (核心命令层)
                       ↕
-              REMNOTE-PLUGIN (RemNote 插件)
+              remnote-plugin (RemNote 插件)
                       ↕
                   RemNote SDK
 ```
@@ -28,10 +28,10 @@ PROJECT-SKILLS (Markdown Skills)  +  MCP-PROJECT (FastMCP Server)
 
 | 子模块 | 语言/框架 | 状态 |
 |:--|:--|:--|
-| REMNOTE-PLUGIN | Node.js / TypeScript / RemNote Plugin SDK | 待开发 |
-| CLI | 待定 | 待讨论 |
-| PROJECT-SKILLS | Markdown (SKILL.md) | 待开发 |
-| MCP-PROJECT | Python / FastMCP | 待开发 |
+| remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 待开发 |
+| remnote-cli | 待定 | 待讨论 |
+| remnote-skills | Markdown (SKILL.md) | 待开发 |
+| remnote-mcp | Python / FastMCP | 待开发 |
 
 - **我应该从哪里开始看**：
   - 约束红线：见本文件第 2 节
@@ -50,28 +50,28 @@ PROJECT-SKILLS (Markdown Skills)  +  MCP-PROJECT (FastMCP Server)
 
 | 模块 | 职责 | 禁止事项 |
 |:--|:--|:--|
-| REMNOTE-PLUGIN | 通过 RemNote SDK 与知识库交互，暴露 WebSocket API | 禁止包含 CLI 逻辑或 MCP 协议代码 |
-| CLI | 封装 RemNote 操作为统一命令接口 | 禁止直接调用 RemNote SDK（必须通过 REMNOTE-PLUGIN） |
-| PROJECT-SKILLS | 定义 Agent 可调用的技能（Markdown） | 禁止包含运行时代码逻辑 |
-| MCP-PROJECT | 通过 MCP 协议暴露 RemNote 操作为标准工具 | 禁止绕过 CLI 直连 REMNOTE-PLUGIN |
+| remnote-plugin | 通过 RemNote SDK 与知识库交互，暴露 WebSocket API | 禁止包含 CLI 逻辑或 MCP 协议代码 |
+| remnote-cli | 封装 RemNote 操作为统一命令接口 | 禁止直接调用 RemNote SDK（必须通过 remnote-plugin） |
+| remnote-skills | 定义 Agent 可调用的技能（Markdown） | 禁止包含运行时代码逻辑 |
+| remnote-mcp | 通过 MCP 协议暴露 RemNote 操作为标准工具 | 禁止绕过 remnote-cli 直连 remnote-plugin |
 
 #### 2.1.2 依赖方向
 
 依赖方向：上层 → 下层，**禁止反向**。
 
 ```
-PROJECT-SKILLS / MCP-PROJECT (接入层)
+remnote-skills / remnote-mcp (接入层)
     ↓
-CLI (命令层)
+remnote-cli (命令层)
     ↓
-REMNOTE-PLUGIN (桥接层)
+remnote-plugin (桥接层)
     ↓
 RemNote SDK
 ```
 
-- **禁止**：REMNOTE-PLUGIN 依赖 CLI 或接入层
-- **禁止**：CLI 依赖 PROJECT-SKILLS 或 MCP-PROJECT
-- **允许**：接入层（PROJECT-SKILLS、MCP-PROJECT）可同时依赖 CLI
+- **禁止**：remnote-plugin 依赖 remnote-cli 或接入层
+- **禁止**：remnote-cli 依赖 remnote-skills 或 remnote-mcp
+- **允许**：接入层（remnote-skills、remnote-mcp）可同时依赖 remnote-cli
 
 ---
 
@@ -90,10 +90,13 @@ RemNote SDK
 
 ```
 remnote-bridge-cli/
-├── CLI/                      # 核心命令行工具（待开发）
-├── REMNOTE-PLUGIN/           # RemNote 官方框架插件（待开发）
-├── PROJECT-SKILLS/           # Agent Skills - Markdown 格式（待开发）
-├── MCP-PROJECT/              # MCP Server - Python/FastMCP（待开发）
+├── remnote-cli/              # 核心命令行工具（待开发）
+├── remnote-plugin/           # RemNote 官方框架插件（待开发）
+├── remnote-skills/           # Agent Skills - Markdown 格式（待开发）
+├── remnote-mcp/              # MCP Server - Python/FastMCP（待开发）
+├── scripts/                  # 脚本工具
+├── docs/                     # 项目文档
+│   └── RemNote API Reference/  # RemNote API 参考
 ├── reference_repository/     # 参考项目（只读，已 gitignore）
 ├── AGENTS.md                 # 本文件（Agent 导航地图）
 ├── .gitignore
@@ -121,7 +124,6 @@ remnote-bridge-cli/
 1. **开始任务前**：用 `codebase-retrieval` 搜索相关代码，了解现状
 2. **编辑文件前**：用 `codebase-retrieval` 查询涉及的所有符号和依赖
 3. **大范围修改 / 重构**：用 `codebase-retrieval` + `Glob`/`Grep` 确认完整影响范围
-4. **查询数据库结构**：先读 `supabase/schema.sql`，需实时数据时用 `supabase-admin` MCP
-5. **不确定当前有哪些模块 / Section / Domain**：用 `Glob` 扫描目录结构
+4. **不确定当前有哪些模块**：用 `Glob` 扫描目录结构
 
 **禁止**：跳过搜索直接猜测代码结构、模块列表或实现方式。
