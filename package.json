@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "remnote-bridge",
+  "version": "0.1.0",
+  "description": "RemNote 自动化桥接工具集（monorepo root）",
+  "scripts": {
+    "lint:deps": "node scripts/check-layer-deps.js",
+    "test:cli": "cd remnote-cli && npm test",
+    "test:plugin": "cd remnote-plugin && npm test",
+    "test": "npm run test:cli && npm run test:plugin"
+  }
+}
