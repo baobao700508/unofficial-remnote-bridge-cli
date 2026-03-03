@@ -15,7 +15,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   // 注册 Bridge Widget（右侧边栏）
   await plugin.app.registerWidget('bridge_widget', WidgetLocation.RightSidebar, {
     dimensions: { height: 'auto', width: '100%' },
-    widgetTabIcon: `${plugin.rootURL}bridge-icon.svg`,
+    widgetTabIcon: 'https://cdn.jsdelivr.net/npm/lucide-static@0.460.0/icons/globe.svg',
   });
 }
 
