@@ -2,12 +2,11 @@
  * Bridge Widget — 显示守护进程连接状态（纯展示）
  *
  * WebSocket 连接在 index.tsx 的 onActivate 中建立，
- * 此 widget 只从 plugin.storage 读取并显示状态。
+ * 此 widget 每秒从 plugin.storage 读取并显示状态和日志。
  */
 
 import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
-import { useCompatibleTracker } from './tracker-compat';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { ConnectionStatus } from '../bridge/websocket-client';
 
 interface StoredLog {
@@ -18,18 +17,30 @@ interface StoredLog {
 
 function BridgeWidget() {
   const plugin = usePlugin();
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [logs, setLogs] = useState<StoredLog[]>([]);
 
-  const status =
-    (useCompatibleTracker(
-      () => plugin.storage.getSession('bridge-status'),
-      [],
-    ) as ConnectionStatus | undefined) ?? 'disconnected';
+  // 每秒轮询 plugin.storage 获取最新状态
+  useEffect(() => {
+    let active = true;
 
-  const logs =
-    (useCompatibleTracker(
-      () => plugin.storage.getSession('bridge-logs'),
-      [],
-    ) as StoredLog[] | undefined) ?? [];
+    async function poll() {
+      if (!active) return;
+      const s = await plugin.storage.getSession('bridge-status');
+      const l = await plugin.storage.getSession('bridge-logs');
+      if (active) {
+        setStatus((s as ConnectionStatus) ?? 'disconnected');
+        setLogs((l as StoredLog[]) ?? []);
+      }
+    }
+
+    poll();
+    const timer = setInterval(poll, 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [plugin]);
 
   const statusConfig = {
     connected: { color: '#22c55e', bg: '#dcfce7', icon: '\u25cf', text: '已连接' },

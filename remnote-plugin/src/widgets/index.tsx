@@ -5,7 +5,6 @@ import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../setti
 import { WebSocketClient } from '../bridge/websocket-client';
 
 let wsClient: WebSocketClient | null = null;
-
 async function onActivate(plugin: ReactRNPlugin) {
   // 注册 WS Server URL 设置
   await plugin.settings.registerStringSetting({
