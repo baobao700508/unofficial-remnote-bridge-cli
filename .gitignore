@@ -1,3 +1,8 @@
 reference_repository/
 .cache/
 node_modules/
+.mcp.json
+
+# 守护进程运行时产物
+.remnote-bridge.pid
+.remnote-bridge.log
