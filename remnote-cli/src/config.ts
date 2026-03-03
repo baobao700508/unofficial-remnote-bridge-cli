@@ -23,12 +23,16 @@ export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
 const CONFIG_FILENAME = '.remnote-bridge.json';
 
 /**
- * 查找项目根目录（包含 package.json 的最近祖先目录）
+ * 查找项目根目录（monorepo 根：包含 .git 目录的最近祖先）
+ *
+ * 优先找 .git（monorepo 根），回退到包含 remnote-plugin/ 的目录，
+ * 最后回退到 cwd。
  */
 export function findProjectRoot(startDir: string = process.cwd()): string {
   let dir = path.resolve(startDir);
   while (true) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) {
+    // 优先匹配 .git 目录（monorepo 根标识）
+    if (fs.existsSync(path.join(dir, '.git'))) {
       return dir;
     }
     const parent = path.dirname(dir);

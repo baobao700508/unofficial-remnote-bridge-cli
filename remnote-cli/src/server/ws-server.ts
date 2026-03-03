@@ -186,12 +186,7 @@ export class BridgeServer {
     this.onCliRequest?.();
 
     if (request.action === 'get_status') {
-      const result: StatusResult = {
-        pluginConnected: this.pluginSocket?.readyState === WebSocket.OPEN,
-        sdkReady: this.pluginSdkReady,
-        uptime: Math.floor((Date.now() - this.startTime) / 1000),
-        timeoutRemaining: 0, // 由守护进程注入实际值
-      };
+      const result = this.getStatus(0);
       const response: BridgeResponse = { id: request.id, result };
       ws.send(JSON.stringify(response));
       return;

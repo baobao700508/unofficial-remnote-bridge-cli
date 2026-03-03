@@ -48,20 +48,22 @@ export async function connectCommand(): Promise<void> {
   }
 
   // fork 守护进程
-  const daemonScript = path.join(__dirname, '..', 'daemon', 'daemon.js');
-  // 开发模式下使用 tsx 运行 .ts 文件
-  const daemonScriptTs = path.join(__dirname, '..', 'daemon', 'daemon.ts');
+  const daemonScriptJs = path.resolve(__dirname, '..', 'daemon', 'daemon.js');
+  const daemonScriptTs = path.resolve(__dirname, '..', 'daemon', 'daemon.ts');
 
   let scriptPath: string;
   let execArgv: string[] = [];
 
   // 判断是 ts 开发模式还是 js 构建后模式
-  try {
-    require.resolve(daemonScript);
-    scriptPath = daemonScript;
-  } catch {
+  const fs = await import('fs');
+  if (fs.existsSync(daemonScriptJs)) {
+    scriptPath = daemonScriptJs;
+  } else {
     scriptPath = daemonScriptTs;
-    execArgv = ['--import', 'tsx'];
+    // 继承父进程的 tsx loader 参数（排除 --eval 相关项）
+    execArgv = process.execArgv.filter(
+      (arg) => !arg.startsWith('--eval') && !arg.includes('const '),
+    );
   }
 
   console.log('正在启动守护进程...');

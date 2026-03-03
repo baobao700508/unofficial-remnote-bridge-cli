@@ -35,9 +35,11 @@ async function main() {
   // 超时管理
   const timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
   let timeoutTimer: ReturnType<typeof setTimeout>;
+  let lastResetTime = Date.now();
 
   function resetTimeout() {
     clearTimeout(timeoutTimer);
+    lastResetTime = Date.now();
     timeoutTimer = setTimeout(() => {
       log('超时关闭（无 CLI 交互）');
       shutdown();
@@ -45,8 +47,8 @@ async function main() {
   }
 
   function getTimeoutRemaining(): number {
-    // 近似值：上次重置到现在的差值
-    return Math.max(0, Math.floor(timeoutMs / 1000));
+    const elapsed = Date.now() - lastResetTime;
+    return Math.max(0, Math.floor((timeoutMs - elapsed) / 1000));
   }
 
   // 启动 WS Server
