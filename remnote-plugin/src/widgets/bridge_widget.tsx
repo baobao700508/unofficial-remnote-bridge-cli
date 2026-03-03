@@ -1,81 +1,35 @@
 /**
- * Bridge Widget — 显示守护进程连接状态
+ * Bridge Widget — 显示守护进程连接状态（纯展示）
  *
- * 在 RemNote 右侧边栏显示：
- * - 连接状态指示灯
- * - 重连按钮
- * - 简单日志
+ * WebSocket 连接在 index.tsx 的 onActivate 中建立，
+ * 此 widget 只从 plugin.storage 读取并显示状态。
  */
 
 import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
 import { useCompatibleTracker } from './tracker-compat';
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { WebSocketClient, ConnectionStatus, BridgeRequest } from '../bridge/websocket-client';
-import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
+import React from 'react';
+import type { ConnectionStatus } from '../bridge/websocket-client';
 
-interface LogEntry {
-  timestamp: Date;
+interface StoredLog {
+  time: number;
   message: string;
-  level: 'info' | 'warn' | 'error';
+  level: string;
 }
 
 function BridgeWidget() {
   const plugin = usePlugin();
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const wsClientRef = useRef<WebSocketClient | null>(null);
 
-  const wsUrl = useCompatibleTracker(() => plugin.settings.getSetting<string>(SETTING_WS_URL), []);
-  const currentWsUrl = wsUrl ?? DEFAULT_WS_URL;
+  const status =
+    (useCompatibleTracker(
+      () => plugin.storage.getSession('bridge-status'),
+      [],
+    ) as ConnectionStatus | undefined) ?? 'disconnected';
 
-  const addLog = useCallback((message: string, level: LogEntry['level'] = 'info') => {
-    setLogs((prev) => {
-      const newLogs = [...prev, { timestamp: new Date(), message, level }];
-      return newLogs.slice(-30);
-    });
-  }, []);
-
-  // 处理来自守护进程的请求（未来扩展用）
-  const handleRequest = useCallback(
-    async (request: BridgeRequest): Promise<unknown> => {
-      addLog(`收到请求: ${request.action}`);
-      // 当前阶段暂不处理实际请求，后续添加 RemAdapter
-      throw new Error(`未实现的 action: ${request.action}`);
-    },
-    [addLog],
-  );
-
-  // 初始化 WebSocket 连接
-  useEffect(() => {
-    if (wsClientRef.current) {
-      wsClientRef.current.disconnect();
-    }
-
-    const client = new WebSocketClient({
-      url: currentWsUrl,
-      pluginVersion: DEFAULT_PLUGIN_VERSION,
-      sdkReady: true, // Plugin SDK 在 widget 渲染时已就绪
-      maxReconnectAttempts: 10,
-      initialReconnectDelay: 1000,
-      maxReconnectDelay: 30000,
-      onStatusChange: setStatus,
-      onLog: (message, level) => addLog(message, level),
-    });
-
-    client.setMessageHandler(handleRequest);
-    wsClientRef.current = client;
-    client.connect();
-    addLog(`正在连接 ${currentWsUrl}...`);
-
-    return () => {
-      client.disconnect();
-    };
-  }, [handleRequest, addLog, currentWsUrl]);
-
-  const handleReconnect = useCallback(() => {
-    addLog('手动重连');
-    wsClientRef.current?.reconnect();
-  }, [addLog]);
+  const logs =
+    (useCompatibleTracker(
+      () => plugin.storage.getSession('bridge-logs'),
+      [],
+    ) as StoredLog[] | undefined) ?? [];
 
   const statusConfig = {
     connected: { color: '#22c55e', bg: '#dcfce7', icon: '\u25cf', text: '已连接' },
@@ -115,25 +69,6 @@ function BridgeWidget() {
         </div>
       </div>
 
-      {/* 重连按钮 */}
-      {status !== 'connected' && (
-        <button
-          onClick={handleReconnect}
-          style={{
-            width: '100%',
-            padding: '8px',
-            marginBottom: '12px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '6px',
-            backgroundColor: '#f9fafb',
-            cursor: 'pointer',
-            fontSize: '12px',
-          }}
-        >
-          重新连接
-        </button>
-      )}
-
       {/* 日志 */}
       <div
         style={{
@@ -170,7 +105,7 @@ function BridgeWidget() {
                   }}
                 >
                   <span style={{ color: '#9ca3af' }}>
-                    {log.timestamp.toLocaleTimeString([], {
+                    {new Date(log.time).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                       second: '2-digit',
