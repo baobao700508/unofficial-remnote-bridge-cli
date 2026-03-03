@@ -31,7 +31,7 @@ remnote-bridge-cli/
 - **参考**: 任何修改前先查阅 `reference_repository/` 中的对应实现
 - **Git**: 未经明确要求不创建 commit
 - **层边界**: 各层（remnote-plugin、remnote-cli、remnote-skills、remnote-mcp）保持独立
-- **Plugin 内部分层**: `widgets → bridge → services → utils`，禁止反向依赖
+- **Plugin 内部分层**: 核心链 `bridge → services → utils` 单向依赖；widgets 为独立宿主层，禁止被核心链反向依赖
 
 ## Tech Stack
 
@@ -46,10 +46,10 @@ remnote-bridge-cli/
 
 ```
 remnote-plugin/src/
-├── widgets/     # UI 层：入口（index.tsx）+ 展示组件
-├── bridge/      # API 层：WS 传输 + 消息路由（→ services）
-├── services/    # 业务层：与 CLI 命令同态命名的 SDK 操作（待实现）
-├── utils/       # 辅助层：富文本解析、内容渲染等纯函数（待实现）
+├── widgets/     # 宿主层：插件入口 + 状态展示（独立于核心链）
+├── bridge/      # 核心链入口：WS 传输 + 消息路由（→ services）
+├── services/    # 核心链：与 CLI 命令同态命名的 SDK 操作（待实现）
+├── utils/       # 核心链：富文本解析、内容渲染等纯函数（待实现）
 └── settings.ts  # 配置常量
 ```
 

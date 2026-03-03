@@ -119,8 +119,8 @@ function checkPackageJson(layerDir, forbidden) {
 }
 
 // ── Plugin 内部分层约束 ──
-// 依赖方向：widgets → bridge → services → utils
-// 禁止反向依赖
+// 核心链：bridge → services → utils（单向依赖）
+// 宿主层：widgets（独立，可依赖 bridge，但核心链禁止反向依赖 widgets）
 const PLUGIN_INTERNAL_RULES = [
   {
     subdir: 'utils',

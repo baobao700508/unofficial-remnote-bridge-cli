@@ -75,21 +75,18 @@ RemNote SDK
 
 #### 2.1.3 Plugin 内部分层（红线）
 
-remnote-plugin 内部按职责分为四层，依赖方向：widgets → bridge → services → utils，**禁止反向**。
+remnote-plugin 内部分为**核心链**和**宿主层**两部分：
 
 ```
-widgets（UI 入口）
-    ↓
-bridge（API 层：WS 传输 + 消息路由）
-    ↓
-services（业务操作：与 CLI 命令同态命名）
-    ↓
-utils（无状态纯函数辅助工具）
+核心链（业务数据流）：bridge → services → utils
+宿主层（独立）：widgets（插件入口 + 状态展示）
 ```
 
-- **禁止**：utils 依赖 services / bridge / widgets
-- **禁止**：services 依赖 bridge / widgets
-- **禁止**：bridge 依赖 widgets
+- **核心链**依赖方向单向：bridge → services → utils，**禁止反向**
+- **widgets** 是 RemNote 插件的宿主入口和展示面板，可依赖 bridge（接线和读状态），但不属于核心链
+- **禁止**：bridge / services / utils 依赖 widgets
+- **禁止**：utils 依赖 services / bridge
+- **禁止**：services 依赖 bridge
 - **检查工具**：`node scripts/check-layer-deps.js`（同时检查跨层和 Plugin 内部依赖）
 
 ### 2.2 SDK 文档时效性（强约束）
@@ -116,10 +113,10 @@ remnote-bridge-cli/
 ├── remnote-cli/              # 核心命令行工具（开发中）
 ├── remnote-plugin/           # RemNote 官方框架插件（开发中）
 │   └── src/
-│       ├── widgets/          # UI 入口（index.tsx）
-│       ├── bridge/           # API 层：WS 传输 + 消息路由
-│       ├── services/         # 业务操作（与 CLI 命令同态命名）
-│       └── utils/            # 无状态纯函数辅助工具
+│       ├── widgets/          # 宿主层：插件入口 + 状态展示
+│       ├── bridge/           # 核心链入口：WS 传输 + 消息路由
+│       ├── services/         # 核心链：业务操作（与 CLI 命令同态命名）
+│       └── utils/            # 核心链：无状态纯函数辅助工具
 ├── remnote-skills/           # Agent Skills - Markdown 格式（待开发）
 ├── remnote-mcp/              # MCP Server - Node.js/TypeScript/FastMCP（待开发）
 ├── scripts/                  # 脚本工具
