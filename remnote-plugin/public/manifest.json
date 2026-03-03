@@ -2,8 +2,8 @@
   "manifestVersion": 1,
   "id": "remnote_bridge",
   "name": "RemNote Bridge",
-  "author": "",
-  "repoUrl": "",
+  "author": "remnote-bridge",
+  "repoUrl": "https://github.com/remnote-bridge/remnote-bridge-cli",
   "version": {
     "major": 0,
     "minor": 1,

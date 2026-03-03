@@ -7,7 +7,8 @@
  * - 简单日志
  */
 
-import { renderWidget, usePlugin, useTracker } from '@remnote/plugin-sdk';
+import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
+import { useCompatibleTracker } from './tracker-compat';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { WebSocketClient, ConnectionStatus, BridgeRequest } from '../bridge/websocket-client';
 import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
@@ -24,7 +25,7 @@ function BridgeWidget() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const wsClientRef = useRef<WebSocketClient | null>(null);
 
-  const wsUrl = useTracker(() => plugin.settings.getSetting<string>(SETTING_WS_URL), []);
+  const wsUrl = useCompatibleTracker(() => plugin.settings.getSetting<string>(SETTING_WS_URL), []);
   const currentWsUrl = wsUrl ?? DEFAULT_WS_URL;
 
   const addLog = useCallback((message: string, level: LogEntry['level'] = 'info') => {
