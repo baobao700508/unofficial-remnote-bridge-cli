@@ -3,6 +3,7 @@ import '../style.css';
 import '../index.css';
 import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
 import { WebSocketClient } from '../bridge/websocket-client';
+import { createMessageRouter } from '../bridge/message-router';
 
 let wsClient: WebSocketClient | null = null;
 async function onActivate(plugin: ReactRNPlugin) {
@@ -48,10 +49,8 @@ async function onActivate(plugin: ReactRNPlugin) {
     },
   });
 
-  // 未来扩展：处理守护进程转发的请求
-  wsClient.setMessageHandler(async (request) => {
-    throw new Error(`未实现的 action: ${request.action}`);
-  });
+  // 路由守护进程转发的请求到 services 层
+  wsClient.setMessageHandler(createMessageRouter());
 
   wsClient.connect();
 }

@@ -118,6 +118,72 @@ function checkPackageJson(layerDir, forbidden) {
   return violations;
 }
 
+// ── Plugin 内部分层约束 ──
+// 依赖方向：widgets → bridge → services → utils
+// 禁止反向依赖
+const PLUGIN_INTERNAL_RULES = [
+  {
+    subdir: 'utils',
+    label: 'utils（辅助工具）',
+    forbidden: ['services', 'bridge', 'widgets'],
+  },
+  {
+    subdir: 'services',
+    label: 'services（业务操作）',
+    forbidden: ['bridge', 'widgets'],
+  },
+  {
+    subdir: 'bridge',
+    label: 'bridge（API 层）',
+    forbidden: ['widgets'],
+  },
+];
+
+function checkPluginInternalDeps(pluginSrcDir) {
+  const violations = [];
+
+  for (const rule of PLUGIN_INTERNAL_RULES) {
+    const subDir = path.join(pluginSrcDir, rule.subdir);
+    if (!fs.existsSync(subDir)) continue;
+
+    const files = walkDir(subDir);
+    for (const file of files) {
+      const content = fs.readFileSync(file, 'utf-8');
+      const lines = content.split('\n');
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const importMatch =
+          line.match(/(?:import|from)\s+['"]([^'"]+)['"]/) ||
+          line.match(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+
+        if (!importMatch) continue;
+        const importPath = importMatch[1];
+
+        for (const forbiddenSub of rule.forbidden) {
+          // 匹配相对路径中引用了禁止的子目录
+          if (
+            importPath.includes('../' + forbiddenSub + '/') ||
+            importPath.includes('../' + forbiddenSub + "'") ||
+            importPath === '../' + forbiddenSub ||
+            importPath.includes('/' + forbiddenSub + '/')
+          ) {
+            violations.push({
+              file,
+              line: i + 1,
+              import: importPath,
+              from: rule.subdir,
+              to: forbiddenSub,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
 // 执行检查
 const rootDir = path.resolve(__dirname, '..');
 let totalViolations = 0;
@@ -156,6 +222,27 @@ for (const rule of RULES) {
     }
     totalViolations += violations.length;
   }
+}
+
+// ── Plugin 内部分层检查 ──
+console.log('');
+console.log('检查 Plugin 内部分层...\n');
+
+const pluginSrcDir = path.join(rootDir, 'remnote-plugin', 'src');
+if (fs.existsSync(pluginSrcDir)) {
+  const internalViolations = checkPluginInternalDeps(pluginSrcDir);
+  if (internalViolations.length === 0) {
+    console.log('  ✅ remnote-plugin 内部分层 — 无违规');
+  } else {
+    console.log(`  ❌ remnote-plugin 内部分层 — 发现 ${internalViolations.length} 处违规：`);
+    for (const v of internalViolations) {
+      console.log(`     ${path.relative(rootDir, v.file)}:${v.line}`);
+      console.log(`       ${v.from} 禁止依赖 ${v.to}，但发现: ${v.import}`);
+    }
+    totalViolations += internalViolations.length;
+  }
+} else {
+  console.log('  ⏭  remnote-plugin/src — 目录不存在，跳过');
 }
 
 console.log('');

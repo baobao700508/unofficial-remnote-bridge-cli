@@ -31,15 +31,27 @@ remnote-bridge-cli/
 - **参考**: 任何修改前先查阅 `reference_repository/` 中的对应实现
 - **Git**: 未经明确要求不创建 commit
 - **层边界**: 各层（remnote-plugin、remnote-cli、remnote-skills、remnote-mcp）保持独立
+- **Plugin 内部分层**: `widgets → bridge → services → utils`，禁止反向依赖
 
 ## Tech Stack
 
 | 层 | 语言/框架 | 状态 |
 |--------|----------|------|
-| remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 待开发 |
-| remnote-cli | Node.js / TypeScript / Commander.js | 待开发 |
+| remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 开发中 |
+| remnote-cli | Node.js / TypeScript / Commander.js | 开发中 |
 | remnote-skills | Markdown (SKILL.md) | 待开发 |
 | remnote-mcp | Node.js / TypeScript / FastMCP | 待开发 |
+
+## Plugin Internal Structure
+
+```
+remnote-plugin/src/
+├── widgets/     # UI 层：入口（index.tsx）+ 展示组件
+├── bridge/      # API 层：WS 传输 + 消息路由（→ services）
+├── services/    # 业务层：与 CLI 命令同态命名的 SDK 操作（待实现）
+├── utils/       # 辅助层：富文本解析、内容渲染等纯函数（待实现）
+└── settings.ts  # 配置常量
+```
 
 ## Architecture Reference
 

@@ -28,8 +28,8 @@ remnote-skills (Markdown Skills)  +  remnote-mcp (FastMCP Server)
 
 | 层 | 语言/框架 | 状态 |
 |:--|:--|:--|
-| remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 待开发 |
-| remnote-cli | Node.js / TypeScript / Commander.js | 待开发 |
+| remnote-plugin | Node.js / TypeScript / RemNote Plugin SDK | 开发中 |
+| remnote-cli | Node.js / TypeScript / Commander.js | 开发中 |
 | remnote-skills | Markdown (SKILL.md) | 待开发 |
 | remnote-mcp | Node.js / TypeScript / FastMCP | 待开发 |
 
@@ -73,6 +73,25 @@ RemNote SDK
 - **禁止**：remnote-cli 依赖 remnote-skills 或 remnote-mcp
 - **允许**：接入层（remnote-skills、remnote-mcp）可同时依赖 remnote-cli
 
+#### 2.1.3 Plugin 内部分层（红线）
+
+remnote-plugin 内部按职责分为四层，依赖方向：widgets → bridge → services → utils，**禁止反向**。
+
+```
+widgets（UI 入口）
+    ↓
+bridge（API 层：WS 传输 + 消息路由）
+    ↓
+services（业务操作：与 CLI 命令同态命名）
+    ↓
+utils（无状态纯函数辅助工具）
+```
+
+- **禁止**：utils 依赖 services / bridge / widgets
+- **禁止**：services 依赖 bridge / widgets
+- **禁止**：bridge 依赖 widgets
+- **检查工具**：`node scripts/check-layer-deps.js`（同时检查跨层和 Plugin 内部依赖）
+
 ### 2.2 SDK 文档时效性（强约束）
 
 `docs/RemNote API Reference/INDEX.md` 头部记录了爬取时间。若距上次爬取超过 **7 天**，必须先执行 `./scripts/crawl-remnote-docs.sh` 更新文档，再继续开发任务。
@@ -94,8 +113,13 @@ RemNote SDK
 
 ```
 remnote-bridge-cli/
-├── remnote-cli/              # 核心命令行工具（待开发）
-├── remnote-plugin/           # RemNote 官方框架插件（待开发）
+├── remnote-cli/              # 核心命令行工具（开发中）
+├── remnote-plugin/           # RemNote 官方框架插件（开发中）
+│   └── src/
+│       ├── widgets/          # UI 入口（index.tsx）
+│       ├── bridge/           # API 层：WS 传输 + 消息路由
+│       ├── services/         # 业务操作（与 CLI 命令同态命名）
+│       └── utils/            # 无状态纯函数辅助工具
 ├── remnote-skills/           # Agent Skills - Markdown 格式（待开发）
 ├── remnote-mcp/              # MCP Server - Node.js/TypeScript/FastMCP（待开发）
 ├── scripts/                  # 脚本工具
