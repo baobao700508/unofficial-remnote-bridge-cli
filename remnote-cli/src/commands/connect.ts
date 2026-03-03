@@ -8,9 +8,14 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 import { fork } from 'child_process';
 import { loadConfig, pidFilePath, findProjectRoot } from '../config';
 import { checkDaemon } from '../daemon/pid';
+
+export interface ConnectOptions {
+  json?: boolean;
+}
 
 interface ReadyMessage {
   type: 'ready';
@@ -34,7 +39,8 @@ function isDaemonMessage(msg: unknown): msg is DaemonMessage {
   );
 }
 
-export async function connectCommand(): Promise<void> {
+export async function connectCommand(options: ConnectOptions = {}): Promise<void> {
+  const { json } = options;
   const projectRoot = findProjectRoot();
   const config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
@@ -42,7 +48,14 @@ export async function connectCommand(): Promise<void> {
   // 检查是否已在运行
   const status = checkDaemon(pidPath);
   if (status.running) {
-    console.log(`守护进程已在运行（PID: ${status.pid}）`);
+    if (json) {
+      console.log(JSON.stringify({
+        ok: true, command: 'connect', alreadyRunning: true,
+        pid: status.pid, wsPort: config.wsPort, devServerPort: config.devServerPort,
+      }));
+    } else {
+      console.log(`守护进程已在运行（PID: ${status.pid}）`);
+    }
     process.exitCode = 0;
     return;
   }
@@ -55,7 +68,6 @@ export async function connectCommand(): Promise<void> {
   let execArgv: string[] = [];
 
   // 判断是 ts 开发模式还是 js 构建后模式
-  const fs = await import('fs');
   if (fs.existsSync(daemonScriptJs)) {
     scriptPath = daemonScriptJs;
   } else {
@@ -66,7 +78,9 @@ export async function connectCommand(): Promise<void> {
     );
   }
 
-  console.log('正在启动守护进程...');
+  if (!json) {
+    console.log('正在启动守护进程...');
+  }
 
   const child = fork(scriptPath, [], {
     detached: true,
@@ -106,20 +120,36 @@ export async function connectCommand(): Promise<void> {
   child.disconnect?.();
 
   if (!ready) {
-    console.error('守护进程启动超时（10 秒）');
+    if (json) {
+      console.log(JSON.stringify({ ok: false, command: 'connect', error: '守护进程启动超时（10 秒）' }));
+    } else {
+      console.error('守护进程启动超时（10 秒）');
+    }
     process.exitCode = 1;
     return;
   }
 
   if (ready.type === 'error') {
-    console.error(`守护进程启动失败: ${ready.message}`);
+    if (json) {
+      console.log(JSON.stringify({ ok: false, command: 'connect', error: ready.message }));
+    } else {
+      console.error(`守护进程启动失败: ${ready.message}`);
+    }
     process.exitCode = 1;
     return;
   }
 
-  console.log(`守护进程已启动（PID: ${ready.pid}）`);
-  console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);
-  console.log(`  webpack-dev-server: http://localhost:${ready.devServerPort}`);
-  console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
+  if (json) {
+    console.log(JSON.stringify({
+      ok: true, command: 'connect', alreadyRunning: false,
+      pid: ready.pid, wsPort: ready.wsPort, devServerPort: ready.devServerPort,
+      timeoutMinutes: config.daemonTimeoutMinutes,
+    }));
+  } else {
+    console.log(`守护进程已启动（PID: ${ready.pid}）`);
+    console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);
+    console.log(`  webpack-dev-server: http://localhost:${ready.devServerPort}`);
+    console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
+  }
   process.exitCode = 0;
 }

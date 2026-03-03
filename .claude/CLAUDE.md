@@ -32,6 +32,7 @@ remnote-bridge-cli/
 - **Git**: 未经明确要求不创建 commit
 - **层边界**: 各层（remnote-plugin、remnote-cli、remnote-skills、remnote-mcp）保持独立
 - **Plugin 内部分层**: 核心链 `bridge → services → utils` 单向依赖；widgets 为独立宿主层，禁止被核心链反向依赖
+- **CLI 输出**: 所有命令必须支持 `--json` 结构化输出（详见 AGENTS.md 2.3 节）
 
 ## Tech Stack
 

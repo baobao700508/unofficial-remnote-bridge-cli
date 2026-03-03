@@ -17,7 +17,12 @@ import { isBridgeResponse } from '../protocol';
 const CONNECT_TIMEOUT_MS = 5_000;
 const RESPONSE_TIMEOUT_MS = 5_000;
 
-export async function healthCommand(): Promise<void> {
+export interface HealthOptions {
+  json?: boolean;
+}
+
+export async function healthCommand(options: HealthOptions = {}): Promise<void> {
+  const { json } = options;
   const projectRoot = findProjectRoot();
   const config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
@@ -25,10 +30,19 @@ export async function healthCommand(): Promise<void> {
   // 先检查 PID 文件
   const daemonStatus = checkDaemon(pidPath);
   if (!daemonStatus.running) {
-    console.log('❌ 守护进程  未运行');
-    console.log('❌ Plugin    未连接');
-    console.log('❌ SDK       不可用');
-    console.log('\n提示: 执行 `remnote connect` 启动守护进程');
+    if (json) {
+      console.log(JSON.stringify({
+        ok: false, command: 'health', exitCode: 2,
+        daemon: { running: false },
+        plugin: { connected: false },
+        sdk: { ready: false },
+      }));
+    } else {
+      console.log('❌ 守护进程  未运行');
+      console.log('❌ Plugin    未连接');
+      console.log('❌ SDK       不可用');
+      console.log('\n提示: 执行 `remnote connect` 启动守护进程');
+    }
     process.exitCode = 2;
     return;
   }
@@ -38,34 +52,56 @@ export async function healthCommand(): Promise<void> {
   try {
     status = await getStatus(config.wsPort);
   } catch (err) {
-    console.log('❌ 守护进程  不可达');
-    console.log('❌ Plugin    未连接');
-    console.log('❌ SDK       不可用');
-    console.log(`\n错误: ${err instanceof Error ? err.message : String(err)}`);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    if (json) {
+      console.log(JSON.stringify({
+        ok: false, command: 'health', exitCode: 2,
+        daemon: { running: true, pid: daemonStatus.pid, reachable: false },
+        plugin: { connected: false },
+        sdk: { ready: false },
+        error: errorMsg,
+      }));
+    } else {
+      console.log('❌ 守护进程  不可达');
+      console.log('❌ Plugin    未连接');
+      console.log('❌ SDK       不可用');
+      console.log(`\n错误: ${errorMsg}`);
+    }
     process.exitCode = 2;
     return;
   }
 
-  // 输出状态
-  console.log(`✅ 守护进程  运行中（PID: ${daemonStatus.pid}，已运行 ${formatUptime(status.uptime)}）`);
-
-  if (status.pluginConnected) {
-    console.log('✅ Plugin    已连接');
-  } else {
-    console.log('❌ Plugin    未连接');
-  }
-
-  if (status.sdkReady) {
-    console.log('✅ SDK       就绪');
-  } else {
-    console.log('❌ SDK       未就绪');
-  }
-
-  console.log(`\n超时: ${formatUptime(status.timeoutRemaining)} 后自动关闭`);
-
   // 退出码
   const allHealthy = status.pluginConnected && status.sdkReady;
-  process.exitCode = allHealthy ? 0 : 1;
+  const exitCode = allHealthy ? 0 : 1;
+
+  if (json) {
+    console.log(JSON.stringify({
+      ok: allHealthy, command: 'health', exitCode,
+      daemon: { running: true, pid: daemonStatus.pid, reachable: true, uptime: status.uptime },
+      plugin: { connected: status.pluginConnected },
+      sdk: { ready: status.sdkReady },
+      timeoutRemaining: status.timeoutRemaining,
+    }));
+  } else {
+    console.log(`✅ 守护进程  运行中（PID: ${daemonStatus.pid}，已运行 ${formatUptime(status.uptime)}）`);
+
+    if (status.pluginConnected) {
+      console.log('✅ Plugin    已连接');
+    } else {
+      console.log('❌ Plugin    未连接');
+    }
+
+    if (status.sdkReady) {
+      console.log('✅ SDK       就绪');
+    } else {
+      console.log('❌ SDK       未就绪');
+    }
+
+    console.log(`\n超时: ${formatUptime(status.timeoutRemaining)} 后自动关闭`);
+  }
+
+  process.exitCode = exitCode;
 }
 
 function getStatus(port: number): Promise<StatusResult> {

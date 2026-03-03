@@ -9,7 +9,6 @@
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
-import { randomUUID } from 'crypto';
 import type {
   HelloMessage,
   BridgeRequest,
@@ -24,6 +23,8 @@ export interface BridgeServerConfig {
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+  /** 获取守护进程超时剩余秒数（由 daemon 注入） */
+  getTimeoutRemaining?: () => number;
 }
 
 export class BridgeServer {
@@ -35,8 +36,9 @@ export class BridgeServer {
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private startTime = Date.now();
 
-  private config: Required<Omit<BridgeServerConfig, 'onLog'>> & {
+  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+    getTimeoutRemaining?: () => number;
   };
 
   /** 每当收到 CLI 命令请求时触发（用于刷新守护进程超时计时器） */
@@ -49,6 +51,7 @@ export class BridgeServer {
       pingIntervalMs: config.pingIntervalMs ?? 30_000,
       pongTimeoutMs: config.pongTimeoutMs ?? 10_000,
       onLog: config.onLog,
+      getTimeoutRemaining: config.getTimeoutRemaining,
     };
   }
 
@@ -66,6 +69,7 @@ export class BridgeServer {
       this.wss = new WebSocketServer({
         port: this.config.port,
         host: this.config.host,
+        maxPayload: 1 * 1024 * 1024, // 1MB，足够所有 JSON 消息
       });
 
       this.wss.on('listening', () => {
@@ -159,6 +163,11 @@ export class BridgeServer {
         this.pluginSocket = null;
         this.pluginVersion = null;
         this.pluginSdkReady = false;
+        // 清理可能残留的 pong 超时定时器
+        if (this.pongTimer) {
+          clearTimeout(this.pongTimer);
+          this.pongTimer = null;
+        }
       }
     });
 
@@ -186,7 +195,7 @@ export class BridgeServer {
     this.onCliRequest?.();
 
     if (request.action === 'get_status') {
-      const result = this.getStatus(0);
+      const result = this.getStatus();
       const response: BridgeResponse = { id: request.id, result };
       ws.send(JSON.stringify(response));
       return;
@@ -244,13 +253,13 @@ export class BridgeServer {
     }
   }
 
-  /** 获取当前状态（供守护进程注入 timeoutRemaining 后返回） */
-  getStatus(timeoutRemaining: number): StatusResult {
+  /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */
+  getStatus(): StatusResult {
     return {
       pluginConnected: this.pluginSocket?.readyState === WebSocket.OPEN,
       sdkReady: this.pluginSdkReady,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
-      timeoutRemaining,
+      timeoutRemaining: this.config.getTimeoutRemaining?.() ?? 0,
     };
   }
 }

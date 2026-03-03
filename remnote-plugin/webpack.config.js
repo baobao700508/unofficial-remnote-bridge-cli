@@ -110,7 +110,7 @@ if (isProd) {
 } else {
   // for more information, see https://webpack.js.org/configuration/dev-server
   config.devServer = {
-    port: 8080,
+    port: process.env.PORT ? parseInt(process.env.PORT, 10) : 8080,
     open: true,
     hot: true,
     compress: true,

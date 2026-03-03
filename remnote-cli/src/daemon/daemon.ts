@@ -56,17 +56,12 @@ async function main() {
     port: config.wsPort,
     host: '127.0.0.1',
     onLog: log,
+    getTimeoutRemaining,
   });
 
   // CLI 请求刷新超时
   server.onCliRequest = () => {
     resetTimeout();
-  };
-
-  // 覆盖 getStatus 的 timeoutRemaining
-  const originalGetStatus = server.getStatus.bind(server);
-  server.getStatus = (timeoutRemaining: number) => {
-    return originalGetStatus(getTimeoutRemaining());
   };
 
   // 启动 webpack-dev-server

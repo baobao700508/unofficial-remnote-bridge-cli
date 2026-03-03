@@ -22,11 +22,15 @@ export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
 
 const CONFIG_FILENAME = '.remnote-bridge.json';
 
+function isValidPort(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535;
+}
+
 /**
  * 查找项目根目录（monorepo 根：包含 .git 目录的最近祖先）
  *
- * 优先找 .git（monorepo 根），回退到包含 remnote-plugin/ 的目录，
- * 最后回退到 cwd。
+ * 从 startDir 向上查找 .git 目录，找到即返回。
+ * 到达文件系统根仍未找到时回退到 cwd。
  */
 export function findProjectRoot(startDir: string = process.cwd()): string {
   let dir = path.resolve(startDir);
@@ -59,13 +63,10 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
     const raw = fs.readFileSync(configPath, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<BridgeConfig>;
     return {
-      wsPort: typeof parsed.wsPort === 'number' ? parsed.wsPort : DEFAULT_CONFIG.wsPort,
-      devServerPort:
-        typeof parsed.devServerPort === 'number'
-          ? parsed.devServerPort
-          : DEFAULT_CONFIG.devServerPort,
+      wsPort: isValidPort(parsed.wsPort) ? parsed.wsPort : DEFAULT_CONFIG.wsPort,
+      devServerPort: isValidPort(parsed.devServerPort) ? parsed.devServerPort : DEFAULT_CONFIG.devServerPort,
       daemonTimeoutMinutes:
-        typeof parsed.daemonTimeoutMinutes === 'number'
+        typeof parsed.daemonTimeoutMinutes === 'number' && parsed.daemonTimeoutMinutes > 0
           ? parsed.daemonTimeoutMinutes
           : DEFAULT_CONFIG.daemonTimeoutMinutes,
     };

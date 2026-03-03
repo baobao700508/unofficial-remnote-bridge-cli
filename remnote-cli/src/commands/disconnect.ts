@@ -12,27 +12,42 @@ import { checkDaemon, removePid } from '../daemon/pid';
 const WAIT_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 200;
 
-export async function disconnectCommand(): Promise<void> {
+export interface DisconnectOptions {
+  json?: boolean;
+}
+
+export async function disconnectCommand(options: DisconnectOptions = {}): Promise<void> {
+  const { json } = options;
   const projectRoot = findProjectRoot();
   const pidPath = pidFilePath(projectRoot);
 
   const status = checkDaemon(pidPath);
   if (!status.running) {
-    console.log('守护进程未在运行');
+    if (json) {
+      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: false }));
+    } else {
+      console.log('守护进程未在运行');
+    }
     process.exitCode = 0;
     return;
   }
 
   const pid = status.pid;
-  console.log(`正在停止守护进程（PID: ${pid}）...`);
+  if (!json) {
+    console.log(`正在停止守护进程（PID: ${pid}）...`);
+  }
 
   // 发送 SIGTERM
   try {
     process.kill(pid, 'SIGTERM');
   } catch (err) {
     // 进程可能已经退出
-    console.log('守护进程已停止');
     removePid(pidPath);
+    if (json) {
+      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false }));
+    } else {
+      console.log('守护进程已停止');
+    }
     process.exitCode = 0;
     return;
   }
@@ -41,19 +56,26 @@ export async function disconnectCommand(): Promise<void> {
   const exited = await waitForExit(pid, WAIT_TIMEOUT_MS);
 
   if (exited) {
-    console.log('守护进程已停止');
-    // 确保 PID 文件被清理（正常情况下守护进程自己会清理）
     removePid(pidPath);
+    if (json) {
+      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false }));
+    } else {
+      console.log('守护进程已停止');
+    }
     process.exitCode = 0;
   } else {
-    console.error(`守护进程未在 ${WAIT_TIMEOUT_MS / 1000} 秒内退出，尝试强制终止...`);
     try {
       process.kill(pid, 'SIGKILL');
     } catch {
       // 可能已退出
     }
     removePid(pidPath);
-    console.log('守护进程已强制终止');
+    if (json) {
+      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: true }));
+    } else {
+      console.error(`守护进程未在 ${WAIT_TIMEOUT_MS / 1000} 秒内退出，尝试强制终止...`);
+      console.log('守护进程已强制终止');
+    }
     process.exitCode = 0;
   }
 }

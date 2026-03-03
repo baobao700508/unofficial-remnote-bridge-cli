@@ -6,6 +6,10 @@ import { WebSocketClient } from '../bridge/websocket-client';
 import { createMessageRouter } from '../bridge/message-router';
 
 let wsClient: WebSocketClient | null = null;
+// 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
+const logBuffer: Array<{ time: number; message: string; level: string }> = [];
+let logFlushPending = false;
+
 async function onActivate(plugin: ReactRNPlugin) {
   // 注册 WS Server URL 设置
   await plugin.settings.registerStringSetting({
@@ -36,16 +40,17 @@ async function onActivate(plugin: ReactRNPlugin) {
     onStatusChange: (status) => {
       void plugin.storage.setSession('bridge-status', status);
     },
-    onLog: async (message, level) => {
-      const logs =
-        ((await plugin.storage.getSession('bridge-logs')) as Array<{
-          time: number;
-          message: string;
-          level: string;
-        }>) || [];
-      logs.push({ time: Date.now(), message, level });
-      if (logs.length > 30) logs.splice(0, logs.length - 30);
-      await plugin.storage.setSession('bridge-logs', logs);
+    onLog: (message, level) => {
+      logBuffer.push({ time: Date.now(), message, level });
+      if (logBuffer.length > 30) logBuffer.splice(0, logBuffer.length - 30);
+      // 合并写入：避免并发 read-modify-write 竞态
+      if (!logFlushPending) {
+        logFlushPending = true;
+        queueMicrotask(async () => {
+          logFlushPending = false;
+          await plugin.storage.setSession('bridge-logs', logBuffer.slice());
+        });
+      }
     },
   });
 

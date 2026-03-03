@@ -72,21 +72,22 @@ export class DevServerManager {
         return;
       }
 
-      this.child.on('exit', () => {
-        this.child = null;
-        resolve();
-      });
-
-      this.child.kill('SIGTERM');
-
       // 5 秒后强制 kill
-      setTimeout(() => {
+      const forceKillTimer = setTimeout(() => {
         if (this.child) {
           this.child.kill('SIGKILL');
           this.child = null;
           resolve();
         }
       }, 5000);
+
+      this.child.on('exit', () => {
+        clearTimeout(forceKillTimer);
+        this.child = null;
+        resolve();
+      });
+
+      this.child.kill('SIGTERM');
     });
   }
 

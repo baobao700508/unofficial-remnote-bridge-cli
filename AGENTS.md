@@ -93,6 +93,36 @@ remnote-plugin 内部分为**核心链**和**宿主层**两部分：
 
 `docs/RemNote API Reference/INDEX.md` 头部记录了爬取时间。若距上次爬取超过 **7 天**，必须先执行 `./scripts/crawl-remnote-docs.sh` 更新文档，再继续开发任务。
 
+### 2.3 CLI 命令输出规范（红线）
+
+所有 remnote-cli 命令**必须**同时支持人类可读输出和 `--json` 结构化输出。
+
+#### 规则
+
+- 全局 flag `--json` 已在 `index.ts` 注册，通过 `program.opts()` 获取，传递给各命令函数
+- **新增命令时必须实现 `--json` 模式**，否则 Agent（Skills / MCP）无法可靠解析输出
+- JSON 模式下：仅输出**一行**合法 JSON 到 stdout，**禁止**混入人类可读文本
+- JSON 输出**必须**包含 `ok`（boolean）和 `command`（string）字段
+- 失败时**必须**包含 `error`（string）字段
+
+#### JSON 输出结构约定
+
+```jsonc
+// 成功
+{ "ok": true,  "command": "<命令名>", ...命令特定字段 }
+// 失败
+{ "ok": false, "command": "<命令名>", "error": "<错误描述>", ...可选上下文 }
+```
+
+#### 命令函数签名约定
+
+```typescript
+export interface XxxOptions {
+  json?: boolean;
+}
+export async function xxxCommand(options: XxxOptions = {}): Promise<void> { ... }
+```
+
 ---
 
 ## 3. 经验
