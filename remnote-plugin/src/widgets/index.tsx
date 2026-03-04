@@ -56,7 +56,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   });
 
   // 路由守护进程转发的请求到 services 层
-  wsClient.setMessageHandler(createMessageRouter());
+  wsClient.setMessageHandler(createMessageRouter(plugin));
 
   wsClient.connect();
 

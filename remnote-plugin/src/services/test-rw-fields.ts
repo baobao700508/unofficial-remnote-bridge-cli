@@ -4,7 +4,7 @@
  * 每个 RW 字段创建一个**独立**的 Rem，清晰标注字段名，
  * 方便截图逐个观察视觉行为。
  */
-import type { ReactRNPlugin, Rem } from '@remnote/plugin-sdk';
+import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 
 async function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

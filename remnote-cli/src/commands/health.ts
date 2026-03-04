@@ -7,15 +7,10 @@
  * - 守护进程不可达 → 退出码 2
  */
 
-import WebSocket from 'ws';
-import crypto from 'crypto';
-import { loadConfig, pidFilePath, findProjectRoot } from '../config';
+import { findProjectRoot, pidFilePath } from '../config';
 import { checkDaemon } from '../daemon/pid';
-import type { BridgeResponse, StatusResult } from '../protocol';
-import { isBridgeResponse } from '../protocol';
-
-const CONNECT_TIMEOUT_MS = 5_000;
-const RESPONSE_TIMEOUT_MS = 5_000;
+import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
+import type { StatusResult } from '../protocol';
 
 export interface HealthOptions {
   json?: boolean;
@@ -24,7 +19,6 @@ export interface HealthOptions {
 export async function healthCommand(options: HealthOptions = {}): Promise<void> {
   const { json } = options;
   const projectRoot = findProjectRoot();
-  const config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
 
   // 先检查 PID 文件
@@ -50,7 +44,7 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   // 通过 WS 连接守护进程获取状态
   let status: StatusResult;
   try {
-    status = await getStatus(config.wsPort);
+    status = await sendDaemonRequest('get_status') as StatusResult;
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
@@ -102,56 +96,6 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   }
 
   process.exitCode = exitCode;
-}
-
-function getStatus(port: number): Promise<StatusResult> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-    const requestId = crypto.randomUUID();
-
-    const connectTimer = setTimeout(() => {
-      ws.terminate();
-      reject(new Error('连接守护进程超时'));
-    }, CONNECT_TIMEOUT_MS);
-
-    ws.on('open', () => {
-      clearTimeout(connectTimer);
-
-      const responseTimer = setTimeout(() => {
-        ws.terminate();
-        reject(new Error('等待响应超时'));
-      }, RESPONSE_TIMEOUT_MS);
-
-      ws.on('message', (data) => {
-        try {
-          const msg = JSON.parse(data.toString());
-          if (isBridgeResponse(msg) && msg.id === requestId) {
-            clearTimeout(responseTimer);
-            ws.close();
-            if (msg.error) {
-              reject(new Error(msg.error));
-            } else {
-              resolve(msg.result as StatusResult);
-            }
-          }
-        } catch {
-          // 忽略非 JSON 消息
-        }
-      });
-
-      // 发送 get_status 请求
-      ws.send(JSON.stringify({
-        id: requestId,
-        action: 'get_status',
-        payload: {},
-      }));
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(connectTimer);
-      reject(new Error(`无法连接守护进程: ${err.message}`));
-    });
-  });
 }
 
 function formatUptime(seconds: number): string {

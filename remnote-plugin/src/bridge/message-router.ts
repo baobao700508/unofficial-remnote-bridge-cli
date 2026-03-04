@@ -7,24 +7,24 @@
  * 依赖方向：bridge/message-router → services（单向）
  */
 
+import type { ReactRNPlugin } from '@remnote/plugin-sdk';
 import type { BridgeRequest } from './websocket-client';
+import { readRem } from '../services/read-rem';
+import { writeRemFields } from '../services/write-rem-fields';
 
 /**
  * 创建消息路由处理器
  *
  * 返回一个函数供 WebSocketClient.setMessageHandler() 使用。
- * 未来实现 services 后，此处按 action 分发到对应 service 方法。
+ * 按 action 分发到 services 层对应方法（同态命名）。
  */
-export function createMessageRouter(): (request: BridgeRequest) => Promise<unknown> {
+export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequest) => Promise<unknown> {
   return async (request: BridgeRequest): Promise<unknown> => {
     switch (request.action) {
-      // 待实现：
-      // case 'read_note':    return readNote(plugin, request.payload);
-      // case 'create_note':  return createNote(plugin, request.payload);
-      // case 'update_note':  return updateNote(plugin, request.payload);
-      // case 'search':       return search(plugin, request.payload);
-      // case 'search_by_tag': return searchByTag(plugin, request.payload);
-      // case 'append_journal': return appendJournal(plugin, request.payload);
+      case 'read_rem':
+        return readRem(plugin, request.payload as { remId: string });
+      case 'write_rem_fields':
+        return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
 
       default:
         throw new Error(`未实现的 action: ${request.action}`);

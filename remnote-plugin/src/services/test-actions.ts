@@ -4,7 +4,7 @@
  * 测试流程：创建初态 → 暂停（截图初态）→ 执行动作 → 暂停（截图终态）
  * 测试的动作方法：remove / indent / outdent / merge / collapse / expand / addToPortal
  */
-import type { ReactRNPlugin, Rem } from '@remnote/plugin-sdk';
+import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 
 async function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

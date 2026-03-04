@@ -266,9 +266,9 @@ export interface RemObject {
    */
   sources: string[];
   /**
-   * [RW] ✅ 别名 Rem ID 数组。SDK: getAliases() / getOrCreateAliasWithText()
-   * UI 行为：Rem 下方出现别名子元素（≡ 三横线图标 + 别名文本，深色背景）
-   *         getOrCreateAliasWithText 有副作用（不存在则创建新 alias Rem）
+   * [R] 别名 Rem ID 数组。SDK: getAliases()
+   * 写入接口 getOrCreateAliasWithText(text) 需要文本参数（非 ID），与 RemObject 的 ID 数组形式不匹配。
+   * v1 标记为只读，后续可提供独立命令 `add-alias <remId> <text>`
    */
   aliases: string[];
 
