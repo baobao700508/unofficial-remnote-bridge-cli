@@ -4,6 +4,7 @@ import '../index.css';
 import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
 import { WebSocketClient } from '../bridge/websocket-client';
 import { createMessageRouter } from '../bridge/message-router';
+import { runActionTests } from '../services/test-actions';
 
 let wsClient: WebSocketClient | null = null;
 // 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
@@ -58,6 +59,9 @@ async function onActivate(plugin: ReactRNPlugin) {
   wsClient.setMessageHandler(createMessageRouter());
 
   wsClient.connect();
+
+  // ── 纯动作测试（一次性运行）──
+  runActionTests(plugin).catch((err) => console.error('[ACTION-TEST] 顶层错误:', err));
 }
 
 async function onDeactivate(_: ReactRNPlugin) {

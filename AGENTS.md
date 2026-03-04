@@ -82,8 +82,51 @@ remnote-plugin 内部分为**核心链**和**宿主层**两部分：
 宿主层（独立）：widgets（插件入口 + 状态展示）
 ```
 
+##### 各层职责边界
+
+| 层 | 目录 | 职责 | 包含什么 | 禁止什么 |
+|:--|:--|:--|:--|:--|
+| **widgets** | `src/widgets/` | RemNote 插件宿主入口 + 状态展示面板 | React 组件、插件生命周期（onActivate/onDeactivate）、UI 渲染 | 禁止包含业务逻辑（不得直接调用 RemNote SDK 的数据操作 API） |
+| **bridge** | `src/bridge/` | WS 传输 + 请求路由 | websocket-client（连接管理、协议处理）、message-router（按 action 分发到 services） | 禁止包含 RemNote SDK 调用；禁止包含业务数据转换逻辑 |
+| **services** | `src/services/` | 业务操作实现 | 每个文件封装一条完整的 RemNote SDK 操作链 | 禁止管理 WS 连接；禁止依赖 bridge 或 widgets |
+| **utils** | `src/utils/` | 无状态纯函数辅助工具 | 富文本解析、内容渲染、Rem 分类等纯函数 | 禁止有副作用；禁止依赖任何其他层 |
+
+##### 关键区分
+
+- **bridge vs services**：bridge 解决「怎么通信」（传输协议、连接管理、请求路由），services 解决「做什么」（调用 RemNote SDK 执行具体操作）。两者界限是：**bridge 不碰 RemNote SDK，services 不碰 WebSocket**。
+- **widgets vs bridge**：widgets 通过构造 `WebSocketClient` 实例并调用 `connect()`/`disconnect()` 来启停连接，通过 `setMessageHandler()` 注入 message-router 创建的处理器。widgets **只做接线和展示**，不参与请求处理流程。
+
+##### 同态命名规则（红线）
+
+CLI 业务命令、协议 action、services 文件/函数之间**必须保持同态映射**——从任一层的名称可以机械地推导出其他层的名称：
+
+```
+CLI 命令名 (kebab-case)     →  remnote read-note
+                                    ↕ 同态
+协议 action (snake_case)     →  { action: "read_note", ... }
+                                    ↕ 同态
+message-router case          →  case 'read_note': return readNote(plugin, payload)
+                                    ↕ 同态
+services 文件名 (kebab-case)  →  services/read-note.ts
+                                    ↕ 同态
+services 导出函数 (camelCase) →  export async function readNote(...)
+```
+
+| CLI 命令 | 协议 action | message-router case | services 文件 | services 函数 |
+|:--|:--|:--|:--|:--|
+| `read-note` | `read_note` | `case 'read_note'` | `read-note.ts` | `readNote()` |
+| `create-note` | `create_note` | `case 'create_note'` | `create-note.ts` | `createNote()` |
+| `search` | `search` | `case 'search'` | `search.ts` | `search()` |
+| `search-by-tag` | `search_by_tag` | `case 'search_by_tag'` | `search-by-tag.ts` | `searchByTag()` |
+
+**新增业务命令时，必须在所有四层同时添加同态命名的对应实现。**
+
+> 注意：`connect`、`disconnect`、`health` 是 CLI 的**基础设施命令**（管理守护进程生命周期），不经过 Plugin 的 bridge→services 链路，因此不适用同态命名规则。
+
+##### 依赖方向（红线）
+
 - **核心链**依赖方向单向：bridge → services → utils，**禁止反向**
-- **widgets** 是 RemNote 插件的宿主入口和展示面板，可依赖 bridge（接线和读状态），但不属于核心链
+- **widgets** 可依赖 bridge（接线和读状态），但不属于核心链
 - **禁止**：bridge / services / utils 依赖 widgets
 - **禁止**：utils 依赖 services / bridge
 - **禁止**：services 依赖 bridge
@@ -197,3 +240,26 @@ remnote-bridge-cli/
 | 桥接层 | `remnote-plugin/` | 通过 RemNote SDK 与知识库交互 |
 | 命令层 | `remnote-cli/` | 封装操作为统一 CLI 命令 |
 | 接入层 | `remnote-skills/` + `remnote-mcp/` | 暴露给 AI Agent（Skills / MCP） |
+
+### 4.5 会话与缓存架构
+
+#### 会话定义
+
+- **会话（Session）= 守护进程（daemon）的生命周期**
+- `remnote-cli connect` 启动守护进程 → 会话开始
+- `remnote-cli disconnect` 关闭守护进程 → 会话结束，缓存全部清空
+- 每次 CLI 命令调用（`read-rem`、`edit-rem` 等）都是**独立的 OS 进程**，命令进程本身无状态
+- 守护进程是 remnote-cli 层的内部组件，不违反层间依赖方向
+
+#### 缓存存储位置
+
+- 缓存存储在**守护进程的内存中**（daemon 是长生命周期进程，CLI 命令是短生命周期进程）
+- CLI 命令通过 IPC 与 daemon 通信，读写缓存
+- 守护进程关闭 → 缓存自然消失，无需 TTL 过期机制
+- 内存控制：LRU 策略，上限 200 条目
+
+#### 为什么不需要 TTL
+
+- 第二道防线（写前变更检测）已能捕获所有陈旧数据——每次 write 前都会从 SDK 重新抓取最新状态对比
+- 如果 Rem 未被外部修改，旧缓存仍然有效，无论多久前 read 的
+- TTL 引入不必要的复杂度（僵尸条目、过期不自动删除的歧义语义）
