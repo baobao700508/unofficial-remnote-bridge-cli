@@ -24,8 +24,9 @@ async function main() {
   const pidPath = pidFilePath(projectRoot);
   const logPath = logFilePath(projectRoot);
 
-  // 日志写入文件（覆盖模式）
-  const logStream = fs.createWriteStream(logPath, { flags: 'w' });
+  // 日志写入文件（追加模式，保留前次会话日志）
+  const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+  logStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] 守护进程启动 (PID: ${process.pid})\n${'='.repeat(60)}\n`);
   function log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;

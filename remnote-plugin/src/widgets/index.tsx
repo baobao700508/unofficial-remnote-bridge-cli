@@ -4,7 +4,12 @@ import '../index.css';
 import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
 import { WebSocketClient } from '../bridge/websocket-client';
 import { createMessageRouter } from '../bridge/message-router';
-import { runActionTests } from '../services/test-actions';
+// test-scripts 已完成数据收集，不再打包进生产代码
+// 如需重跑，取消注释对应 import 和 onActivate 调用
+// import { runActionTests } from '../test-scripts/test-actions';
+// import { runRichTextBuilderTest } from '../test-scripts/test-richtext-builder';
+// import { runRichTextRemainingTest } from '../test-scripts/test-richtext-remaining';
+// import { runRichTextMatrixTest } from '../test-scripts/test-richtext-matrix';
 
 let wsClient: WebSocketClient | null = null;
 // 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
@@ -60,8 +65,11 @@ async function onActivate(plugin: ReactRNPlugin) {
 
   wsClient.connect();
 
-  // ── 纯动作测试（一次性运行）──
-  runActionTests(plugin).catch((err) => console.error('[ACTION-TEST] 顶层错误:', err));
+  // test-scripts 已完成数据收集，不再自动运行
+  // runActionTests(plugin).catch((err) => console.error('[ACTION-TEST] 顶层错误:', err));
+  // runRichTextBuilderTest(plugin).catch((err) => console.error('[RICHTEXT-BUILDER-TEST] 顶层错误:', err));
+  // runRichTextRemainingTest(plugin).catch((err) => console.error('[RICHTEXT-REMAINING-TEST] 顶层错误:', err));
+  // runRichTextMatrixTest(plugin).catch((err) => console.error('[RICHTEXT-MATRIX-TEST] 顶层错误:', err));
 }
 
 async function onDeactivate(_: ReactRNPlugin) {

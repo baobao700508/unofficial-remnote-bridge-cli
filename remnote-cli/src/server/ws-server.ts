@@ -1,11 +1,13 @@
 /**
  * WebSocket Server
  *
- * 守护进程的核心组件：监听端口，管理 Plugin 和 CLI 命令的连接。
+ * 守护进程的核心基础设施：监听端口，管理 Plugin 和 CLI 命令的连接。
  * - 接受 Plugin 的 hello 握手
  * - 向 Plugin 发送 ping 心跳
- * - 处理 CLI 命令的 BridgeRequest（如 get_status）
+ * - 分发 CLI 请求到对应的 handler
  * - 只允许一个 Plugin 连接
+ *
+ * 业务编排逻辑在 handlers/ 中，本文件只做连接管理和请求分发。
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
@@ -16,23 +18,12 @@ import type {
   StatusResult,
 } from '../protocol';
 import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol';
-import { RemCache } from './rem-cache';
-import { EditHandler } from './edit-handler';
+import { RemCache } from '../handlers/rem-cache';
+import { ReadHandler } from '../handlers/read-handler';
+import { EditHandler } from '../handlers/edit-handler';
 import crypto from 'crypto';
 
 const PLUGIN_REQUEST_TIMEOUT_MS = 15_000;
-
-/** R-F 字段（仅 --full 模式输出，默认不输出） */
-const RF_FIELDS = new Set([
-  'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
-  'isPowerupPropertyListItem', 'isPowerupSlot',
-  'deepRemsBeingReferenced',
-  'ancestorTagRem', 'descendantTagRem',
-  'portalsAndDocumentsIn', 'allRemInDocumentOrPortal', 'allRemInFolderQueue',
-  'timesSelectedInSearch', 'lastTimeMovedTo', 'schemaVersion',
-  'embeddedQueueViewMode',
-  'localUpdatedAt', 'lastPracticed',
-]);
 
 export interface BridgeServerConfig {
   port: number;
@@ -52,13 +43,15 @@ export class BridgeServer {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private startTime = Date.now();
-  private remCache = new RemCache();
-  private editHandler: EditHandler;
   private pendingPluginRequests = new Map<string, {
     resolve: (result: unknown) => void;
     reject: (error: Error) => void;
     timer: NodeJS.Timeout;
   }>();
+
+  // 业务编排器
+  private readHandler: ReadHandler;
+  private editHandler: EditHandler;
 
   private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
@@ -77,10 +70,13 @@ export class BridgeServer {
       onLog: config.onLog,
       getTimeoutRemaining: config.getTimeoutRemaining,
     };
-    this.editHandler = new EditHandler(
-      this.remCache,
-      (action, payload) => this.forwardToPlugin(action, payload),
-    );
+
+    const remCache = new RemCache();
+    const forwardFn = (action: string, payload: Record<string, unknown>) =>
+      this.forwardToPlugin(action, payload);
+
+    this.readHandler = new ReadHandler(remCache, forwardFn, config.onLog);
+    this.editHandler = new EditHandler(remCache, forwardFn);
   }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -232,6 +228,7 @@ export class BridgeServer {
     // 通知守护进程刷新超时计时器
     this.onCliRequest?.();
 
+    // get_status：内部处理（不需要 Plugin）
     if (request.action === 'get_status') {
       const result = this.getStatus();
       const response: BridgeResponse = { id: request.id, result };
@@ -239,7 +236,7 @@ export class BridgeServer {
       return;
     }
 
-    // 检查 Plugin 连接
+    // 以下 action 都需要 Plugin 连接
     if (!this.pluginSocket || this.pluginSocket.readyState !== WebSocket.OPEN) {
       const response: BridgeResponse = {
         id: request.id,
@@ -249,43 +246,21 @@ export class BridgeServer {
       return;
     }
 
-    // read_rem: 转发 + 缓存 + 字段过滤
-    if (request.action === 'read_rem') {
-      try {
-        const result = await this.handleReadRem(request.payload);
-        const response: BridgeResponse = { id: request.id, result };
-        ws.send(JSON.stringify(response));
-      } catch (error) {
-        const response: BridgeResponse = {
-          id: request.id,
-          error: error instanceof Error ? error.message : String(error),
-        };
-        ws.send(JSON.stringify(response));
-      }
-      return;
-    }
+    // 分发到对应 handler
+    try {
+      let result: unknown;
 
-    // edit_rem: 三道防线 + str_replace + 写入
-    if (request.action === 'edit_rem') {
-      try {
-        const result = await this.editHandler.handleEditRem(
+      if (request.action === 'read_rem') {
+        result = await this.readHandler.handleReadRem(request.payload);
+      } else if (request.action === 'edit_rem') {
+        result = await this.editHandler.handleEditRem(
           request.payload as { remId: string; oldStr: string; newStr: string },
         );
-        const response: BridgeResponse = { id: request.id, result };
-        ws.send(JSON.stringify(response));
-      } catch (error) {
-        const response: BridgeResponse = {
-          id: request.id,
-          error: error instanceof Error ? error.message : String(error),
-        };
-        ws.send(JSON.stringify(response));
+      } else {
+        // 其他 action：直接转发给 Plugin
+        result = await this.forwardToPlugin(request.action, request.payload);
       }
-      return;
-    }
 
-    // 其他 action：直接转发给 Plugin
-    try {
-      const result = await this.forwardToPlugin(request.action, request.payload);
       const response: BridgeResponse = { id: request.id, result };
       ws.send(JSON.stringify(response));
     } catch (error) {
@@ -295,58 +270,6 @@ export class BridgeServer {
       };
       ws.send(JSON.stringify(response));
     }
-  }
-
-  /**
-   * 处理 read_rem 请求：
-   * 1. 转发到 Plugin 获取完整 RemObject
-   * 2. 序列化为 JSON 字符串并缓存（完整版本）
-   * 3. 根据 fields/full 参数过滤字段返回给 CLI
-   */
-  private async handleReadRem(payload: Record<string, unknown>): Promise<unknown> {
-    const remId = payload.remId as string;
-    if (!remId) {
-      throw new Error('缺少 remId 参数');
-    }
-
-    // 转发到 Plugin
-    const remObject = await this.forwardToPlugin('read_rem', { remId });
-
-    // 缓存完整 JSON
-    const fullJson = JSON.stringify(remObject, null, 2);
-    this.remCache.set(remId, fullJson);
-    this.log(`缓存 Rem ${remId.slice(0, 8)}... (${fullJson.length} bytes)`);
-
-    // 字段过滤
-    const fields = payload.fields as string[] | undefined;
-    const full = payload.full as boolean | undefined;
-
-    if (full) {
-      // --full → 返回完整对象（含 R-F 字段）
-      return remObject;
-    }
-
-    const obj = remObject as Record<string, unknown>;
-
-    if (fields) {
-      // --fields 过滤：只返回指定字段 + id
-      const filtered: Record<string, unknown> = { id: obj.id };
-      for (const field of fields) {
-        if (field in obj) {
-          filtered[field] = obj[field];
-        }
-      }
-      return filtered;
-    }
-
-    // 默认模式：排除 R-F 字段
-    const filtered: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      if (!RF_FIELDS.has(key)) {
-        filtered[key] = value;
-      }
-    }
-    return filtered;
   }
 
   /**
@@ -429,11 +352,6 @@ export class BridgeServer {
       clearTimeout(this.pongTimer);
       this.pongTimer = null;
     }
-  }
-
-  /** 获取缓存的 Rem JSON（供 edit-rem 防线使用） */
-  getCachedRem(remId: string): string | null {
-    return this.remCache.get(remId);
   }
 
   /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */

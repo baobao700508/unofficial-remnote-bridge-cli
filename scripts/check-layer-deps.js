@@ -118,32 +118,14 @@ function checkPackageJson(layerDir, forbidden) {
   return violations;
 }
 
-// ── Plugin 内部分层约束 ──
-// 核心链：bridge → services → utils（单向依赖）
-// 宿主层：widgets（独立，可依赖 bridge，但核心链禁止反向依赖 widgets）
-const PLUGIN_INTERNAL_RULES = [
-  {
-    subdir: 'utils',
-    label: 'utils（辅助工具）',
-    forbidden: ['services', 'bridge', 'widgets'],
-  },
-  {
-    subdir: 'services',
-    label: 'services（业务操作）',
-    forbidden: ['bridge', 'widgets'],
-  },
-  {
-    subdir: 'bridge',
-    label: 'bridge（API 层）',
-    forbidden: ['widgets'],
-  },
-];
+// ── 通用内部分层检查函数 ──
+// 用于检查一个 srcDir 内各子目录之间的依赖方向
 
-function checkPluginInternalDeps(pluginSrcDir) {
+function checkInternalDeps(srcDir, rules) {
   const violations = [];
 
-  for (const rule of PLUGIN_INTERNAL_RULES) {
-    const subDir = path.join(pluginSrcDir, rule.subdir);
+  for (const rule of rules) {
+    const subDir = path.join(srcDir, rule.subdir);
     if (!fs.existsSync(subDir)) continue;
 
     const files = walkDir(subDir);
@@ -183,6 +165,43 @@ function checkPluginInternalDeps(pluginSrcDir) {
 
   return violations;
 }
+
+// ── Plugin 内部分层约束 ──
+// 核心链：bridge → services → utils（单向依赖）
+// 宿主层：widgets（独立，可依赖 bridge，但核心链禁止反向依赖 widgets）
+const PLUGIN_INTERNAL_RULES = [
+  {
+    subdir: 'utils',
+    label: 'utils（辅助工具）',
+    forbidden: ['services', 'bridge', 'widgets'],
+  },
+  {
+    subdir: 'services',
+    label: 'services（业务操作）',
+    forbidden: ['bridge', 'widgets'],
+  },
+  {
+    subdir: 'bridge',
+    label: 'bridge（API 层）',
+    forbidden: ['widgets'],
+  },
+];
+
+// ── CLI 内部分层约束 ──
+// handlers 不依赖 server/commands/daemon（通过构造注入解耦）
+// commands 不依赖 server/handlers（通过 daemon/send-request 通信）
+const CLI_INTERNAL_RULES = [
+  {
+    subdir: 'handlers',
+    label: 'handlers（业务编排）',
+    forbidden: ['server', 'commands', 'daemon'],
+  },
+  {
+    subdir: 'commands',
+    label: 'commands（CLI 入口）',
+    forbidden: ['server', 'handlers'],
+  },
+];
 
 // 执行检查
 const rootDir = path.resolve(__dirname, '..');
@@ -224,25 +243,41 @@ for (const rule of RULES) {
   }
 }
 
-// ── Plugin 内部分层检查 ──
-console.log('');
-console.log('检查 Plugin 内部分层...\n');
+// ── 内部分层检查（通用） ──
+const INTERNAL_CHECKS = [
+  {
+    name: 'remnote-plugin',
+    label: 'Plugin 内部分层',
+    srcDir: path.join(rootDir, 'remnote-plugin', 'src'),
+    rules: PLUGIN_INTERNAL_RULES,
+  },
+  {
+    name: 'remnote-cli',
+    label: 'CLI 内部分层',
+    srcDir: path.join(rootDir, 'remnote-cli', 'src'),
+    rules: CLI_INTERNAL_RULES,
+  },
+];
 
-const pluginSrcDir = path.join(rootDir, 'remnote-plugin', 'src');
-if (fs.existsSync(pluginSrcDir)) {
-  const internalViolations = checkPluginInternalDeps(pluginSrcDir);
-  if (internalViolations.length === 0) {
-    console.log('  ✅ remnote-plugin 内部分层 — 无违规');
-  } else {
-    console.log(`  ❌ remnote-plugin 内部分层 — 发现 ${internalViolations.length} 处违规：`);
-    for (const v of internalViolations) {
-      console.log(`     ${path.relative(rootDir, v.file)}:${v.line}`);
-      console.log(`       ${v.from} 禁止依赖 ${v.to}，但发现: ${v.import}`);
+for (const check of INTERNAL_CHECKS) {
+  console.log('');
+  console.log(`检查 ${check.label}...\n`);
+
+  if (fs.existsSync(check.srcDir)) {
+    const internalViolations = checkInternalDeps(check.srcDir, check.rules);
+    if (internalViolations.length === 0) {
+      console.log(`  ✅ ${check.name} 内部分层 — 无违规`);
+    } else {
+      console.log(`  ❌ ${check.name} 内部分层 — 发现 ${internalViolations.length} 处违规：`);
+      for (const v of internalViolations) {
+        console.log(`     ${path.relative(rootDir, v.file)}:${v.line}`);
+        console.log(`       ${v.from} 禁止依赖 ${v.to}，但发现: ${v.import}`);
+      }
+      totalViolations += internalViolations.length;
     }
-    totalViolations += internalViolations.length;
+  } else {
+    console.log(`  ⏭  ${check.name}/src — 目录不存在，跳过`);
   }
-} else {
-  console.log('  ⏭  remnote-plugin/src — 目录不存在，跳过');
 }
 
 console.log('');

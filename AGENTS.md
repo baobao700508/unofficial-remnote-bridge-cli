@@ -75,62 +75,71 @@ RemNote SDK
 
 #### 2.1.3 Plugin 内部分层（红线）
 
-remnote-plugin 内部分为**核心链**和**宿主层**两部分：
-
 ```
-核心链（业务数据流）：bridge → services → utils
-宿主层（独立）：widgets（插件入口 + 状态展示）
+核心链：bridge → services → utils（单向依赖）
+宿主层：widgets（独立，可依赖 bridge）
 ```
 
-##### 各层职责边界
+| 目录 | 职责 | 禁止 |
+|:--|:--|:--|
+| **widgets** | 插件入口 + 状态展示（React 组件、生命周期） | 禁止包含业务逻辑（不直接调用 SDK 数据 API） |
+| **bridge** | WS 传输 + 请求路由（websocket-client、message-router） | 禁止调用 RemNote SDK；禁止业务数据转换 |
+| **services** | 业务操作（每个文件封装一条 SDK 操作链） | 禁止管理 WS 连接；禁止依赖 bridge/widgets |
+| **utils** | 无状态纯函数（富文本解析、Rem 分类等） | 禁止有副作用；禁止依赖任何其他层 |
 
-| 层 | 目录 | 职责 | 包含什么 | 禁止什么 |
-|:--|:--|:--|:--|:--|
-| **widgets** | `src/widgets/` | RemNote 插件宿主入口 + 状态展示面板 | React 组件、插件生命周期（onActivate/onDeactivate）、UI 渲染 | 禁止包含业务逻辑（不得直接调用 RemNote SDK 的数据操作 API） |
-| **bridge** | `src/bridge/` | WS 传输 + 请求路由 | websocket-client（连接管理、协议处理）、message-router（按 action 分发到 services） | 禁止包含 RemNote SDK 调用；禁止包含业务数据转换逻辑 |
-| **services** | `src/services/` | 业务操作实现 | 每个文件封装一条完整的 RemNote SDK 操作链 | 禁止管理 WS 连接；禁止依赖 bridge 或 widgets |
-| **utils** | `src/utils/` | 无状态纯函数辅助工具 | 富文本解析、内容渲染、Rem 分类等纯函数 | 禁止有副作用；禁止依赖任何其他层 |
-
-##### 关键区分
-
-- **bridge vs services**：bridge 解决「怎么通信」（传输协议、连接管理、请求路由），services 解决「做什么」（调用 RemNote SDK 执行具体操作）。两者界限是：**bridge 不碰 RemNote SDK，services 不碰 WebSocket**。
-- **widgets vs bridge**：widgets 通过构造 `WebSocketClient` 实例并调用 `connect()`/`disconnect()` 来启停连接，通过 `setMessageHandler()` 注入 message-router 创建的处理器。widgets **只做接线和展示**，不参与请求处理流程。
+核心区分：**bridge 不碰 SDK，services 不碰 WebSocket**。
 
 ##### 同态命名规则（红线）
 
-CLI 业务命令、协议 action、services 文件/函数之间**必须保持同态映射**——从任一层的名称可以机械地推导出其他层的名称：
+CLI 命令 → 协议 action → message-router case → services 文件/函数，**名称必须同态映射**：
 
-```
-CLI 命令名 (kebab-case)     →  remnote read-note
-                                    ↕ 同态
-协议 action (snake_case)     →  { action: "read_note", ... }
-                                    ↕ 同态
-message-router case          →  case 'read_note': return readNote(plugin, payload)
-                                    ↕ 同态
-services 文件名 (kebab-case)  →  services/read-note.ts
-                                    ↕ 同态
-services 导出函数 (camelCase) →  export async function readNote(...)
-```
+| CLI 命令 | 协议 action | services 文件 | services 函数 |
+|:--|:--|:--|:--|
+| `read-rem` | `read_rem` | `read-rem.ts` | `readRem()` |
+| `search` | `search` | `search.ts` | `search()` |
 
-| CLI 命令 | 协议 action | message-router case | services 文件 | services 函数 |
-|:--|:--|:--|:--|:--|
-| `read-note` | `read_note` | `case 'read_note'` | `read-note.ts` | `readNote()` |
-| `create-note` | `create_note` | `case 'create_note'` | `create-note.ts` | `createNote()` |
-| `search` | `search` | `case 'search'` | `search.ts` | `search()` |
-| `search-by-tag` | `search_by_tag` | `case 'search_by_tag'` | `search-by-tag.ts` | `searchByTag()` |
+**新增业务命令时，必须在所有层同时添加同态命名的对应实现。**
 
-**新增业务命令时，必须在所有四层同时添加同态命名的对应实现。**
-
-> 注意：`connect`、`disconnect`、`health` 是 CLI 的**基础设施命令**（管理守护进程生命周期），不经过 Plugin 的 bridge→services 链路，因此不适用同态命名规则。
+> `connect`、`disconnect`、`health` 是基础设施命令，不经过 Plugin 的 bridge→services 链路，不适用同态命名。
 
 ##### 依赖方向（红线）
 
-- **核心链**依赖方向单向：bridge → services → utils，**禁止反向**
-- **widgets** 可依赖 bridge（接线和读状态），但不属于核心链
-- **禁止**：bridge / services / utils 依赖 widgets
-- **禁止**：utils 依赖 services / bridge
-- **禁止**：services 依赖 bridge
-- **检查工具**：`node scripts/check-layer-deps.js`（同时检查跨层和 Plugin 内部依赖）
+- 核心链单向：bridge → services → utils，**禁止反向**
+- widgets 可依赖 bridge，但核心链**禁止**依赖 widgets
+- **检查工具**：`node scripts/check-layer-deps.js`
+
+#### 2.1.4 CLI 内部分层（强约束）
+
+remnote-cli 内部按语义分为**基础设施**和**业务编排**两类：
+
+```
+基础设施：server（WS 通信）、daemon（进程管理）
+业务编排：handlers（缓存、防线、校验）
+入口：commands（CLI 命令入口）
+```
+
+##### 各目录职责边界
+
+| 目录 | 职责 | 包含什么 | 禁止什么 |
+|:--|:--|:--|:--|
+| **commands** | CLI 入口：参数解析、调用 daemon、格式化输出 | 每个文件对应一个 CLI 命令 | 禁止包含业务编排逻辑；禁止直接依赖 server 或 handlers |
+| **handlers** | 业务编排：缓存管理、防线检查、str_replace、校验 | ReadHandler、EditHandler、RemCache | 禁止管理 WS 连接；禁止依赖 server、commands、daemon |
+| **server** | WS 通信：连接管理、消息转发、心跳、pending requests | ws-server（分发请求到 handlers） | 禁止包含业务编排逻辑（缓存、防线、字段过滤等） |
+| **daemon** | 进程管理：启停守护进程、PID 文件、超时控制 | daemon、dev-server、pid、send-request | 禁止包含业务编排逻辑 |
+
+##### 关键区分
+
+- **server vs handlers**：server 解决「怎么通信」（WS 连接、消息收发、请求转发），handlers 解决「做什么」（缓存 Rem、防线检查、字段过滤）。两者界限是：**server 不碰业务逻辑，handlers 不碰 WebSocket**。
+- **handlers 解耦方式**：handlers 通过构造注入 `forwardToPlugin` 回调与 Plugin 通信，不直接依赖 server。
+
+##### 依赖方向（强约束）
+
+- `server/ws-server` → `handlers`（分发请求到编排器）
+- `daemon` → `server`（启动 WS Server）
+- `commands` → `daemon/send-request`（发送请求到守护进程）
+- **禁止**：handlers 依赖 server / commands / daemon
+- **禁止**：commands 依赖 server / handlers
+- **检查工具**：`node scripts/check-layer-deps.js`（同时检查跨层、Plugin 内部和 CLI 内部依赖）
 
 ### 2.2 SDK 文档时效性（强约束）
 
@@ -184,6 +193,11 @@ export async function xxxCommand(options: XxxOptions = {}): Promise<void> { ... 
 ```
 remnote-bridge-cli/
 ├── remnote-cli/              # 核心命令行工具（开发中）
+│   └── src/
+│       ├── commands/         # CLI 命令入口（参数解析 + 输出格式化）
+│       ├── handlers/         # 业务编排（缓存、防线、校验）
+│       ├── server/           # 基础设施：WS 通信（转发、连接、心跳）
+│       └── daemon/           # 基础设施：进程管理（启停、PID、超时）
 ├── remnote-plugin/           # RemNote 官方框架插件（开发中）
 │   └── src/
 │       ├── widgets/          # 宿主层：插件入口 + 状态展示

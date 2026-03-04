@@ -170,7 +170,7 @@ function countOccurrences(haystack: string, needle: string): number {
     pos = haystack.indexOf(needle, pos);
     if (pos === -1) break;
     count++;
-    pos += 1; // 允许重叠匹配
+    pos += needle.length; // 非重叠匹配，与 String.replace 行为一致
   }
   return count;
 }

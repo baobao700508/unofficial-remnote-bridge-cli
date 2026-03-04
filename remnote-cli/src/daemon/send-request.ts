@@ -58,6 +58,7 @@ export async function sendDaemonRequest(
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${config.wsPort}`);
     const requestId = crypto.randomUUID();
+    let responseTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connectTimer = setTimeout(() => {
       ws.terminate();
@@ -67,7 +68,7 @@ export async function sendDaemonRequest(
     ws.on('open', () => {
       clearTimeout(connectTimer);
 
-      const responseTimer = setTimeout(() => {
+      responseTimer = setTimeout(() => {
         ws.terminate();
         reject(new Error(`请求超时 (${responseTimeout / 1000}s): ${action}`));
       }, responseTimeout);
@@ -76,7 +77,7 @@ export async function sendDaemonRequest(
         try {
           const msg = JSON.parse(data.toString());
           if (isBridgeResponse(msg) && msg.id === requestId) {
-            clearTimeout(responseTimer);
+            if (responseTimer) clearTimeout(responseTimer);
             ws.close();
             if (msg.error) {
               reject(new Error(msg.error));
@@ -99,6 +100,7 @@ export async function sendDaemonRequest(
 
     ws.on('error', (err) => {
       clearTimeout(connectTimer);
+      if (responseTimer) clearTimeout(responseTimer);
       reject(new DaemonUnreachableError(err.message));
     });
   });
