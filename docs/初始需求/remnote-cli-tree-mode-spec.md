@@ -194,7 +194,7 @@ else:
 ### `read-tree` — 读取 Rem 子树结构
 
 ```
-remnote-cli read-tree <remId> [--depth 3] [--json]
+unofficial-remnote-bridge read-tree <remId> [--depth 3] [--json]
 ```
 
 | 参数 | 说明 |
@@ -208,7 +208,7 @@ remnote-cli read-tree <remId> [--depth 3] [--json]
 ### `edit-tree` — str_replace 编辑树结构
 
 ```
-remnote-cli edit-tree <remId> --old-str <old_str> --new-str <new_str> [--json]
+unofficial-remnote-bridge edit-tree <remId> --old-str <old_str> --new-str <new_str> [--json]
 ```
 
 | 参数 | 说明 |
@@ -229,7 +229,7 @@ remnote-cli edit-tree <remId> --old-str <old_str> --new-str <new_str> [--json]
 在"聚类分析"下面添加新算法：
 
 ```
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '      K-means <!--rem008-->\n      DBSCAN <!--rem009-->' \
   --new-str '      K-means <!--rem008-->\n      DBSCAN <!--rem009-->\n      层次聚类'
 ```
@@ -246,7 +246,7 @@ CLI 处理：
 删除"逻辑回归"：
 
 ```
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '    逻辑回归 :: 用于分类问题 <!--rem004 fc:concept-->\n' \
   --new-str ''
 ```
@@ -261,7 +261,7 @@ CLI 处理：
 把"K-means"从"聚类分析"下面移到"降维方法"下面：
 
 ```
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '    聚类分析 <!--rem007-->\n      K-means <!--rem008-->\n      DBSCAN <!--rem009-->\n    降维方法 <!--rem010 children:5-->' \
   --new-str '    聚类分析 <!--rem007-->\n      DBSCAN <!--rem009-->\n    降维方法 <!--rem010 children:5-->\n      K-means <!--rem008-->'
 ```
@@ -275,7 +275,7 @@ CLI 处理：
 把"强化学习"移到"监督学习"前面：
 
 ```
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '  监督学习 <!--rem002-->\n' \
   --new-str '  强化学习 <!--rem011-->\n    什么是 Q-learning？ >>> <!--rem012 fc:multiline-front-->\n      一种无模型的强化学习算法 <!--rem013 role:card-item-->\n      通过学习动作价值函数来选择最优策略 <!--rem014 role:card-item-->\n  监督学习 <!--rem002-->\n'
 ```
@@ -290,7 +290,7 @@ CLI 处理：
 新增一个 concept 闪卡：
 
 ```
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '    线性回归 :: 最基本的回归模型 <!--rem003 fc:concept-->' \
   --new-str '    线性回归 :: 最基本的回归模型 <!--rem003 fc:concept-->\n    岭回归 :: 带 L2 正则化的线性回归'
 ```
@@ -456,23 +456,23 @@ CLI 收到 `edit-tree` 后的处理流程：
 ### 工作流 1：查看结构后精细编辑某个 Rem
 
 ```
-remnote-cli read-tree doc001 --depth 2
+unofficial-remnote-bridge read-tree doc001 --depth 2
 → 看到整体结构，发现 rem003 需要修改内容
 
-remnote-cli read-rem rem003
+unofficial-remnote-bridge read-rem rem003
 → 看到 rem003 的完整 RichText 对象
 
-remnote-cli edit-rem rem003 --old-str ... --new-str ...
+unofficial-remnote-bridge edit-rem rem003 --old-str ... --new-str ...
 → 精细修改内容
 ```
 
 ### 工作流 2：重组文档结构
 
 ```
-remnote-cli read-tree doc001 --depth 3
+unofficial-remnote-bridge read-tree doc001 --depth 3
 → 看到整体结构
 
-remnote-cli edit-tree doc001 \
+unofficial-remnote-bridge edit-tree doc001 \
   --old-str '  强化学习 <!--rem011-->...' \
   --new-str '  强化学习 <!--rem011-->...\n  迁移学习\n    领域自适应\n    预训练模型'
 → 新增"迁移学习"及其子节点
@@ -481,15 +481,15 @@ remnote-cli edit-tree doc001 \
 ### 工作流 3：批量结构调整 + 逐个内容修改
 
 ```
-remnote-cli read-tree doc001 --depth -1
+unofficial-remnote-bridge read-tree doc001 --depth -1
 → 完全展开
 
-remnote-cli edit-tree doc001 ...  → 移动若干行
-remnote-cli edit-tree doc001 ...  → 删除若干行
-remnote-cli edit-tree doc001 ...  → 新增若干行
+unofficial-remnote-bridge edit-tree doc001 ...  → 移动若干行
+unofficial-remnote-bridge edit-tree doc001 ...  → 删除若干行
+unofficial-remnote-bridge edit-tree doc001 ...  → 新增若干行
 
-remnote-cli read-rem rem003  → remnote-cli edit-rem rem003 ...  → 改 rem003 内容
-remnote-cli read-rem rem007  → remnote-cli edit-rem rem007 ...  → 改 rem007 内容
+unofficial-remnote-bridge read-rem rem003  → unofficial-remnote-bridge edit-rem rem003 ...  → 改 rem003 内容
+unofficial-remnote-bridge read-rem rem007  → unofficial-remnote-bridge edit-rem rem007 ...  → 改 rem007 内容
 ```
 
 ---

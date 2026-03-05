@@ -132,9 +132,11 @@ async function applyField(
       break;
     case 'highlightColor':
       if (value === null) {
-        throw new Error('SDK limitation: cannot clear highlightColor (only change to another color)');
+        // setHighlightColor(null) 被 SDK 拒绝，通过 removePowerup('h') 从底层移除高亮 Tag
+        await rem.removePowerup('h');
+      } else {
+        await rem.setHighlightColor(value as 'Red' | 'Orange' | 'Yellow' | 'Green' | 'Blue' | 'Purple');
       }
-      await rem.setHighlightColor(value as 'Red' | 'Orange' | 'Yellow' | 'Green' | 'Blue' | 'Purple');
       break;
 
     // 状态标记

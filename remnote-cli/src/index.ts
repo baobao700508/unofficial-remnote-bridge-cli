@@ -17,6 +17,39 @@ import { editTreeCommand } from './commands/edit-tree';
 
 const program = new Command();
 
+/**
+ * --json 模式下解析 JSON 输入参数。
+ * 返回 null 表示解析失败（已输出错误并设置 exitCode）。
+ */
+function parseJsonInput(command: string, jsonStr: string | undefined, requiredFields: string[] = []): any | null {
+  if (!jsonStr) {
+    console.log(JSON.stringify({ ok: false, command, error: '--json 模式需要传入 JSON 参数，例如: command --json \'{"remId":"..."}\''}));
+    process.exitCode = 1;
+    return null;
+  }
+  let input: any;
+  try {
+    input = JSON.parse(jsonStr);
+  } catch {
+    console.log(JSON.stringify({ ok: false, command, error: `JSON 解析失败: ${jsonStr}` }));
+    process.exitCode = 1;
+    return null;
+  }
+  if (!input.remId) {
+    console.log(JSON.stringify({ ok: false, command, error: 'JSON 参数中缺少 remId 字段' }));
+    process.exitCode = 1;
+    return null;
+  }
+  for (const field of requiredFields) {
+    if (input[field] === undefined) {
+      console.log(JSON.stringify({ ok: false, command, error: `JSON 参数中缺少 ${field} 字段` }));
+      process.exitCode = 1;
+      return null;
+    }
+  }
+  return input;
+}
+
 program
   .name('unofficial-remnote-bridge')
   .description('Unofficial RemNote Bridge — 连接 CLI 与 RemNote 插件')
@@ -48,42 +81,72 @@ program
   });
 
 program
-  .command('read-rem <remId>')
+  .command('read-rem [remIdOrJson]')
   .description('读取单个 Rem 的完整 JSON 对象')
   .option('--fields <fields>', '只返回指定字段（逗号分隔）')
   .option('--full', '输出全部 51 个字段（含 R-F 低频字段）')
-  .action(async (remId: string, cmdOpts: { fields?: string; full?: boolean }) => {
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { fields?: string; full?: boolean }) => {
     const { json } = program.opts();
-    await readRemCommand(remId, { json, ...cmdOpts });
+    if (json) {
+      const input = parseJsonInput('read-rem', remIdOrJson);
+      if (!input) return;
+      await readRemCommand(input.remId, { json, fields: input.fields?.join(','), full: input.full });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      await readRemCommand(remIdOrJson, { json, ...cmdOpts });
+    }
   });
 
 program
-  .command('read-tree <remId>')
+  .command('read-tree [remIdOrJson]')
   .description('读取 Rem 子树并序列化为 Markdown 大纲')
   .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
-  .action(async (remId: string, cmdOpts: { depth?: string }) => {
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string }) => {
     const { json } = program.opts();
-    await readTreeCommand(remId, { json, ...cmdOpts });
+    if (json) {
+      const input = parseJsonInput('read-tree', remIdOrJson);
+      if (!input) return;
+      await readTreeCommand(input.remId, { json, depth: input.depth?.toString() });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      await readTreeCommand(remIdOrJson, { json, ...cmdOpts });
+    }
   });
 
 program
-  .command('edit-tree <remId>')
+  .command('edit-tree [remIdOrJson]')
   .description('通过 str_replace 编辑 Rem 子树结构（行级增/删/移/重排）')
-  .requiredOption('--old-str <oldStr>', '要替换的原始文本片段')
-  .requiredOption('--new-str <newStr>', '替换后的新文本片段')
-  .action(async (remId: string, cmdOpts: { oldStr: string; newStr: string }) => {
+  .option('--old-str <oldStr>', '要替换的原始文本片段')
+  .option('--new-str <newStr>', '替换后的新文本片段')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { oldStr?: string; newStr?: string }) => {
     const { json } = program.opts();
-    await editTreeCommand(remId, { json, ...cmdOpts });
+    if (json) {
+      const input = parseJsonInput('edit-tree', remIdOrJson, ['oldStr', 'newStr']);
+      if (!input) return;
+      await editTreeCommand(input.remId, { json, oldStr: input.oldStr, newStr: input.newStr });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      if (!cmdOpts.oldStr || !cmdOpts.newStr) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
+      await editTreeCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
+    }
   });
 
 program
-  .command('edit-rem <remId>')
+  .command('edit-rem [remIdOrJson]')
   .description('通过 str_replace 编辑 Rem 的 JSON 字段')
-  .requiredOption('--old-str <oldStr>', '要替换的原始文本片段')
-  .requiredOption('--new-str <newStr>', '替换后的新文本片段')
-  .action(async (remId: string, cmdOpts: { oldStr: string; newStr: string }) => {
+  .option('--old-str <oldStr>', '要替换的原始文本片段')
+  .option('--new-str <newStr>', '替换后的新文本片段')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { oldStr?: string; newStr?: string }) => {
     const { json } = program.opts();
-    await editRemCommand(remId, { json, ...cmdOpts });
+    if (json) {
+      const input = parseJsonInput('edit-rem', remIdOrJson, ['oldStr', 'newStr']);
+      if (!input) return;
+      await editRemCommand(input.remId, { json, oldStr: input.oldStr, newStr: input.newStr });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      if (!cmdOpts.oldStr || !cmdOpts.newStr) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
+      await editRemCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
+    }
   });
 
 program.parse();

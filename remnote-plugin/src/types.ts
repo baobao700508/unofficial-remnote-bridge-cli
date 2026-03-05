@@ -167,11 +167,9 @@ export interface RemObject {
    * [RW] ✅ 高亮颜色。SDK: getHighlightColor() / setHighlightColor()
    * UI 行为：整行背景变为对应颜色（Red→粉红、Blue→浅蓝），bullet 也着色
    *         默认 null（无高亮）
-   * SDK 限制：setHighlightColor() 只能设置颜色，不能清除（null→颜色 ✅，颜色→null ❌）
-   *          实测 undefined/null/0/""/RemColor.undefined 均被 SDK 拒绝
+   * SDK 注意：setHighlightColor() 只能设置颜色，不能清除（null/undefined 均被拒绝）
+   *          清除高亮通过 removePowerup('h') 从底层移除高亮 Tag 实现
    * 底层机制：Powerup — 注入"高亮" Tag (TBOrcFVvsbb3nqzaV) + 创建 [Color];;[Red/Blue/...] descriptor 子 Rem
-   * 清除方案：可通过 removePowerup('h') 或 removeTag(highlightTagId) 从底层移除高亮 Tag，
-   *          绕过 setHighlightColor() 无法清除的 SDK 限制
    */
   highlightColor: HighlightColor | null;
 

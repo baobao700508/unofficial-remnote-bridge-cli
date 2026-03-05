@@ -12,6 +12,18 @@
 
 ## 1. 核心发现：Rem 渲染的三层决定机制 ✅
 
+### 1.1 本质：复用 RemNote 的 Tag + Property 继承
+
+Powerup 渲染**不是**一套独立的特殊机制，而是复用了 RemNote 本身的 **Tag + Property 继承**特性：
+
+1. **任何 Rem 都可以作为 Tag** 标记别的 Rem，同时它可以定义自己拥有哪些 Property（`isProperty=true` 的子 Rem）
+2. **当 Tag 应用到目标 Rem 时**，Tag 携带的 Property 会以**复制粘贴**（而非 Portal 引用）的方式，直接成为目标 Rem 的子 Rem
+3. **前端渲染引擎**读取这些 Tag 引用和 Property 子 Rem 来决定 UI 样式
+
+所谓"Powerup"只是 RemNote 对这套通用机制的一个特定应用——系统内置了一批 `isPowerup=true` 的 Tag（如"标题""高亮""待办"），前端渲染引擎识别这些 Tag 并据此改变 Rem 的视觉表现。而 Property 在早期 SDK 中被称为 **Slot**，两者是同一概念的不同名称（详见 [术语辨析：Slot vs Property](../vocabulary-definition/README.md#1-slot-vs-property-)）。
+
+### 1.2 三层结构
+
 一个 Rem 的前端渲染效果由三层机制**共同决定**：
 
 ```
@@ -21,23 +33,24 @@
 | -> 存储在 Rem 的 tags 字段中（Rem ID 数组）          |
 | -> 每个 Powerup Tag 本身是一个 isPowerup=true 的 Rem |
 +-----------------------------------------------------+
-| 第 2 层：Powerup 子 Rem（隐藏的 children）           |
+| 第 2 层：Property 子 Rem（隐藏的 children）          |
 | -> 决定"启用效果的具体参数值"                         |
+| -> Tag 携带的 Property 被复制到目标 Rem 下            |
 | -> 以 [属性名] ;; [属性值] 的 descriptor 格式存储     |
 | -> 在 UI 中隐藏，但 SDK/read-tree 可读取              |
 | -> 只有"有参数"的 Powerup 才会生成子 Rem             |
 +-----------------------------------------------------+
-| 第 3 层：Powerup Tag 定义（Tag Rem 本身的结构）      |
-| -> 决定"这个 Powerup 有哪些可配置属性"及其默认值     |
-| -> 是全局共享的模板定义                               |
+| 第 3 层：Tag 定义（Tag Rem 本身的结构）              |
+| -> 决定"这个 Tag/Powerup 有哪些可配置 Property"      |
+| -> Tag Rem 下的 isProperty=true 子 Rem 定义了可用字段 |
 +-----------------------------------------------------+
 ```
 
 **关键结论：**
 
-- 删除 Powerup 子 Rem（第 2 层）-> 效果退化为**默认值**，但不完全消失 ✅🗑
+- 删除 Property 子 Rem（第 2 层）-> 效果退化为**默认值**，但不完全消失 ✅🗑
 - 只要 Tag 引用（第 1 层）还在 -> 效果本身**不会消失** ✅🗑
-- 要**彻底去除**某个 Powerup 效果，需要同时清除 Tag 引用 + 删除 Powerup 子 Rem
+- 要**彻底去除**某个 Powerup 效果 -> 使用 `removePowerup(code)`，它会同时清除 Tag 引用 + 删除所有参数子 Rem ✅ 实测验证
 - **并非所有渲染方法都走 Powerup 机制** — `setType`、`setBackText`、`setEnablePractice`、`setPracticeDirection` 是纯字段修改，不注入 Tag ✅
 
 ---
@@ -255,9 +268,27 @@ AI Agent 在使用 `edit-tree` 时需要理解：
 |:-----|:---------|:-----|
 | 设置标题字号 | `setFontSize('H1')` | 自动处理 Tag + 参数子 Rem |
 | 设置整行高亮 | `setHighlightColor('Red')` | 同上 |
+| **清除整行高亮** | `removePowerup('h')` | `setHighlightColor(null)` 被 SDK 拒绝，需通过 removePowerup 从底层清除 ✅ 实测验证 |
 | 切换代码/引用/列表 | `setIsCode(true)` 等 | 与 `addPowerup` 等价，语义更清晰 |
 | 切换 Rem 类型 | `setType(CONCEPT)` | 纯字段修改，不涉及 Powerup |
 | 精确控制 Powerup 属性 | `addPowerup()` + `setPowerupProperty()` | 两步操作，属性值为纯文本 |
+
+#### removePowerup 行为详解（2026-03-05 实测 + SDK CHANGELOG 确认）
+
+`removePowerup(code)` 会**同时**执行三件事：
+1. 从 `tags` 数组移除对应的 Powerup Tag 引用（第 1 层）
+2. 删除所有 Powerup 参数子 Rem / slots（第 2 层）
+3. 对应的 getter（如 `getHighlightColor()`）恢复返回 `null`
+
+SDK CHANGELOG 原文：*"Added `Rem.removePowerup(powerupCode)`. It will always remove all powerup slots."*
+
+**实测数据（highlightColor Blue → null）：**
+
+| 字段 | `setHighlightColor('Blue')` 后 | `removePowerup('h')` 后 |
+|:-----|:-------------------------------|:------------------------|
+| `highlightColor` | `"Blue"` | `null` |
+| `tags` | 含 `TBOrcFVvsbb3nqzaV`（高亮 Tag） | 已移除 |
+| `children` | 含 `[Color] ;; [Blue]` descriptor 子 Rem | 已清空 |
 
 ### 7.4 未来可能的 Powerup 操作命令
 
@@ -270,7 +301,7 @@ AI Agent 在使用 `edit-tree` 时需要理解：
 
 ## 8. 待验证问题
 
-- [ ] 清除 `tags` 数组中的 Tag 引用后，Powerup 效果是否完全消失？
+- [x] 清除 `tags` 数组中的 Tag 引用后，Powerup 效果是否完全消失？→ **已验证（2026-03-05）**：`removePowerup('h')` 同时移除 Tag 引用 + 所有参数子 Rem，高亮效果完全消失。SDK CHANGELOG 明确记载："It will always remove all powerup slots."
 - [ ] `标签组` Tag（`yj9EeMQi0NIiCEgCE`）的具体作用是什么？
 - [ ] Portal Rem（`type:portal`）在 Powerup 体系中的角色是什么？
 - [ ] 删除 Tag 引用但保留 Powerup 子 Rem 会怎样？（与删除实验相反的操作）
