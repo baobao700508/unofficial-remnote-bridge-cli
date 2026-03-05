@@ -11,6 +11,15 @@
  * - 关联关系只存 ID，不嵌套对象（避免循环引用和体积膨胀）
  * - 需要参数的方法（如 isCollapsed(portalId)）不纳入，留给按需查询
  *
+ * Powerup 渲染机制（2026-03-05 实验验证，详见 docs/powerup-rendering/README.md）：
+ * RemNote 的许多"格式设置"SDK 方法（setFontSize、setHighlightColor、setIsCode 等）
+ * 底层并非修改 Rem 自身字段，而是通过三层 Powerup 机制实现：
+ *   第 1 层：向 Rem 注入一个系统 Powerup Tag（控制渲染开关）
+ *   第 2 层：创建隐藏的 descriptor 子 Rem（携带参数值，如颜色、大小）
+ *   第 3 层：Powerup Tag 定义 Rem（模板，定义可接受的参数插槽）
+ * 这些隐藏的 Tag 和子 Rem 在 UI 中不可见，但通过 SDK 可读出。
+ * 以下每个 [RW] 字段的注释标注了其底层是 Powerup 机制还是纯字段修改
+ *
  * 读写标注：
  * - [RW]   = 可读可写（SDK 有对应的 setter/add/remove 方法）
  * - [R]    = 只读，默认输出（SDK 仅有 getter）
@@ -108,6 +117,7 @@ export interface RemObject {
    * UI 行为：设值后 Rem 显示为 "正面文本 → 背面文本" 格式（箭头分隔符）
    *         默认 null（无背面）；设值即产生闪卡正反面结构
    * 写入语义：null → setBackText([])（SDK 接受 undefined | RichTextInterface，空数组清除背面）
+   * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   backText: RichText | null;
 
@@ -119,12 +129,14 @@ export interface RemObject {
    * [RW] ✅ Rem 类型。SDK: type, getType() / setType(SetRemType)
    * UI 行为：CONCEPT → 文字变粗体；DESCRIPTOR → 保持正常字重（与默认无视觉差异）
    *         SetRemType 不含 PORTAL(6)，Portal 只能通过 createPortal() 创建
+   * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   type: RemTypeValue;
   /**
    * [RW] ✅ 是否作为独立文档页面打开。SDK: isDocument() / setIsDocument()
    * UI 行为：bullet (•) 变为文档页面图标（小方块），Rem 可作为独立页面打开
    *         独立于 type，CONCEPT Rem 可以同时是 Document
+   * 底层机制：Powerup — 注入"文档" Tag + 自动创建 [Status];;[Draft] descriptor 子 Rem
    */
   isDocument: boolean;
 
@@ -148,6 +160,7 @@ export interface RemObject {
    * [RW] ✅ 标题大小。SDK: getFontSize() / setFontSize()
    * UI 行为：H1 → 超大粗体；H2 → 大粗体（略小于 H1）；H3 → 中粗体
    *         默认 null（普通大小）；setFontSize(undefined) 恢复
+   * 底层机制：Powerup — 注入"标题" Tag + 创建 [Size];;[H1/H2/H3] descriptor 子 Rem
    */
   fontSize: FontSize | null;
   /**
@@ -156,6 +169,9 @@ export interface RemObject {
    *         默认 null（无高亮）
    * SDK 限制：setHighlightColor() 只能设置颜色，不能清除（null→颜色 ✅，颜色→null ❌）
    *          实测 undefined/null/0/""/RemColor.undefined 均被 SDK 拒绝
+   * 底层机制：Powerup — 注入"高亮" Tag (TBOrcFVvsbb3nqzaV) + 创建 [Color];;[Red/Blue/...] descriptor 子 Rem
+   * 清除方案：可通过 removePowerup('h') 或 removeTag(highlightTagId) 从底层移除高亮 Tag，
+   *          绕过 setHighlightColor() 无法清除的 SDK 限制
    */
   highlightColor: HighlightColor | null;
 
@@ -166,6 +182,7 @@ export interface RemObject {
   /**
    * [RW] ✅ 是否待办。SDK: isTodo() / setIsTodo()
    * UI 行为：文本前出现空心 checkbox（☐）；副作用：todoStatus 自动初始化为 "Unfinished"
+   * 底层机制：Powerup — 注入"待办" Tag + 自动创建 [Status];;[Unfinished] descriptor 子 Rem
    */
   isTodo: boolean;
   /**
@@ -178,22 +195,26 @@ export interface RemObject {
   /**
    * [RW] ✅ 是否代码块。SDK: isCode() / setIsCode()
    * UI 行为：Rem 变为代码块容器——等宽字体、灰色背景、块级缩进
+   * 底层机制：Powerup — 注入"代码" Tag，无参数子 Rem
    */
   isCode: boolean;
   /**
    * [RW] ✅ 是否引用块。SDK: isQuote() / setIsQuote()
    * UI 行为：左侧出现灰色竖线 + 行背景变浅灰（经典 blockquote 样式）
+   * 底层机制：Powerup — 注入"引用" Tag，无参数子 Rem
    */
   isQuote: boolean;
   /**
    * [RW] ✅ 是否列表项。SDK: isListItem() / setIsListItem()
    * UI 行为：bullet (•) 变为数字编号 "1."（有序列表样式）
+   * 底层机制：Powerup — 注入"列表项" Tag，无参数子 Rem
    */
   isListItem: boolean;
   /**
    * [RW] ✅ 是否卡片项。SDK: isCardItem() / setIsCardItem()
    * UI：无明显变化。功能：标记 Rem 以卡片样式显示（类似看板布局），
    *     而非默认项目符号列表，在 RemNote 的 Card View 中生效
+   * 底层机制：Powerup — 注入"卡片条目" Tag (MultiLineCard)，无参数子 Rem
    */
   isCardItem: boolean;
   /** [R] 是否表格。SDK: isTable()（无 setIsTable，只有 setTableFilter） */
@@ -203,6 +224,10 @@ export interface RemObject {
    * UI：bullet 变为方形图标（☐）。功能：标记 Rem 为 Powerup 的数据插槽（slot），
    *     Powerup 注册时通过 slots 配置定义，用于存储键值对数据（值为 RichText）。
    *     通过 getPowerupProperty(code, slot) / setPowerupProperty() 读写
+   * 底层机制：Powerup — 注入"模板插槽" Tag (vD8KGEg5dkj9bzkRn)，无参数子 Rem
+   * 重要发现：setIsSlot() 与 setIsProperty() 底层完全相同——注入同一个 Tag，
+   *          结果 isSlot=true 且 isProperty=true。两个名字是同一概念的不同视角：
+   *          "Slot" 用于 Powerup 语境，"Property" 用于表格/Tag 语境
    */
   isSlot: boolean;
   /**
@@ -211,6 +236,7 @@ export interface RemObject {
    *     结构化属性列，可通过 getPropertyType() 指定数据类型（text/number/date/checkbox/
    *     single_select/multi_select/url/image 等），通过 getTagPropertyValue(propertyId) /
    *     setTagPropertyValue() 读写单元格值。是 RemNote 表格系统的核心机制
+   * 底层机制：与 isSlot 完全相同 — 注入同一个"模板插槽" Tag (vD8KGEg5dkj9bzkRn)
    */
   isProperty: boolean;
   /** [R-F] 是否 Powerup。SDK: isPowerup()（写入用 addPowerup/removePowerup，参数化）。Powerup 系统标识 */
@@ -248,12 +274,14 @@ export interface RemObject {
    * [RW] ✅ 是否启用间隔重复练习。SDK: getEnablePractice() / setEnablePractice()
    * UI：无明显变化。功能：为 true 时，RemNote 根据 Rem 的 text/backText 结构
    *     自动生成闪卡并纳入间隔重复调度。setType(CONCEPT) 可能自动置为 true
+   * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   enablePractice: boolean;
   /**
    * [RW] ✅ 闪卡练习方向。SDK: getPracticeDirection() / setPracticeDirection()
    * UI：无明显变化。功能：控制闪卡生成方向——forward=正面→背面，
    *     backward=背面→正面，both=双向生成，none=不生成闪卡
+   * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   practiceDirection: PracticeDirection;
 
@@ -265,6 +293,8 @@ export interface RemObject {
    * [RW] ✅ 标签 Rem ID 数组。SDK: getTagRems() / addTag() / removeTag()
    * UI 行为：行右侧出现标签徽章（圆角矩形，显示标签名 + × 删除按钮）
    *         setType(CONCEPT) 等操作可能自动添加系统标签
+   * 注意：系统 Powerup Tag 会混入此数组（如 setIsCode 注入的"代码" Tag），
+   *       可通过 isPowerup 属性区分用户标签和系统 Powerup Tag
    */
   tags: string[];
   /**

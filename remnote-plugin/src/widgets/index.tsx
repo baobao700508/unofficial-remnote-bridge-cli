@@ -10,6 +10,7 @@ import { createMessageRouter } from '../bridge/message-router';
 // import { runRichTextBuilderTest } from '../test-scripts/test-richtext-builder';
 // import { runRichTextRemainingTest } from '../test-scripts/test-richtext-remaining';
 // import { runRichTextMatrixTest } from '../test-scripts/test-richtext-matrix';
+// import { runPowerupRenderingTest } from '../test-scripts/test-powerup-rendering';
 
 let wsClient: WebSocketClient | null = null;
 // 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
@@ -70,6 +71,7 @@ async function onActivate(plugin: ReactRNPlugin) {
   // runRichTextBuilderTest(plugin).catch((err) => console.error('[RICHTEXT-BUILDER-TEST] 顶层错误:', err));
   // runRichTextRemainingTest(plugin).catch((err) => console.error('[RICHTEXT-REMAINING-TEST] 顶层错误:', err));
   // runRichTextMatrixTest(plugin).catch((err) => console.error('[RICHTEXT-MATRIX-TEST] 顶层错误:', err));
+  // runPowerupRenderingTest(plugin).catch((err) => console.error('[POWERUP-RENDER] 顶层错误:', err));
 }
 
 async function onDeactivate(_: ReactRNPlugin) {
