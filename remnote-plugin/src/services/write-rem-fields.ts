@@ -45,7 +45,7 @@ export async function writeRemFields(
 
   for (const field of Object.keys(changes)) {
     // 跳过 positionAmongstSiblings（已与 parent 合并处理）
-    if (field === 'positionAmongstSiblings' && hasParent) {
+    if (field === 'positionAmongstSiblings') {
       continue;
     }
 
@@ -110,7 +110,7 @@ async function applyField(
       await rem.setText(value as RichTextInterface);
       break;
     case 'backText':
-      await rem.setBackText(value as RichTextInterface | undefined);
+      await rem.setBackText(value === null ? [] : value as RichTextInterface);
       break;
 
     // 类型系统
@@ -128,9 +128,12 @@ async function applyField(
 
     // 格式 / 显示
     case 'fontSize':
-      await rem.setFontSize(value as 'H1' | 'H2' | 'H3' | undefined);
+      await rem.setFontSize(value === null ? undefined : value as 'H1' | 'H2' | 'H3');
       break;
     case 'highlightColor':
+      if (value === null) {
+        throw new Error('SDK limitation: cannot clear highlightColor (only change to another color)');
+      }
       await rem.setHighlightColor(value as 'Red' | 'Orange' | 'Yellow' | 'Green' | 'Blue' | 'Purple');
       break;
 
@@ -139,7 +142,10 @@ async function applyField(
       await rem.setIsTodo(value as boolean);
       break;
     case 'todoStatus':
-      await rem.setTodoStatus(value as 'Finished' | 'Unfinished');
+      if (value !== null) {
+        await rem.setTodoStatus(value as 'Finished' | 'Unfinished');
+      }
+      // null → 跳过：todoStatus=null 的语义是"非 todo"，应通过 isTodo=false 实现
       break;
     case 'isCode':
       await rem.setIsCode(value as boolean);
@@ -222,10 +228,10 @@ async function applySourcesDiff(rem: Rem, targetIds: string[]): Promise<void> {
 }
 
 /** 字符串类型值 → SDK RemType 枚举数值 */
-function remTypeStringToEnum(type: string): number {
+function remTypeStringToEnum(type: string): number | string {
   switch (type) {
     case 'concept': return 1;
     case 'descriptor': return 2;
-    default: return 0; // default type
+    default: return 'DEFAULT_TYPE';
   }
 }

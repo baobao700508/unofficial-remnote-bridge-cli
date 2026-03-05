@@ -52,8 +52,11 @@ export type FontSize = 'H1' | 'H2' | 'H3';
 /** 待办状态 */
 export type TodoStatus = 'Finished' | 'Unfinished';
 
-/** 高亮颜色（SDK setHighlightColor 支持的值） */
-export type HighlightColor = 'Red' | 'Orange' | 'Yellow' | 'Green' | 'Blue' | 'Purple';
+/**
+ * 高亮颜色（对应 SDK RemColor 枚举，除 undefined=0 外的全部值）
+ * 注意：SDK setHighlightColor() 类型签名只列了前 6 种，但实测 Gray/Brown/Pink 也可读出
+ */
+export type HighlightColor = 'Red' | 'Orange' | 'Yellow' | 'Green' | 'Blue' | 'Purple' | 'Gray' | 'Brown' | 'Pink';
 
 /** Portal 子类型（仅 type === 'portal' 时有值） */
 export type PortalType = 'portal' | 'embedded_queue' | 'scaffold' | 'search_portal';
@@ -104,6 +107,7 @@ export interface RemObject {
    * [RW] ✅ 背面文本。SDK: backText / setBackText()
    * UI 行为：设值后 Rem 显示为 "正面文本 → 背面文本" 格式（箭头分隔符）
    *         默认 null（无背面）；设值即产生闪卡正反面结构
+   * 写入语义：null → setBackText([])（SDK 接受 undefined | RichTextInterface，空数组清除背面）
    */
   backText: RichText | null;
 
@@ -150,6 +154,8 @@ export interface RemObject {
    * [RW] ✅ 高亮颜色。SDK: getHighlightColor() / setHighlightColor()
    * UI 行为：整行背景变为对应颜色（Red→粉红、Blue→浅蓝），bullet 也着色
    *         默认 null（无高亮）
+   * SDK 限制：setHighlightColor() 只能设置颜色，不能清除（null→颜色 ✅，颜色→null ❌）
+   *          实测 undefined/null/0/""/RemColor.undefined 均被 SDK 拒绝
    */
   highlightColor: HighlightColor | null;
 
@@ -166,6 +172,7 @@ export interface RemObject {
    * [RW] ✅ 待办完成状态。SDK: getTodoStatus() / setTodoStatus()
    * UI 行为：Finished → checkbox 变蓝色已勾选（☑）+ 文本加删除线
    *         前提：需先 setIsTodo(true)，否则无意义
+   * 写入语义：null → 跳过（清除 todo 状态应通过 isTodo=false 实现，SDK 不接受 null）
    */
   todoStatus: TodoStatus | null;
   /**
