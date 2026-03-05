@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "remnote-bridge",
+  "name": "unofficial-remnote-bridge",
   "version": "0.1.0",
   "description": "RemNote 自动化桥接工具集（monorepo root）",
   "scripts": {

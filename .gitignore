@@ -2,6 +2,7 @@ reference_repository/
 .cache/
 node_modules/
 .mcp.json
+.claude/worktrees/
 
 # 守护进程运行时产物
 .remnote-bridge.pid

@@ -1,10 +1,11 @@
 {
-  "name": "remnote-cli",
+  "name": "unofficial-remnote-bridge-cli",
   "version": "0.1.0",
   "private": true,
   "description": "RemNote 命令层：封装 RemNote 操作为统一 CLI 命令",
   "bin": {
-    "remnote": "./dist/index.js"
+    "unofficial-remnote-bridge": "./dist/index.js",
+    "urbc": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",

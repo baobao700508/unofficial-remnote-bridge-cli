@@ -16,8 +16,8 @@ import { editRemCommand } from './commands/edit-rem';
 const program = new Command();
 
 program
-  .name('remnote')
-  .description('RemNote 桥接工具 — 连接 CLI 与 RemNote 插件')
+  .name('unofficial-remnote-bridge')
+  .description('Unofficial RemNote Bridge — 连接 CLI 与 RemNote 插件')
   .version('0.1.0')
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 

@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "remnote-bridge-plugin",
+  "name": "unofficial-remnote-bridge-plugin",
   "version": "0.1.0",
   "license": "MIT",
   "description": "RemNote 桥接层：嵌入 RemNote 的 WebSocket 桥接插件",
