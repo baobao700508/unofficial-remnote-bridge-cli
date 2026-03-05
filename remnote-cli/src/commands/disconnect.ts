@@ -8,6 +8,7 @@
 
 import { pidFilePath, findProjectRoot } from '../config';
 import { checkDaemon, removePid } from '../daemon/pid';
+import { jsonOutput } from '../utils/output';
 
 const WAIT_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 200;
@@ -24,7 +25,7 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
   const status = checkDaemon(pidPath);
   if (!status.running) {
     if (json) {
-      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: false }));
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: false });
     } else {
       console.log('守护进程未在运行');
     }
@@ -44,7 +45,7 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
     // 进程可能已经退出
     removePid(pidPath);
     if (json) {
-      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false }));
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false });
     } else {
       console.log('守护进程已停止');
     }
@@ -58,7 +59,7 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
   if (exited) {
     removePid(pidPath);
     if (json) {
-      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false }));
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false });
     } else {
       console.log('守护进程已停止');
     }
@@ -71,7 +72,7 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
     }
     removePid(pidPath);
     if (json) {
-      console.log(JSON.stringify({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: true }));
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: true });
     } else {
       console.error(`守护进程未在 ${WAIT_TIMEOUT_MS / 1000} 秒内退出，尝试强制终止...`);
       console.log('守护进程已强制终止');

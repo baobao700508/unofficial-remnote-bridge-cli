@@ -11,6 +11,7 @@ import { findProjectRoot, pidFilePath } from '../config';
 import { checkDaemon } from '../daemon/pid';
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
 import type { StatusResult } from '../protocol';
+import { jsonOutput } from '../utils/output';
 
 export interface HealthOptions {
   json?: boolean;
@@ -25,12 +26,12 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   const daemonStatus = checkDaemon(pidPath);
   if (!daemonStatus.running) {
     if (json) {
-      console.log(JSON.stringify({
+      jsonOutput({
         ok: false, command: 'health', exitCode: 2,
         daemon: { running: false },
         plugin: { connected: false },
         sdk: { ready: false },
-      }));
+      });
     } else {
       console.log('❌ 守护进程  未运行');
       console.log('❌ Plugin    未连接');
@@ -48,13 +49,13 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
-      console.log(JSON.stringify({
+      jsonOutput({
         ok: false, command: 'health', exitCode: 2,
         daemon: { running: true, pid: daemonStatus.pid, reachable: false },
         plugin: { connected: false },
         sdk: { ready: false },
         error: errorMsg,
-      }));
+      });
     } else {
       console.log('❌ 守护进程  不可达');
       console.log('❌ Plugin    未连接');
@@ -70,13 +71,13 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   const exitCode = allHealthy ? 0 : 1;
 
   if (json) {
-    console.log(JSON.stringify({
+    jsonOutput({
       ok: allHealthy, command: 'health', exitCode,
       daemon: { running: true, pid: daemonStatus.pid, reachable: true, uptime: status.uptime },
       plugin: { connected: status.pluginConnected },
       sdk: { ready: status.sdkReady },
       timeoutRemaining: status.timeoutRemaining,
-    }));
+    });
   } else {
     console.log(`✅ 守护进程  运行中（PID: ${daemonStatus.pid}，已运行 ${formatUptime(status.uptime)}）`);
 

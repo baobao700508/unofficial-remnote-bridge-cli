@@ -7,6 +7,7 @@
  */
 
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
+import { jsonOutput } from '../utils/output';
 
 export interface EditRemOptions {
   json?: boolean;
@@ -32,7 +33,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
   } catch (err) {
     if (err instanceof DaemonNotRunningError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'edit-rem', error: err.message }));
+        jsonOutput({ ok: false, command: 'edit-rem', error: err.message });
       } else {
         console.error(`错误: ${err.message}`);
       }
@@ -41,7 +42,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
     }
     if (err instanceof DaemonUnreachableError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'edit-rem', error: err.message }));
+        jsonOutput({ ok: false, command: 'edit-rem', error: err.message });
       } else {
         console.error(`错误: ${err.message}`);
       }
@@ -51,7 +52,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
     // 业务错误（防线拒绝、Plugin 未连接等）
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'edit-rem', error: errorMsg }));
+      jsonOutput({ ok: false, command: 'edit-rem', error: errorMsg });
     } else {
       console.error(`错误: ${errorMsg}`);
     }
@@ -62,7 +63,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
   const editResult = result as EditRemResult;
 
   if (json) {
-    console.log(JSON.stringify({
+    jsonOutput({
       ok: editResult.ok,
       command: 'edit-rem',
       changes: editResult.changes,
@@ -70,7 +71,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
       ...(editResult.error ? { error: editResult.error } : {}),
       ...(editResult.appliedChanges ? { appliedChanges: editResult.appliedChanges } : {}),
       ...(editResult.failedField ? { failedField: editResult.failedField } : {}),
-    }));
+    });
   } else {
     if (editResult.ok) {
       if (editResult.changes.length === 0) {

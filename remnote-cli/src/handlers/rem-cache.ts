@@ -6,7 +6,7 @@
  */
 
 export class RemCache {
-  private cache = new Map<string, { json: string; lastAccess: number }>();
+  private cache = new Map<string, { json: string; lastAccess: number; createdAt: string }>();
   private maxSize: number;
 
   constructor(maxSize = 200) {
@@ -20,11 +20,21 @@ export class RemCache {
     return entry.json;
   }
 
+  /** 获取缓存条目的创建时间（ISO 8601），不存在返回 null */
+  getCreatedAt(remId: string): string | null {
+    const entry = this.cache.get(remId);
+    return entry ? entry.createdAt : null;
+  }
+
   set(remId: string, json: string): void {
+    const now = Date.now();
+    const createdAt = new Date(now).toISOString();
+
     if (this.cache.has(remId)) {
       const entry = this.cache.get(remId)!;
       entry.json = json;
-      entry.lastAccess = Date.now();
+      entry.lastAccess = now;
+      entry.createdAt = createdAt;
       return;
     }
 
@@ -43,7 +53,7 @@ export class RemCache {
       }
     }
 
-    this.cache.set(remId, { json, lastAccess: Date.now() });
+    this.cache.set(remId, { json, lastAccess: now, createdAt });
   }
 
   has(remId: string): boolean {

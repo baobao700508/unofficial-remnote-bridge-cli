@@ -8,6 +8,7 @@
  */
 
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
+import { jsonOutput } from '../utils/output';
 
 export interface EditTreeOptions {
   json?: boolean;
@@ -24,7 +25,7 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
   } catch (err) {
     if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'edit-tree', error: (err as Error).message }));
+        jsonOutput({ ok: false, command: 'edit-tree', error: (err as Error).message });
       } else {
         console.error(`错误: ${(err as Error).message}`);
       }
@@ -33,7 +34,7 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
     }
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'edit-tree', error: errorMsg }));
+      jsonOutput({ ok: false, command: 'edit-tree', error: errorMsg });
     } else {
       console.error(`错误: ${errorMsg}`);
     }
@@ -45,7 +46,7 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
 
   if (!data.ok) {
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'edit-tree', error: data.error, ...data.details as object }));
+      jsonOutput({ ok: false, command: 'edit-tree', error: data.error, ...data.details as object });
     } else {
       console.error(`错误: ${data.error}`);
       if (data.details) {
@@ -57,7 +58,7 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
   }
 
   if (json) {
-    console.log(JSON.stringify({ ok: true, command: 'edit-tree', operations: data.operations }));
+    jsonOutput({ ok: true, command: 'edit-tree', operations: data.operations });
   } else {
     if (data.operations.length === 0) {
       console.log('无结构变更。');

@@ -9,6 +9,7 @@
  */
 
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
+import { jsonOutput } from '../utils/output';
 
 export interface ReadRemOptions {
   json?: boolean;
@@ -33,7 +34,7 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
   } catch (err) {
     if (err instanceof DaemonNotRunningError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'read-rem', error: err.message }));
+        jsonOutput({ ok: false, command: 'read-rem', error: err.message });
       } else {
         console.error(`错误: ${err.message}`);
       }
@@ -42,7 +43,7 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
     }
     if (err instanceof DaemonUnreachableError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'read-rem', error: err.message }));
+        jsonOutput({ ok: false, command: 'read-rem', error: err.message });
       } else {
         console.error(`错误: ${err.message}`);
       }
@@ -52,7 +53,7 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
     // 业务错误（Rem not found, Plugin 未连接等）
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'read-rem', error: errorMsg }));
+      jsonOutput({ ok: false, command: 'read-rem', error: errorMsg });
     } else {
       console.error(`错误: ${errorMsg}`);
     }
@@ -60,10 +61,16 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
     return;
   }
 
+  const data = result as Record<string, unknown>;
+  const cacheOverridden = data._cacheOverridden as { id: string; previousCachedAt: string } | undefined;
+  delete data._cacheOverridden;
+
   if (json) {
-    console.log(JSON.stringify({ ok: true, command: 'read-rem', data: result }));
+    jsonOutput({ ok: true, command: 'read-rem', data, ...(cacheOverridden ? { cacheOverridden } : {}) });
   } else {
-    // 人类可读：格式化 JSON 输出
-    console.log(JSON.stringify(result, null, 2));
+    if (cacheOverridden) {
+      console.warn(`注意: Rem ${cacheOverridden.id} 的缓存（${cacheOverridden.previousCachedAt}）已被本次 read 覆盖`);
+    }
+    console.log(JSON.stringify(data, null, 2));
   }
 }

@@ -12,6 +12,7 @@ import fs from 'fs';
 import { fork } from 'child_process';
 import { loadConfig, pidFilePath, findProjectRoot } from '../config';
 import { checkDaemon } from '../daemon/pid';
+import { jsonOutput } from '../utils/output';
 
 export interface ConnectOptions {
   json?: boolean;
@@ -49,10 +50,10 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
   const status = checkDaemon(pidPath);
   if (status.running) {
     if (json) {
-      console.log(JSON.stringify({
+      jsonOutput({
         ok: true, command: 'connect', alreadyRunning: true,
         pid: status.pid, wsPort: config.wsPort, devServerPort: config.devServerPort,
-      }));
+      });
     } else {
       console.log(`守护进程已在运行（PID: ${status.pid}）`);
     }
@@ -121,7 +122,7 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
 
   if (!ready) {
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'connect', error: '守护进程启动超时（10 秒）' }));
+      jsonOutput({ ok: false, command: 'connect', error: '守护进程启动超时（10 秒）' });
     } else {
       console.error('守护进程启动超时（10 秒）');
     }
@@ -131,7 +132,7 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
 
   if (ready.type === 'error') {
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'connect', error: ready.message }));
+      jsonOutput({ ok: false, command: 'connect', error: ready.message });
     } else {
       console.error(`守护进程启动失败: ${ready.message}`);
     }
@@ -140,11 +141,11 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
   }
 
   if (json) {
-    console.log(JSON.stringify({
+    jsonOutput({
       ok: true, command: 'connect', alreadyRunning: false,
       pid: ready.pid, wsPort: ready.wsPort, devServerPort: ready.devServerPort,
       timeoutMinutes: config.daemonTimeoutMinutes,
-    }));
+    });
   } else {
     console.log(`守护进程已启动（PID: ${ready.pid}）`);
     console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);

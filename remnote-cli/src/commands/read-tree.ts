@@ -8,6 +8,7 @@
  */
 
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request';
+import { jsonOutput } from '../utils/output';
 
 export interface ReadTreeOptions {
   json?: boolean;
@@ -20,7 +21,7 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
 
   if (isNaN(depth)) {
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'read-tree', error: '--depth must be a number' }));
+      jsonOutput({ ok: false, command: 'read-tree', error: '--depth must be a number' });
     } else {
       console.error('错误: --depth 必须是数字');
     }
@@ -34,7 +35,7 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
   } catch (err) {
     if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
       if (json) {
-        console.log(JSON.stringify({ ok: false, command: 'read-tree', error: (err as Error).message }));
+        jsonOutput({ ok: false, command: 'read-tree', error: (err as Error).message });
       } else {
         console.error(`错误: ${(err as Error).message}`);
       }
@@ -43,7 +44,7 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
     }
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
-      console.log(JSON.stringify({ ok: false, command: 'read-tree', error: errorMsg }));
+      jsonOutput({ ok: false, command: 'read-tree', error: errorMsg });
     } else {
       console.error(`错误: ${errorMsg}`);
     }
@@ -51,12 +52,16 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
     return;
   }
 
-  const data = result as { rootId: string; depth: number; nodeCount: number; outline: string };
+  const data = result as Record<string, unknown>;
+  const cacheOverridden = data._cacheOverridden as { id: string; previousCachedAt: string } | undefined;
+  delete data._cacheOverridden;
 
   if (json) {
-    console.log(JSON.stringify({ ok: true, command: 'read-tree', data }));
+    jsonOutput({ ok: true, command: 'read-tree', data, ...(cacheOverridden ? { cacheOverridden } : {}) });
   } else {
-    // 人类可读：直接输出大纲文本
+    if (cacheOverridden) {
+      console.warn(`注意: Tree ${cacheOverridden.id} 的缓存（${cacheOverridden.previousCachedAt}）已被本次 read 覆盖`);
+    }
     console.log(data.outline);
   }
 }
