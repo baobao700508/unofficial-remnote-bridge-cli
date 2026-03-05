@@ -12,6 +12,7 @@ import { healthCommand } from './commands/health';
 import { disconnectCommand } from './commands/disconnect';
 import { readRemCommand } from './commands/read-rem';
 import { editRemCommand } from './commands/edit-rem';
+import { readTreeCommand } from './commands/read-tree';
 
 const program = new Command();
 
@@ -53,6 +54,15 @@ program
   .action(async (remId: string, cmdOpts: { fields?: string; full?: boolean }) => {
     const { json } = program.opts();
     await readRemCommand(remId, { json, ...cmdOpts });
+  });
+
+program
+  .command('read-tree <remId>')
+  .description('读取 Rem 子树并序列化为 Markdown 大纲')
+  .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
+  .action(async (remId: string, cmdOpts: { depth?: string }) => {
+    const { json } = program.opts();
+    await readTreeCommand(remId, { json, ...cmdOpts });
   });
 
 program
