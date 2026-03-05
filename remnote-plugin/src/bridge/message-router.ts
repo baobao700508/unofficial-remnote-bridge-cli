@@ -12,6 +12,10 @@ import type { BridgeRequest } from './websocket-client';
 import { readRem } from '../services/read-rem';
 import { readTree } from '../services/read-tree';
 import { writeRemFields } from '../services/write-rem-fields';
+import { createRem } from '../services/create-rem';
+import { deleteRem } from '../services/delete-rem';
+import { moveRem } from '../services/move-rem';
+import { reorderChildren } from '../services/reorder-children';
 
 /**
  * 创建消息路由处理器
@@ -28,6 +32,14 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
         return readTree(plugin, request.payload as { remId: string; depth?: number });
       case 'write_rem_fields':
         return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
+      case 'create_rem':
+        return createRem(plugin, request.payload as { content: string; parentId: string; position: number });
+      case 'delete_rem':
+        return deleteRem(plugin, request.payload as { remId: string });
+      case 'move_rem':
+        return moveRem(plugin, request.payload as { remId: string; newParentId: string; position: number });
+      case 'reorder_children':
+        return reorderChildren(plugin, request.payload as { parentId: string; order: string[] });
 
       default:
         throw new Error(`未实现的 action: ${request.action}`);
