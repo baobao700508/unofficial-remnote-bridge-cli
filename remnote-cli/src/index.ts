@@ -13,6 +13,7 @@ import { disconnectCommand } from './commands/disconnect';
 import { readRemCommand } from './commands/read-rem';
 import { editRemCommand } from './commands/edit-rem';
 import { readTreeCommand } from './commands/read-tree';
+import { editTreeCommand } from './commands/edit-tree';
 
 const program = new Command();
 
@@ -63,6 +64,16 @@ program
   .action(async (remId: string, cmdOpts: { depth?: string }) => {
     const { json } = program.opts();
     await readTreeCommand(remId, { json, ...cmdOpts });
+  });
+
+program
+  .command('edit-tree <remId>')
+  .description('通过 str_replace 编辑 Rem 子树结构（行级增/删/移/重排）')
+  .requiredOption('--old-str <oldStr>', '要替换的原始文本片段')
+  .requiredOption('--new-str <newStr>', '替换后的新文本片段')
+  .action(async (remId: string, cmdOpts: { oldStr: string; newStr: string }) => {
+    const { json } = program.opts();
+    await editTreeCommand(remId, { json, ...cmdOpts });
   });
 
 program

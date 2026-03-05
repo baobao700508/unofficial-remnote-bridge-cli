@@ -22,6 +22,7 @@ import { RemCache } from '../handlers/rem-cache';
 import { ReadHandler } from '../handlers/read-handler';
 import { EditHandler } from '../handlers/edit-handler';
 import { TreeReadHandler } from '../handlers/tree-read-handler';
+import { TreeEditHandler } from '../handlers/tree-edit-handler';
 import crypto from 'crypto';
 
 const PLUGIN_REQUEST_TIMEOUT_MS = 15_000;
@@ -54,6 +55,7 @@ export class BridgeServer {
   private readHandler: ReadHandler;
   private editHandler: EditHandler;
   private treeReadHandler: TreeReadHandler;
+  private treeEditHandler: TreeEditHandler;
 
   private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
@@ -80,6 +82,7 @@ export class BridgeServer {
     this.readHandler = new ReadHandler(remCache, forwardFn, config.onLog);
     this.editHandler = new EditHandler(remCache, forwardFn);
     this.treeReadHandler = new TreeReadHandler(remCache, forwardFn, config.onLog);
+    this.treeEditHandler = new TreeEditHandler(remCache, forwardFn);
   }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -257,6 +260,10 @@ export class BridgeServer {
         result = await this.readHandler.handleReadRem(request.payload);
       } else if (request.action === 'read_tree') {
         result = await this.treeReadHandler.handleReadTree(request.payload);
+      } else if (request.action === 'edit_tree') {
+        result = await this.treeEditHandler.handleEditTree(
+          request.payload as { remId: string; oldStr: string; newStr: string },
+        );
       } else if (request.action === 'edit_rem') {
         result = await this.editHandler.handleEditRem(
           request.payload as { remId: string; oldStr: string; newStr: string },
