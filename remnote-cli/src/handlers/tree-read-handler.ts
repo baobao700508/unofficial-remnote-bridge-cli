@@ -34,8 +34,9 @@ export class TreeReadHandler {
     // 转发到 Plugin 的 read_tree service
     const result = await this.forwardToPlugin('read_tree', { remId, depth }) as TreeReadResult;
 
-    // 缓存大纲文本（key = 'tree:' + remId）
+    // 缓存大纲文本（key = 'tree:' + remId）+ 缓存 depth（key = 'tree-depth:' + remId）
     this.cache.set('tree:' + remId, result.outline);
+    this.cache.set('tree-depth:' + remId, String(depth));
     this.onLog?.(
       `缓存树 ${remId.slice(0, 8)}... (${result.nodeCount} 节点, ${result.outline.length} bytes)`,
       'info',

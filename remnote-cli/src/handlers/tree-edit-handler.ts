@@ -47,8 +47,10 @@ export class TreeEditHandler {
     }
 
     // ── 防线 2: 乐观并发检测 ──
-    // 重新从 Plugin 获取最新大纲
-    const freshResult = await this.forwardToPlugin('read_tree', { remId }) as {
+    // 用与 read-tree 相同的 depth 重新获取最新大纲
+    const cachedDepthStr = this.cache.get('tree-depth:' + remId);
+    const depth = cachedDepthStr ? Number(cachedDepthStr) : 3;
+    const freshResult = await this.forwardToPlugin('read_tree', { remId, depth }) as {
       outline: string;
       depth: number;
       nodeCount: number;
@@ -153,8 +155,8 @@ export class TreeEditHandler {
       }
     }
 
-    // ── D3: 成功后更新缓存 ──
-    const updatedResult = await this.forwardToPlugin('read_tree', { remId }) as {
+    // ── D3: 成功后更新缓存（使用相同 depth）──
+    const updatedResult = await this.forwardToPlugin('read_tree', { remId, depth }) as {
       outline: string;
     };
     this.cache.set('tree:' + remId, updatedResult.outline);
