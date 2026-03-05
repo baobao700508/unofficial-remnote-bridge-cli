@@ -1,7 +1,7 @@
 ---
 title: "feat: 实现 read-tree / edit-tree 树模式读写命令"
 type: feat
-status: active
+status: completed
 date: 2026-03-04
 origin: docs/初始需求/remnote-cli-tree-mode-spec.md
 ---
@@ -171,21 +171,21 @@ AI 在 str_replace 中可能无意修改元数据（如 `fc:concept` → `fc:for
 
 ### 功能需求
 
-- [ ] `read-tree <remId> --depth N` 返回正确格式的 Markdown 大纲
-- [ ] 大纲格式：`{缩进}{Markdown内容} <!--{remId} {元数据}-->`
-- [ ] 行内容拼接规则：正确推导 10 种分隔符（对照 `docs/rem-type-mapping/README.md`）
-- [ ] 元数据推导正确：`fc`、`role`、`type`、`tags`、`children`
-- [ ] `--depth` 参数正确控制展开深度（1/2/3/-1），默认 3
-- [ ] depth=0 只显示根节点本身，不展开子节点
-- [ ] 超过深度的子树显示折叠标记 `children:N`
-- [ ] `edit-tree` 支持新增行（无 ID 标记 → createRem）
-- [ ] `edit-tree` 支持删除行（ID 消失 → remove）
-- [ ] `edit-tree` 支持移动行（缩进变化 → setParent）
-- [ ] `edit-tree` 支持重排行（同级位置变化 → 重排 children）
-- [ ] 禁止修改已有行内容 → 报错并提示用 edit-rem
-- [ ] 新增行支持 RemNote Markdown 闪卡语法（通过 parseFromMarkdown）
-- [ ] 新增行支持嵌套父子关系（先创建父再创建子）
-- [ ] `--json` 输出符合项目规范（`ok`/`command`/`error` 字段）
+- [x] `read-tree <remId> --depth N` 返回正确格式的 Markdown 大纲
+- [x] 大纲格式：`{缩进}{Markdown内容} <!--{remId} {元数据}-->`
+- [x] 行内容拼接规则：正确推导 10 种分隔符（对照 `docs/rem-type-mapping/README.md`）
+- [x] 元数据推导正确：`fc`、`role`、`type`、`tags`、`children`
+- [x] `--depth` 参数正确控制展开深度（1/2/3/-1），默认 3
+- [x] depth=0 只显示根节点本身，不展开子节点
+- [x] 超过深度的子树显示折叠标记 `children:N`
+- [x] `edit-tree` 支持新增行（无 ID 标记 → createRem）
+- [x] `edit-tree` 支持删除行（ID 消失 → remove）
+- [x] `edit-tree` 支持移动行（缩进变化 → setParent）
+- [x] `edit-tree` 支持重排行（同级位置变化 → 重排 children）
+- [x] 禁止修改已有行内容 → 报错并提示用 edit-rem
+- [x] 新增行支持 RemNote Markdown 闪卡语法（通过 parseFromMarkdown）
+- [x] 新增行支持嵌套父子关系（先创建父再创建子）
+- [x] `--json` 输出符合项目规范（`ok`/`command`/`error` 字段）
 
 ### JSON 输出结构
 
@@ -242,28 +242,28 @@ AI 在 str_replace 中可能无意修改元数据（如 `fc:concept` → `fc:for
 
 ### 防线需求
 
-- [ ] 防线 1：未 read-tree 直接 edit-tree 报错
-- [ ] 防线 2：树被外部修改时 edit-tree 报错
-- [ ] 防线 3：old_str 不匹配或多次匹配时报错
-- [ ] edit-tree 成功后自动更新缓存（连续 edit-tree 可工作）
+- [x] 防线 1：未 read-tree 直接 edit-tree 报错
+- [x] 防线 2：树被外部修改时 edit-tree 报错
+- [x] 防线 3：old_str 不匹配或多次匹配时报错
+- [x] edit-tree 成功后自动更新缓存（连续 edit-tree 可工作）
 
 ### 错误处理
 
-- [ ] 不存在的 remId → `Rem not found` 错误
-- [ ] 删除带可见子行但子行未被删除 → 孤儿错误
-- [ ] 删除折叠节点（children:N）→ 报错要求先展开
-- [ ] 删除/移动/修改根节点 → 报错
-- [ ] 内容变更检测 → 报错并提示用 edit-rem
-- [ ] 节点数超限（>500）→ 报错建议缩小 depth
-- [ ] 新增行缩进跳级（向上找不到"少一级"的行）→ 报错
-- [ ] old_str == new_str（无变更）→ 直接返回成功（noop）
+- [x] 不存在的 remId → `Rem not found` 错误
+- [x] 删除带可见子行但子行未被删除 → 孤儿错误
+- [x] 删除折叠节点（children:N）→ 报错要求先展开
+- [x] 删除/移动/修改根节点 → 报错
+- [x] 内容变更检测 → 报错并提示用 edit-rem
+- [x] 节点数超限（>500）→ 报错建议缩小 depth
+- [x] 新增行缩进跳级（向上找不到"少一级"的行）→ 报错
+- [x] old_str == new_str（无变更）→ 直接返回成功（noop）
 
 ### 分层需求
 
-- [ ] CLI 命令级同态命名（read-tree / read_tree / readTree）
-- [ ] 内部原子操作 action 与 service 同名（create_rem / createRem 等）
-- [ ] Plugin services 不碰 WS，CLI handlers 不碰 SDK
-- [ ] `node scripts/check-layer-deps.js` 通过
+- [x] CLI 命令级同态命名（read-tree / read_tree / readTree）
+- [x] 内部原子操作 action 与 service 同名（create_rem / createRem 等）
+- [x] Plugin services 不碰 WS，CLI handlers 不碰 SDK
+- [x] `node scripts/check-layer-deps.js` 通过
 - [ ] 缓存键前缀迁移后 read-rem / edit-rem 回归测试通过
 
 ## Success Metrics
