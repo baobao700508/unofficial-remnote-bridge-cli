@@ -10,6 +10,7 @@
 import type { ReactRNPlugin } from '@remnote/plugin-sdk';
 import type { BridgeRequest } from './websocket-client';
 import { readRem } from '../services/read-rem';
+import { readTree } from '../services/read-tree';
 import { writeRemFields } from '../services/write-rem-fields';
 
 /**
@@ -23,6 +24,8 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
     switch (request.action) {
       case 'read_rem':
         return readRem(plugin, request.payload as { remId: string });
+      case 'read_tree':
+        return readTree(plugin, request.payload as { remId: string; depth?: number });
       case 'write_rem_fields':
         return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
 

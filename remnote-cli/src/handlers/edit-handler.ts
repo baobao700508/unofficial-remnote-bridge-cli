@@ -55,7 +55,7 @@ export class EditHandler {
     const { remId, oldStr, newStr } = payload;
 
     // ── 防线 1: 缓存存在性检查 ──
-    const cachedJson = this.cache.get(remId);
+    const cachedJson = this.cache.get('rem:' + remId);
     if (!cachedJson) {
       throw new Error(
         `Rem ${remId} has not been read yet. Read it first before editing.`,
@@ -152,7 +152,7 @@ export class EditHandler {
     // ── 写入成功 → 从 Plugin 重新获取完整 Rem 并更新缓存（D5）──
     const freshRemObject = await this.forwardToPlugin('read_rem', { remId });
     const freshJson = JSON.stringify(freshRemObject, null, 2);
-    this.cache.set(remId, freshJson);
+    this.cache.set('rem:' + remId, freshJson);
 
     return {
       ok: true,
