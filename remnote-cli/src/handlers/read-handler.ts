@@ -39,7 +39,7 @@ export class ReadHandler {
 
     // 缓存完整 JSON
     const fullJson = JSON.stringify(remObject, null, 2);
-    this.cache.set(remId, fullJson);
+    this.cache.set('rem:' + remId, fullJson);
     this.onLog?.(`缓存 Rem ${remId.slice(0, 8)}... (${fullJson.length} bytes)`, 'info');
 
     // 字段过滤
