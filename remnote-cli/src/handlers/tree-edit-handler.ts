@@ -9,7 +9,7 @@
  */
 
 import { RemCache } from './rem-cache';
-import { parseOutline, diffTrees, type TreeOp, type TreeDiffError } from './tree-parser';
+import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiffError } from './tree-parser';
 
 export interface TreeEditPayload {
   remId: string;
@@ -123,11 +123,22 @@ export class TreeEditHandler {
             parentId = actualId;
           }
 
+          // 解析 Markdown 前缀 → Powerup 属性
+          const { cleanContent, powerups } = parsePowerupPrefix(op.content);
+
           const createResult = await this.forwardToPlugin('create_rem', {
-            content: op.content,
+            content: cleanContent,
             parentId,
             position: op.position,
           }) as { remId: string };
+
+          // 设置 Powerup 属性
+          if (Object.keys(powerups).length > 0) {
+            await this.forwardToPlugin('write_rem_fields', {
+              remId: createResult.remId,
+              changes: powerups,
+            });
+          }
 
           // 记录新创建的 remId，供后续嵌套引用
           newRemIdMap.set(i, createResult.remId);

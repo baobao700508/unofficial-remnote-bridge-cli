@@ -175,6 +175,32 @@ export interface XxxOptions {
 export async function xxxCommand(options: XxxOptions = {}): Promise<void> { ... }
 ```
 
+#### `--json` 的输入语义（红线）
+
+`--json` **同时改变输入和输出**。开启 `--json` 后，命令的位置参数从裸 remId 变成 **JSON 字符串**，所有参数打包在 JSON 对象中。
+
+```bash
+# 人类模式：位置参数 = remId，选项通过 --flag 传递
+read-tree kLrIOHJLyMd8Y2lyA --depth 2
+edit-tree kLrIOHJLyMd8Y2lyA --old-str 'xxx' --new-str 'yyy'
+
+# JSON 模式：位置参数 = JSON 字符串，所有参数打包在 JSON 对象中
+read-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","depth":2}'
+edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"xxx","newStr":"yyy"}'
+```
+
+**禁止**：`read-tree kLrIOHJLyMd8Y2lyA --json` — 裸 remId 会被当作 JSON 解析，必定失败。
+
+实现位置：`index.ts` 的 `parseJsonInput()` 函数（每个命令的 `.action()` 中根据 `json` flag 分支处理输入）。
+
+### 2.4 实机测试（强约束）
+
+涉及 RemNote SDK 行为、Plugin 数据交互、CLI 端到端功能的改动，**必须主动使用 Claude in Chrome MCP 进行实机测试**，验证实际效果。
+
+- **禁止**：仅凭代码推理就认为功能正确，跳过实测
+- **禁止**：要求用户代为手动测试（Agent 应自主完成）
+- 测试时灵活使用 Claude in Chrome MCP 操作 RemNote 界面，确认数据读写、渲染、序列化等行为符合预期
+
 ---
 
 ## 3. 经验

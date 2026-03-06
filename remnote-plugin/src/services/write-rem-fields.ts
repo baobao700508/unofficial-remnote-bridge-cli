@@ -186,6 +186,11 @@ async function applyField(
       await applySourcesDiff(rem, value as string[]);
       break;
 
+    // Powerup 操作
+    case 'addPowerup':
+      await rem.addPowerup(value as string);
+      break;
+
     default:
       throw new Error(`不可写入的字段: ${field}`);
   }

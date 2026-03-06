@@ -46,7 +46,7 @@ export interface TreeDiffError {
  * 行尾标记正则（D5: 从行尾匹配）。
  * 捕获组：[1] = remId, [2] = 可选的 key:value 元数据串
  */
-const LINE_MARKER_RE = /<!--(\S+)((?:\s+\S+:\S+)*)-->$/;
+const LINE_MARKER_RE = /<!--(\S+)((?:\s+\S+)*)-->$/;
 
 /** 解析单行，提取缩进、内容、remId */
 function parseLine(line: string): { depth: number; rawContent: string; remId: string | null; metadata: string } {
@@ -115,6 +115,46 @@ export function parseOutline(text: string): OutlineNode[] {
   }
 
   return roots;
+}
+
+// ────────────────────────── Powerup 前缀解析 ──────────────────────────
+
+export interface PowerupPrefixResult {
+  cleanContent: string;
+  powerups: Record<string, unknown>;
+}
+
+/**
+ * 从新增行的 rawContent 中解析 Markdown 前缀，提取 Powerup 属性。
+ *
+ * 解析顺序与 read-tree 输出的嵌套顺序对称：Header → Todo → Code。
+ */
+export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
+  const powerups: Record<string, unknown> = {};
+
+  if (rawContent === '---') {
+    return { cleanContent: '', powerups: { addPowerup: 'dv' } };
+  }
+
+  let content = rawContent;
+
+  // Header（从长到短匹配）
+  if (content.startsWith('### '))      { powerups.fontSize = 'H3'; content = content.slice(4); }
+  else if (content.startsWith('## '))  { powerups.fontSize = 'H2'; content = content.slice(3); }
+  else if (content.startsWith('# '))   { powerups.fontSize = 'H1'; content = content.slice(2); }
+
+  // Todo
+  if (content.startsWith('- [x] '))      { powerups.isTodo = true; powerups.todoStatus = 'Finished'; content = content.slice(6); }
+  else if (content.startsWith('- [ ] ')) { powerups.isTodo = true; content = content.slice(6); }
+
+  // Code
+  if (content.startsWith('`') && content.endsWith('`') && content.length >= 2) {
+    powerups.isCode = true;
+    content = content.slice(1, -1);
+  }
+
+  if (Object.keys(powerups).length === 0) return { cleanContent: rawContent, powerups: {} };
+  return { cleanContent: content, powerups };
 }
 
 // ────────────────────────── Diff 算法 ──────────────────────────

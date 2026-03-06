@@ -25,6 +25,16 @@ export interface SerializableRem {
   childrenCount: number;
   tagCount: number;
   hasCloze: boolean;
+  // P0: Markdown 语法映射
+  fontSize: 'H1' | 'H2' | 'H3' | null;
+  isTodo: boolean;
+  todoStatus: 'Finished' | 'Unfinished' | null;
+  isCode: boolean;
+  isDivider: boolean;
+  // P2: 元数据注释
+  highlightColor: string | null;
+  isQuote: boolean;
+  isListItem: boolean;
 }
 
 /** 递归树节点，用于 buildOutline */
@@ -43,36 +53,54 @@ export interface OutlineNode {
  * 推导规则严格遵循 spec 中的优先级链。
  */
 function buildLineContent(rem: SerializableRem): string {
+  // Divider（最高优先）
+  if (rem.isDivider) return '---';
+
   const { markdownText, markdownBackText, type, hasMultilineChildren, practiceDirection } = rem;
 
+  // 基础内容（concept/descriptor/>> 等分隔符逻辑）
+  let baseContent: string;
   if (type === 'concept' && hasMultilineChildren) {
-    return markdownText + ' ::>';
-  }
-  if (type === 'concept' && markdownBackText !== null) {
-    return markdownText + ' :: ' + markdownBackText;
-  }
-  if (type === 'descriptor' && hasMultilineChildren) {
-    return markdownText + ' ;;>';
-  }
-  if (type === 'descriptor' && markdownBackText !== null) {
-    return markdownText + ' ;; ' + markdownBackText;
-  }
-  if (markdownBackText !== null) {
+    baseContent = markdownText + ' ::>';
+  } else if (type === 'concept' && markdownBackText !== null) {
+    baseContent = markdownText + ' :: ' + markdownBackText;
+  } else if (type === 'descriptor' && hasMultilineChildren) {
+    baseContent = markdownText + ' ;;>';
+  } else if (type === 'descriptor' && markdownBackText !== null) {
+    baseContent = markdownText + ' ;; ' + markdownBackText;
+  } else if (markdownBackText !== null) {
     if (practiceDirection === 'forward') {
-      return markdownText + ' >> ' + markdownBackText;
+      baseContent = markdownText + ' >> ' + markdownBackText;
+    } else if (practiceDirection === 'backward') {
+      baseContent = markdownText + ' << ' + markdownBackText;
+    } else if (practiceDirection === 'both') {
+      baseContent = markdownText + ' <> ' + markdownBackText;
+    } else {
+      baseContent = markdownText;
     }
-    if (practiceDirection === 'backward') {
-      return markdownText + ' << ' + markdownBackText;
-    }
-    if (practiceDirection === 'both') {
-      return markdownText + ' <> ' + markdownBackText;
-    }
+  } else if (hasMultilineChildren) {
+    baseContent = markdownText + ' >>>';
+  } else {
+    // hasCloze 的情况：cloze 已由 toMarkdown 处理为 {{...}}，直接输出 text
+    baseContent = markdownText;
   }
-  if (hasMultilineChildren) {
-    return markdownText + ' >>>';
+
+  // Code 包裹（最内层）
+  if (rem.isCode) baseContent = '`' + baseContent + '`';
+
+  // Todo 前缀
+  if (rem.isTodo) {
+    const cb = rem.todoStatus === 'Finished' ? '- [x] ' : '- [ ] ';
+    baseContent = cb + baseContent;
   }
-  // hasCloze 的情况：cloze 已由 toMarkdown 处理为 {{...}}，直接输出 text
-  return markdownText;
+
+  // Header 前缀（最外层）
+  if (rem.fontSize) {
+    const hd = rem.fontSize === 'H1' ? '# ' : rem.fontSize === 'H2' ? '## ' : '### ';
+    baseContent = hd + baseContent;
+  }
+
+  return baseContent;
 }
 
 // ────────────────────────── 元数据推导 ──────────────────────────
@@ -119,6 +147,11 @@ function buildMetadata(rem: SerializableRem, folded: boolean): string[] {
 
   // children（折叠时才输出）
   if (folded && rem.childrenCount > 0) parts.push('children:' + rem.childrenCount);
+
+  // P2: Powerup 元数据
+  if (rem.highlightColor) parts.push('hl:' + rem.highlightColor);
+  if (rem.isQuote) parts.push('quote');
+  if (rem.isListItem) parts.push('list');
 
   return parts;
 }

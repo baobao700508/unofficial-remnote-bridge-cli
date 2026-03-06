@@ -85,6 +85,14 @@ export async function readTree(
       isPortal,
       tagRems,
       practiceDirection,
+      fontSize,
+      isTodo,
+      todoStatus,
+      isCode,
+      hasDvPowerup,
+      highlightColor,
+      isQuote,
+      isListItem,
     ] = await Promise.all([
       plugin.richText.toMarkdown(rem.text ?? []),
       rem.backText ? plugin.richText.toMarkdown(rem.backText) : Promise.resolve(null),
@@ -97,6 +105,14 @@ export async function readTree(
         return filtered;
       })),
       rem.getPracticeDirection(),
+      rem.getFontSize(),
+      rem.isTodo(),
+      rem.getTodoStatus(),
+      rem.isCode(),
+      rem.hasPowerup('dv'),
+      rem.getHighlightColor(),
+      rem.isQuote(),
+      rem.isListItem(),
     ]);
 
     // 检测是否有 multiline children（children 中有 isCardItem 的）
@@ -114,6 +130,9 @@ export async function readTree(
       el => typeof el === 'object' && el !== null && 'cId' in el,
     );
 
+    // Divider = 有 dv powerup 且 text 为空
+    const isDivider = hasDvPowerup && (rem.text ?? []).length === 0;
+
     const serializable: SerializableRem = {
       id: rem._id,
       markdownText: sanitizeNewlines(markdownText),
@@ -127,6 +146,14 @@ export async function readTree(
       childrenCount: children.length,
       tagCount: tagRems.length,
       hasCloze,
+      fontSize: (fontSize as 'H1' | 'H2' | 'H3' | null) ?? null,
+      isTodo,
+      todoStatus: (todoStatus as 'Finished' | 'Unfinished' | null) ?? null,
+      isCode,
+      isDivider,
+      highlightColor: (highlightColor as string | null) ?? null,
+      isQuote,
+      isListItem,
     };
 
     // 递归处理子节点
