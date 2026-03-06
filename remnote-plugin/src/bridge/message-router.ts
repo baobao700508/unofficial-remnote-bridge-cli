@@ -11,6 +11,8 @@ import type { ReactRNPlugin } from '@remnote/plugin-sdk';
 import type { BridgeRequest } from './websocket-client';
 import { readRem } from '../services/read-rem';
 import { readTree } from '../services/read-tree';
+import { readGlobe } from '../services/read-globe';
+import { readContext } from '../services/read-context';
 import { writeRemFields } from '../services/write-rem-fields';
 import { createRem } from '../services/create-rem';
 import { deleteRem } from '../services/delete-rem';
@@ -29,7 +31,7 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
       case 'read_rem':
         return readRem(plugin, request.payload as { remId: string; includePowerup?: boolean });
       case 'read_tree':
-        return readTree(plugin, request.payload as { remId: string; depth?: number; includePowerup?: boolean });
+        return readTree(plugin, request.payload as { remId: string; depth?: number; maxNodes?: number; maxSiblings?: number; ancestorLevels?: number; includePowerup?: boolean });
       case 'write_rem_fields':
         return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
       case 'create_rem':
@@ -40,6 +42,10 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
         return moveRem(plugin, request.payload as { remId: string; newParentId: string; position: number });
       case 'reorder_children':
         return reorderChildren(plugin, request.payload as { parentId: string; order: string[] });
+      case 'read_globe':
+        return readGlobe(plugin, request.payload as { depth?: number; maxNodes?: number; maxSiblings?: number });
+      case 'read_context':
+        return readContext(plugin, request.payload as { mode?: 'focus' | 'page'; ancestorLevels?: number; maxNodes?: number; maxSiblings?: number; depth?: number });
 
       default:
         throw new Error(`未实现的 action: ${request.action}`);

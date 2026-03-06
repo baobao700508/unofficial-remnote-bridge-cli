@@ -35,14 +35,37 @@ export interface SerializableRem {
   highlightColor: string | null;
   isQuote: boolean;
   isListItem: boolean;
+  /** 是否为知识库顶级 Rem（无父节点） */
+  isTopLevel?: boolean;
 }
 
 /** 递归树节点，用于 buildOutline */
 export interface OutlineNode {
   rem: SerializableRem;
-  children: OutlineNode[];
+  children: TreeNode[];
   /** true = 子树超过 depth 限制被折叠 */
   folded: boolean;
+}
+
+/** 省略占位节点 */
+export interface ElidedNode {
+  type: 'elided';
+  /** 被省略的同级节点数 */
+  count: number;
+  /** 是否精确计数（false = ">=N"，表示省略的节点可能还有后代） */
+  isExact: boolean;
+  parentId: string;
+  rangeFrom: number;
+  rangeTo: number;
+  totalSiblings: number;
+}
+
+/** 树节点统一类型 */
+export type TreeNode = OutlineNode | ElidedNode;
+
+/** 类型守卫 */
+export function isElidedNode(node: TreeNode): node is ElidedNode {
+  return 'type' in node && node.type === 'elided';
 }
 
 // ────────────────────────── 行内容拼接 ──────────────────────────
@@ -148,6 +171,9 @@ function buildMetadata(rem: SerializableRem, folded: boolean): string[] {
   // children（折叠时才输出）
   if (folded && rem.childrenCount > 0) parts.push('children:' + rem.childrenCount);
 
+  // 顶级标记
+  if (rem.isTopLevel) parts.push('top');
+
   // P2: Powerup 元数据
   if (rem.highlightColor) parts.push('hl:' + rem.highlightColor);
   if (rem.isQuote) parts.push('quote');
@@ -171,6 +197,18 @@ export function serializeRemLine(rem: SerializableRem, folded: boolean = false):
 }
 
 /**
+ * 序列化省略占位符行（不含缩进）。
+ *
+ * 精确：`<!--...elided {N} siblings (parent:{id} range:{from}-{to} total:{total})-->`
+ * 非精确：`<!--...elided >={N} nodes (parent:{id} range:{from}-{to} total:{total})-->`
+ */
+export function serializeElidedLine(node: ElidedNode): string {
+  const label = node.isExact ? 'siblings' : 'nodes';
+  const prefix = node.isExact ? '' : '>=';
+  return `<!--...elided ${prefix}${node.count} ${label} (parent:${node.parentId} range:${node.rangeFrom}-${node.rangeTo} total:${node.totalSiblings})-->`;
+}
+
+/**
  * 将递归树结构序列化为完整的 Markdown 大纲文本。
  *
  * 每级缩进 2 个空格。
@@ -178,18 +216,24 @@ export function serializeRemLine(rem: SerializableRem, folded: boolean = false):
 export function buildOutline(root: OutlineNode): string {
   const lines: string[] = [];
 
-  function walk(node: OutlineNode, depth: number): void {
+  function walkNode(node: TreeNode, depth: number): void {
     const indent = '  '.repeat(depth);
+
+    if (isElidedNode(node)) {
+      lines.push(indent + serializeElidedLine(node));
+      return;
+    }
+
     const line = serializeRemLine(node.rem, node.folded);
     lines.push(indent + line);
 
     if (!node.folded) {
       for (const child of node.children) {
-        walk(child, depth + 1);
+        walkNode(child, depth + 1);
       }
     }
   }
 
-  walk(root, 0);
+  walkNode(root, 0);
   return lines.join('\n');
 }

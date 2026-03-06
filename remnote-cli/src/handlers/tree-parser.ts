@@ -21,6 +21,8 @@ export interface OutlineNode {
   rawLine: string;
   /** 子节点 */
   children: OutlineNode[];
+  /** 是否为省略占位符行 */
+  isElided?: boolean;
 }
 
 /** diff 操作类型 */
@@ -35,7 +37,7 @@ export interface TreeDiffResult {
 }
 
 export interface TreeDiffError {
-  type: 'content_modified' | 'orphan_detected' | 'folded_delete' | 'root_modified' | 'indent_skip';
+  type: 'content_modified' | 'orphan_detected' | 'folded_delete' | 'root_modified' | 'indent_skip' | 'elided_modified';
   message: string;
   details: Record<string, unknown>;
 }
@@ -48,12 +50,20 @@ export interface TreeDiffError {
  */
 const LINE_MARKER_RE = /<!--(\S+)((?:\s+\S+)*)-->$/;
 
+/** 省略占位符正则 */
+const ELIDED_LINE_RE = /^<!--\.\.\.elided\s/;
+
 /** 解析单行，提取缩进、内容、remId */
-function parseLine(line: string): { depth: number; rawContent: string; remId: string | null; metadata: string } {
+function parseLine(line: string): { depth: number; rawContent: string; remId: string | null; metadata: string; isElided: boolean } {
   // 计算缩进（每 2 空格一级）
   const stripped = line.replace(/^ */, '');
   const indentChars = line.length - stripped.length;
   const depth = Math.floor(indentChars / 2);
+
+  // 检测省略占位符行
+  if (ELIDED_LINE_RE.test(stripped)) {
+    return { depth, rawContent: stripped, remId: null, metadata: '', isElided: true };
+  }
 
   // 匹配行尾标记
   const match = stripped.match(LINE_MARKER_RE);
@@ -62,11 +72,11 @@ function parseLine(line: string): { depth: number; rawContent: string; remId: st
     const metadata = match[2].trim();
     // rawContent = 去掉行尾标记后的内容（也去掉标记前的空格）
     const contentPart = stripped.slice(0, match.index!).trimEnd();
-    return { depth, rawContent: contentPart, remId, metadata };
+    return { depth, rawContent: contentPart, remId, metadata, isElided: false };
   }
 
   // 无标记 = 新增行
-  return { depth, rawContent: stripped, remId: null, metadata: '' };
+  return { depth, rawContent: stripped, remId: null, metadata: '', isElided: false };
 }
 
 // ────────────────────────── 大纲解析 ──────────────────────────
@@ -85,7 +95,7 @@ export function parseOutline(text: string): OutlineNode[] {
   const stack: OutlineNode[] = [];
 
   for (const line of lines) {
-    const { depth, rawContent, remId } = parseLine(line);
+    const { depth, rawContent, remId, isElided } = parseLine(line);
 
     const node: OutlineNode = {
       remId,
@@ -93,6 +103,7 @@ export function parseOutline(text: string): OutlineNode[] {
       rawContent,
       rawLine: line,
       children: [],
+      isElided,
     };
 
     if (depth === 0) {
@@ -243,7 +254,7 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
   function walk(node: OutlineNode, parentId: string | null): void {
     let childPos = 0;
     for (const child of node.children) {
-      if (child.remId === null) {
+      if (child.remId === null && !child.isElided) {
         if (!parentId) {
           // 新增行不能作为根节点的兄弟（根 remId 为 null 时理论不会到这里）
           throw new Error('新增行缺少父节点');
@@ -284,6 +295,21 @@ function collectNewLinesUnderNew(parent: OutlineNode, result: NewLineInfo[]): vo
   }
 }
 
+/** 递归收集所有省略占位符行的 rawContent */
+function collectElidedLines(roots: OutlineNode[]): Set<string> {
+  const result = new Set<string>();
+  function walk(node: OutlineNode): void {
+    if (node.isElided) {
+      result.add(node.rawContent);
+    }
+    for (const child of node.children) {
+      walk(child);
+    }
+  }
+  for (const root of roots) walk(root);
+  return result;
+}
+
 /**
  * 对比新旧大纲树，生成操作列表或报错。
  *
@@ -307,6 +333,20 @@ export function diffTrees(
         type: 'root_modified',
         message: 'Root node cannot be changed, deleted or moved.',
         details: { expected: oldRoot.remId, actual: newRoot.remId },
+      };
+    }
+  }
+
+  // ── 省略行防线：检测旧大纲中的省略行是否在新大纲中被删除/修改 ──
+  const oldElidedLines = collectElidedLines(oldRoots);
+  const newElidedLines = collectElidedLines(newRoots);
+  // 旧大纲中的每个省略行必须在新大纲中原样存在
+  for (const elidedLine of oldElidedLines) {
+    if (!newElidedLines.has(elidedLine)) {
+      return {
+        type: 'elided_modified',
+        message: 'Cannot delete or modify elided region directly. Use read-tree with the parent remId to expand first.',
+        details: { elidedLine },
       };
     }
   }

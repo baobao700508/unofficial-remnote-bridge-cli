@@ -13,17 +13,29 @@ import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 import {
   type SerializableRem,
   type OutlineNode,
+  type TreeNode,
+  type ElidedNode,
   buildOutline,
 } from '../utils/tree-serializer';
 import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
-
-/** 节点数上限，超出报错 */
-const MAX_NODES = 500;
+import { sliceSiblings } from '../utils/elision';
 
 export interface ReadTreePayload {
   remId: string;
   depth?: number;
+  maxNodes?: number;
+  maxSiblings?: number;
+  ancestorLevels?: number;
   includePowerup?: boolean;
+}
+
+/** 祖先节点信息（从直接父亲到最远祖先，由近及远） */
+export interface AncestorInfo {
+  id: string;
+  name: string;
+  childrenCount: number;
+  isDocument: boolean;
+  isTopLevel?: boolean;
 }
 
 export interface ReadTreeResult {
@@ -31,6 +43,8 @@ export interface ReadTreeResult {
   depth: number;
   nodeCount: number;
   outline: string;
+  /** 祖先链（从直接父亲到最远祖先，由近及远） */
+  ancestors?: AncestorInfo[];
   powerupFiltered?: { tags: number; children: number };
 }
 
@@ -43,7 +57,14 @@ export async function readTree(
   plugin: ReactRNPlugin,
   payload: ReadTreePayload,
 ): Promise<ReadTreeResult> {
-  const { remId, depth = 3, includePowerup = false } = payload;
+  const {
+    remId,
+    depth = 3,
+    maxNodes = 200,
+    maxSiblings = 20,
+    ancestorLevels = 0,
+    includePowerup = false,
+  } = payload;
 
   const rootRem = await plugin.rem.findOne(remId);
   if (!rootRem) {
@@ -53,6 +74,7 @@ export async function readTree(
   let nodeCount = 0;
   let totalFilteredTags = 0;
   let totalFilteredChildren = 0;
+  const budget = { remaining: maxNodes };
 
   /**
    * 递归构建 OutlineNode 树。
@@ -63,11 +85,7 @@ export async function readTree(
    */
   async function buildNode(rem: Rem, currentDepth: number, maxDepth: number): Promise<OutlineNode> {
     nodeCount++;
-    if (nodeCount > MAX_NODES) {
-      throw new Error(
-        `Tree exceeds ${MAX_NODES} nodes. Use a smaller --depth or read-tree a subtree.`,
-      );
-    }
+    budget.remaining--;
 
     const allChildren = await rem.getChildrenRem();
     const children = includePowerup ? allChildren : await filterNoisyChildren(allChildren);
@@ -156,11 +174,61 @@ export async function readTree(
       isListItem,
     };
 
-    // 递归处理子节点
-    const childNodes: OutlineNode[] = [];
+    // 递归处理子节点（带省略逻辑）
+    const childNodes: TreeNode[] = [];
     if (!folded) {
-      for (const child of children) {
-        childNodes.push(await buildNode(child, currentDepth + 1, maxDepth));
+      // Sibling 省略
+      const { visibleIndices, elided } = sliceSiblings(children.length, maxSiblings, rem._id);
+
+      if (visibleIndices) {
+        // 有省略：展示前 head + 省略占位 + 后 tail
+        const { head, tail } = visibleIndices;
+
+        // 前 head 个
+        for (let i = 0; i < head && budget.remaining > 0; i++) {
+          childNodes.push(await buildNode(children[i], currentDepth + 1, maxDepth));
+        }
+
+        // 省略占位符
+        if (elided) {
+          // 判断 isExact：被省略的节点如果有子节点，则不精确
+          // 保守策略：只要 depth 未到底，就标记为非精确
+          const atMaxDepth = maxDepth !== -1 && currentDepth + 1 >= maxDepth;
+          childNodes.push({
+            type: 'elided',
+            count: elided.count,
+            isExact: atMaxDepth, // 到底了就是精确的（不会有更多后代）
+            parentId: elided.parentId,
+            rangeFrom: elided.rangeFrom,
+            rangeTo: elided.rangeTo,
+            totalSiblings: elided.totalSiblings,
+          } as ElidedNode);
+        }
+
+        // 后 tail 个
+        const tailStart = children.length - tail;
+        for (let i = tailStart; i < children.length && budget.remaining > 0; i++) {
+          childNodes.push(await buildNode(children[i], currentDepth + 1, maxDepth));
+        }
+      } else {
+        // 无 sibling 省略：正常遍历，但需检查全局预算
+        for (let i = 0; i < children.length; i++) {
+          if (budget.remaining <= 0) {
+            // 全局预算耗尽：剩余 children 生成一个省略占位符
+            const remainCount = children.length - i;
+            childNodes.push({
+              type: 'elided',
+              count: remainCount,
+              isExact: false, // 可能还有后代
+              parentId: rem._id,
+              rangeFrom: i,
+              rangeTo: children.length - 1,
+              totalSiblings: children.length,
+            } as ElidedNode);
+            break;
+          }
+          childNodes.push(await buildNode(children[i], currentDepth + 1, maxDepth));
+        }
       }
     }
 
@@ -168,6 +236,13 @@ export async function readTree(
   }
 
   const rootNode = await buildNode(rootRem, 0, depth);
+
+  // 检测根节点是否为顶级 Rem（无父节点）
+  const rootParent = await rootRem.getParentRem();
+  if (!rootParent) {
+    rootNode.rem.isTopLevel = true;
+  }
+
   const outline = buildOutline(rootNode);
 
   const result: ReadTreeResult = {
@@ -176,6 +251,38 @@ export async function readTree(
     nodeCount,
     outline,
   };
+
+  // 祖先链构建
+  const clampedLevels = Math.min(Math.max(ancestorLevels, 0), 10);
+  if (clampedLevels > 0) {
+    const ancestors: AncestorInfo[] = [];
+    let current: Rem | undefined = rootRem;
+    for (let i = 0; i < clampedLevels; i++) {
+      const parent = await current.getParentRem();
+      if (!parent) break;
+      const [name, children, isDoc] = await Promise.all([
+        plugin.richText.toMarkdown(parent.text ?? []),
+        parent.getChildrenRem(),
+        parent.isDocument(),
+      ]);
+      ancestors.push({
+        id: parent._id,
+        name: sanitizeNewlines(name),
+        childrenCount: children.length,
+        isDocument: isDoc,
+      });
+      current = parent;
+    }
+    if (ancestors.length > 0) {
+      // 检测最远祖先是否为顶级 Rem
+      const furthestAncestor = ancestors[ancestors.length - 1];
+      const furthestParent = await current!.getParentRem();
+      if (!furthestParent) {
+        furthestAncestor.isTopLevel = true;
+      }
+      result.ancestors = ancestors;
+    }
+  }
 
   if (!includePowerup && (totalFilteredTags > 0 || totalFilteredChildren > 0)) {
     result.powerupFiltered = { tags: totalFilteredTags, children: totalFilteredChildren };

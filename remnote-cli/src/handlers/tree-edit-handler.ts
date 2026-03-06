@@ -47,10 +47,14 @@ export class TreeEditHandler {
     }
 
     // ── 防线 2: 乐观并发检测 ──
-    // 用与 read-tree 相同的 depth 重新获取最新大纲
+    // 用与 read-tree 相同的参数重新获取最新大纲
     const cachedDepthStr = this.cache.get('tree-depth:' + remId);
+    const cachedMaxNodesStr = this.cache.get('tree-maxNodes:' + remId);
+    const cachedMaxSiblingsStr = this.cache.get('tree-maxSiblings:' + remId);
     const depth = cachedDepthStr ? Number(cachedDepthStr) : 3;
-    const freshResult = await this.forwardToPlugin('read_tree', { remId, depth }) as {
+    const maxNodes = cachedMaxNodesStr ? Number(cachedMaxNodesStr) : 200;
+    const maxSiblings = cachedMaxSiblingsStr ? Number(cachedMaxSiblingsStr) : 20;
+    const freshResult = await this.forwardToPlugin('read_tree', { remId, depth, maxNodes, maxSiblings }) as {
       outline: string;
       depth: number;
       nodeCount: number;
@@ -166,8 +170,8 @@ export class TreeEditHandler {
       }
     }
 
-    // ── D3: 成功后更新缓存（使用相同 depth）──
-    const updatedResult = await this.forwardToPlugin('read_tree', { remId, depth }) as {
+    // ── D3: 成功后更新缓存（使用相同参数）──
+    const updatedResult = await this.forwardToPlugin('read_tree', { remId, depth, maxNodes, maxSiblings }) as {
       outline: string;
     };
     this.cache.set('tree:' + remId, updatedResult.outline);

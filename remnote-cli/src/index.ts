@@ -14,6 +14,8 @@ import { readRemCommand } from './commands/read-rem';
 import { editRemCommand } from './commands/edit-rem';
 import { readTreeCommand } from './commands/read-tree';
 import { editTreeCommand } from './commands/edit-tree';
+import { readGlobeCommand } from './commands/read-globe';
+import { readContextCommand } from './commands/read-context';
 
 const program = new Command();
 
@@ -102,16 +104,86 @@ program
   .command('read-tree [remIdOrJson]')
   .description('读取 Rem 子树并序列化为 Markdown 大纲')
   .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
+  .option('--max-nodes <maxNodes>', '全局节点上限（默认 200）')
+  .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
+  .option('--ancestor-levels <ancestorLevels>', '向上追溯祖先层数（默认 0，上限 10）')
   .option('--includePowerup', '包含 Powerup 系统数据（默认过滤）')
-  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string; includePowerup?: boolean }) => {
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string; maxNodes?: string; maxSiblings?: string; ancestorLevels?: string; includePowerup?: boolean }) => {
     const { json } = program.opts();
     if (json) {
       const input = parseJsonInput('read-tree', remIdOrJson);
       if (!input) return;
-      await readTreeCommand(input.remId, { json, depth: input.depth?.toString(), includePowerup: input.includePowerup });
+      await readTreeCommand(input.remId, {
+        json,
+        depth: input.depth?.toString(),
+        maxNodes: input.maxNodes?.toString(),
+        maxSiblings: input.maxSiblings?.toString(),
+        ancestorLevels: input.ancestorLevels?.toString(),
+        includePowerup: input.includePowerup,
+      });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readTreeCommand(remIdOrJson, { json, ...cmdOpts });
+    }
+  });
+
+program
+  .command('read-globe [jsonStr]')
+  .description('读取知识库全局概览（仅 Document 层级）')
+  .option('--depth <depth>', 'Document 嵌套深度（默认 -1 无限）')
+  .option('--max-nodes <maxNodes>', '全局节点上限（默认 200）')
+  .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
+  .action(async (jsonStr: string | undefined, cmdOpts: { depth?: string; maxNodes?: string; maxSiblings?: string }) => {
+    const { json } = program.opts();
+    if (json) {
+      let input: Record<string, unknown> = {};
+      if (jsonStr) {
+        try { input = JSON.parse(jsonStr); } catch {
+          console.log(JSON.stringify({ ok: false, command: 'read-globe', error: `JSON 解析失败: ${jsonStr}` }));
+          process.exitCode = 1;
+          return;
+        }
+      }
+      await readGlobeCommand({
+        json,
+        depth: input.depth?.toString(),
+        maxNodes: input.maxNodes?.toString(),
+        maxSiblings: input.maxSiblings?.toString(),
+      });
+    } else {
+      await readGlobeCommand({ json, ...cmdOpts });
+    }
+  });
+
+program
+  .command('read-context [jsonStr]')
+  .description('读取当前上下文视图（focus 鱼眼 / page 页面）')
+  .option('--mode <mode>', '模式：focus（默认）或 page')
+  .option('--ancestor-levels <levels>', '向上追溯几层祖先（默认 2，仅 focus 模式）')
+  .option('--depth <depth>', '展开深度（默认 3，仅 page 模式）')
+  .option('--max-nodes <maxNodes>', '全局节点上限（默认 200）')
+  .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
+  .action(async (jsonStr: string | undefined, cmdOpts: { mode?: string; ancestorLevels?: string; depth?: string; maxNodes?: string; maxSiblings?: string }) => {
+    const { json } = program.opts();
+    if (json) {
+      let input: Record<string, unknown> = {};
+      if (jsonStr) {
+        try { input = JSON.parse(jsonStr); } catch {
+          console.log(JSON.stringify({ ok: false, command: 'read-context', error: `JSON 解析失败: ${jsonStr}` }));
+          process.exitCode = 1;
+          return;
+        }
+      }
+      await readContextCommand({
+        json,
+        mode: input.mode as string | undefined,
+        ancestorLevels: input.ancestorLevels?.toString(),
+        depth: input.depth?.toString(),
+        maxNodes: input.maxNodes?.toString(),
+        maxSiblings: input.maxSiblings?.toString(),
+      });
+    } else {
+      await readContextCommand({ json, ...cmdOpts });
     }
   });
 

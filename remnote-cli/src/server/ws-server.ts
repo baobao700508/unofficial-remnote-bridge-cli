@@ -23,6 +23,8 @@ import { ReadHandler } from '../handlers/read-handler';
 import { EditHandler } from '../handlers/edit-handler';
 import { TreeReadHandler } from '../handlers/tree-read-handler';
 import { TreeEditHandler } from '../handlers/tree-edit-handler';
+import { GlobeReadHandler } from '../handlers/globe-read-handler';
+import { ContextReadHandler } from '../handlers/context-read-handler';
 import crypto from 'crypto';
 
 const PLUGIN_REQUEST_TIMEOUT_MS = 15_000;
@@ -56,6 +58,8 @@ export class BridgeServer {
   private editHandler: EditHandler;
   private treeReadHandler: TreeReadHandler;
   private treeEditHandler: TreeEditHandler;
+  private globeReadHandler: GlobeReadHandler;
+  private contextReadHandler: ContextReadHandler;
 
   private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
@@ -83,6 +87,8 @@ export class BridgeServer {
     this.editHandler = new EditHandler(remCache, forwardFn);
     this.treeReadHandler = new TreeReadHandler(remCache, forwardFn, config.onLog);
     this.treeEditHandler = new TreeEditHandler(remCache, forwardFn);
+    this.globeReadHandler = new GlobeReadHandler(forwardFn);
+    this.contextReadHandler = new ContextReadHandler(forwardFn);
   }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -264,6 +270,10 @@ export class BridgeServer {
         result = await this.treeEditHandler.handleEditTree(
           request.payload as { remId: string; oldStr: string; newStr: string },
         );
+      } else if (request.action === 'read_globe') {
+        result = await this.globeReadHandler.handleReadGlobe(request.payload);
+      } else if (request.action === 'read_context') {
+        result = await this.contextReadHandler.handleReadContext(request.payload);
       } else if (request.action === 'edit_rem') {
         result = await this.editHandler.handleEditRem(
           request.payload as { remId: string; oldStr: string; newStr: string },

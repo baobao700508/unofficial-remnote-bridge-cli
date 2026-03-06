@@ -31,6 +31,9 @@ export class TreeReadHandler {
     }
 
     const depth = (payload.depth as number) ?? 3;
+    const maxNodes = (payload.maxNodes as number) ?? 200;
+    const maxSiblings = (payload.maxSiblings as number) ?? 20;
+    const ancestorLevels = (payload.ancestorLevels as number) ?? 0;
     const includePowerup = (payload.includePowerup as boolean) ?? false;
 
     // 检查旧缓存
@@ -38,11 +41,15 @@ export class TreeReadHandler {
     const previousCachedAt = this.cache.getCreatedAt(cacheKey);
 
     // 转发到 Plugin 的 read_tree service
-    const result = await this.forwardToPlugin('read_tree', { remId, depth, includePowerup }) as TreeReadResult;
+    const result = await this.forwardToPlugin('read_tree', {
+      remId, depth, maxNodes, maxSiblings, ancestorLevels, includePowerup,
+    }) as TreeReadResult;
 
-    // 缓存大纲文本（key = 'tree:' + remId）+ 缓存 depth（key = 'tree-depth:' + remId）
+    // 缓存大纲文本 + 读取参数（供 edit-tree 乐观并发检测时复现相同查询）
     this.cache.set(cacheKey, result.outline);
     this.cache.set('tree-depth:' + remId, String(depth));
+    this.cache.set('tree-maxNodes:' + remId, String(maxNodes));
+    this.cache.set('tree-maxSiblings:' + remId, String(maxSiblings));
     this.onLog?.(
       `缓存树 ${remId.slice(0, 8)}... (${result.nodeCount} 节点, ${result.outline.length} bytes)`,
       'info',
