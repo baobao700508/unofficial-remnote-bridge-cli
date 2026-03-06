@@ -27,9 +27,9 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
   return async (request: BridgeRequest): Promise<unknown> => {
     switch (request.action) {
       case 'read_rem':
-        return readRem(plugin, request.payload as { remId: string });
+        return readRem(plugin, request.payload as { remId: string; includePowerup?: boolean });
       case 'read_tree':
-        return readTree(plugin, request.payload as { remId: string; depth?: number });
+        return readTree(plugin, request.payload as { remId: string; depth?: number; includePowerup?: boolean });
       case 'write_rem_fields':
         return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
       case 'create_rem':

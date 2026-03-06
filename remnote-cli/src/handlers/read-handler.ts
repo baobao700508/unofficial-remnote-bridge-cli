@@ -38,8 +38,10 @@ export class ReadHandler {
     const cacheKey = 'rem:' + remId;
     const previousCachedAt = this.cache.getCreatedAt(cacheKey);
 
+    const includePowerup = (payload.includePowerup as boolean) ?? false;
+
     // 转发到 Plugin
-    const remObject = await this.forwardToPlugin('read_rem', { remId });
+    const remObject = await this.forwardToPlugin('read_rem', { remId, includePowerup });
 
     // 缓存完整 JSON
     const fullJson = JSON.stringify(remObject, null, 2);

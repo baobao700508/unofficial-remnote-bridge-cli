@@ -85,12 +85,13 @@ program
   .description('读取单个 Rem 的完整 JSON 对象')
   .option('--fields <fields>', '只返回指定字段（逗号分隔）')
   .option('--full', '输出全部 51 个字段（含 R-F 低频字段）')
-  .action(async (remIdOrJson: string | undefined, cmdOpts: { fields?: string; full?: boolean }) => {
+  .option('--includePowerup', '包含 Powerup 系统数据（默认过滤）')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { fields?: string; full?: boolean; includePowerup?: boolean }) => {
     const { json } = program.opts();
     if (json) {
       const input = parseJsonInput('read-rem', remIdOrJson);
       if (!input) return;
-      await readRemCommand(input.remId, { json, fields: input.fields?.join(','), full: input.full });
+      await readRemCommand(input.remId, { json, fields: input.fields?.join(','), full: input.full, includePowerup: input.includePowerup });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readRemCommand(remIdOrJson, { json, ...cmdOpts });
@@ -101,12 +102,13 @@ program
   .command('read-tree [remIdOrJson]')
   .description('读取 Rem 子树并序列化为 Markdown 大纲')
   .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
-  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string }) => {
+  .option('--includePowerup', '包含 Powerup 系统数据（默认过滤）')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string; includePowerup?: boolean }) => {
     const { json } = program.opts();
     if (json) {
       const input = parseJsonInput('read-tree', remIdOrJson);
       if (!input) return;
-      await readTreeCommand(input.remId, { json, depth: input.depth?.toString() });
+      await readTreeCommand(input.remId, { json, depth: input.depth?.toString(), includePowerup: input.includePowerup });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readTreeCommand(remIdOrJson, { json, ...cmdOpts });

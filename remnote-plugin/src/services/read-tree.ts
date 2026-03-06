@@ -15,6 +15,7 @@ import {
   type OutlineNode,
   buildOutline,
 } from '../utils/tree-serializer';
+import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
 
 /** 节点数上限，超出报错 */
 const MAX_NODES = 500;
@@ -22,6 +23,7 @@ const MAX_NODES = 500;
 export interface ReadTreePayload {
   remId: string;
   depth?: number;
+  includePowerup?: boolean;
 }
 
 export interface ReadTreeResult {
@@ -29,6 +31,7 @@ export interface ReadTreeResult {
   depth: number;
   nodeCount: number;
   outline: string;
+  powerupFiltered?: { tags: number; children: number };
 }
 
 /**
@@ -40,7 +43,7 @@ export async function readTree(
   plugin: ReactRNPlugin,
   payload: ReadTreePayload,
 ): Promise<ReadTreeResult> {
-  const { remId, depth = 3 } = payload;
+  const { remId, depth = 3, includePowerup = false } = payload;
 
   const rootRem = await plugin.rem.findOne(remId);
   if (!rootRem) {
@@ -48,6 +51,8 @@ export async function readTree(
   }
 
   let nodeCount = 0;
+  let totalFilteredTags = 0;
+  let totalFilteredChildren = 0;
 
   /**
    * 递归构建 OutlineNode 树。
@@ -64,7 +69,9 @@ export async function readTree(
       );
     }
 
-    const children = await rem.getChildrenRem();
+    const allChildren = await rem.getChildrenRem();
+    const children = includePowerup ? allChildren : await filterNoisyChildren(allChildren);
+    if (!includePowerup) totalFilteredChildren += allChildren.length - children.length;
     const shouldFold = maxDepth !== -1 && currentDepth >= maxDepth;
     const folded = shouldFold && children.length > 0;
 
@@ -85,7 +92,10 @@ export async function readTree(
       rem.isCardItem(),
       rem.isDocument(),
       Promise.resolve(rem.type === 6), // portal type enum = 6
-      rem.getTagRems(),
+      rem.getTagRems().then(tags => includePowerup ? tags : filterNoisyTags(tags).then(filtered => {
+        totalFilteredTags += tags.length - filtered.length;
+        return filtered;
+      })),
       rem.getPracticeDirection(),
     ]);
 
@@ -133,12 +143,18 @@ export async function readTree(
   const rootNode = await buildNode(rootRem, 0, depth);
   const outline = buildOutline(rootNode);
 
-  return {
+  const result: ReadTreeResult = {
     rootId: remId,
     depth,
     nodeCount,
     outline,
   };
+
+  if (!includePowerup && (totalFilteredTags > 0 || totalFilteredChildren > 0)) {
+    result.powerupFiltered = { tags: totalFilteredTags, children: totalFilteredChildren };
+  }
+
+  return result;
 }
 
 // ── 辅助函数 ──

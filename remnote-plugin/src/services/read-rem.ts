@@ -15,6 +15,7 @@ import type {
   PortalType,
   PropertyTypeValue,
 } from '../types';
+import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
 
 /**
  * 读取单个 Rem，组装为完整 RemObject。
@@ -23,8 +24,9 @@ import type {
  */
 export async function readRem(
   plugin: ReactRNPlugin,
-  payload: { remId: string },
-): Promise<RemObject> {
+  payload: { remId: string; includePowerup?: boolean },
+): Promise<RemObject & { powerupFiltered?: { tags: number; children: number } }> {
+  const { includePowerup = false } = payload;
   const rem = await plugin.rem.findOne(payload.remId);
   if (!rem) {
     throw new Error(`Rem not found: ${payload.remId}`);
@@ -75,6 +77,8 @@ export async function readRem(
     portalsAndDocsIn,
     allRemInDocOrPortal,
     allRemInFolderQ,
+    // Children (for powerup filtering)
+    childrenRems,
     // Stats
     timesSelected,
     lastMovedTo,
@@ -125,6 +129,8 @@ export async function readRem(
     rem.portalsAndDocumentsIn(),
     rem.allRemInDocumentOrPortal(),
     rem.allRemInFolderQueue(),
+    // Children (for powerup filtering)
+    rem.getChildrenRem(),
     // Stats
     rem.timesSelectedInSearch(),
     rem.getLastTimeMovedTo(),
@@ -132,6 +138,21 @@ export async function readRem(
     rem.embeddedQueueViewMode(),
     rem.getLastPracticed(),
   ]);
+
+  // Powerup 噪音过滤
+  let filteredTagRems = tagRems;
+  let filteredChildrenIds = rem.children ?? [];
+  let filteredTagCount = 0;
+  let filteredChildCount = 0;
+
+  if (!includePowerup) {
+    filteredTagRems = await filterNoisyTags(tagRems);
+    filteredTagCount = tagRems.length - filteredTagRems.length;
+
+    const filteredChildren = await filterNoisyChildren(childrenRems);
+    filteredChildCount = childrenRems.length - filteredChildren.length;
+    filteredChildrenIds = filteredChildren.map(r => r._id);
+  }
 
   // 按 RemObject 接口字段声明顺序组装（确定性序列化）
   const remObject: RemObject = {
@@ -148,7 +169,7 @@ export async function readRem(
 
     // 结构
     parent: rem.parent,
-    children: rem.children ?? [],
+    children: filteredChildrenIds,
 
     // 格式 / 显示
     fontSize: (fontSize as RemObject['fontSize']) ?? null,
@@ -184,7 +205,7 @@ export async function readRem(
     practiceDirection: practiceDirection as RemObject['practiceDirection'],
 
     // 关联 — 直接关系
-    tags: tagRems.map(r => r._id),
+    tags: filteredTagRems.map(r => r._id),
     sources: sourceRems.map(r => r._id),
     aliases: aliasRems.map(r => r._id),
 
@@ -220,6 +241,10 @@ export async function readRem(
     localUpdatedAt: rem.localUpdatedAt,
     lastPracticed,
   };
+
+  if (!includePowerup && (filteredTagCount > 0 || filteredChildCount > 0)) {
+    return { ...remObject, powerupFiltered: { tags: filteredTagCount, children: filteredChildCount } };
+  }
 
   return remObject;
 }

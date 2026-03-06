@@ -15,13 +15,17 @@ export interface ReadRemOptions {
   json?: boolean;
   fields?: string;
   full?: boolean;
+  includePowerup?: boolean;
 }
 
 export async function readRemCommand(remId: string, options: ReadRemOptions = {}): Promise<void> {
-  const { json, fields, full } = options;
+  const { json, fields, full, includePowerup } = options;
 
   // 构造 payload
   const payload: Record<string, unknown> = { remId };
+  if (includePowerup) {
+    payload.includePowerup = true;
+  }
   if (full) {
     payload.full = true;
   } else if (fields) {
@@ -64,12 +68,19 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
   const data = result as Record<string, unknown>;
   const cacheOverridden = data._cacheOverridden as { id: string; previousCachedAt: string } | undefined;
   delete data._cacheOverridden;
+  const powerupFiltered = data.powerupFiltered as { tags: number; children: number } | undefined;
+  delete data.powerupFiltered;
 
   if (json) {
-    jsonOutput({ ok: true, command: 'read-rem', data, ...(cacheOverridden ? { cacheOverridden } : {}) });
+    jsonOutput({ ok: true, command: 'read-rem', data, ...(cacheOverridden ? { cacheOverridden } : {}), ...(powerupFiltered ? { powerupFiltered } : {}) });
   } else {
     if (cacheOverridden) {
       console.warn(`注意: Rem ${cacheOverridden.id} 的缓存（${cacheOverridden.previousCachedAt}）已被本次 read 覆盖`);
+    }
+    if (powerupFiltered) {
+      console.warn(`⚠ 已过滤 Powerup 系统数据（${powerupFiltered.tags} 个 Tag、${powerupFiltered.children} 个隐藏子 Rem）。`);
+      console.warn('  Powerup 是 RemNote 的格式渲染机制，其产生的 Tag 和子 Rem 在 UI 中不可见。');
+      console.warn('  如需查看完整数据，请加 --includePowerup 选项。');
     }
     console.log(JSON.stringify(data, null, 2));
   }

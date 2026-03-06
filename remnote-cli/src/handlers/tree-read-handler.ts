@@ -14,6 +14,7 @@ export interface TreeReadResult {
   depth: number;
   nodeCount: number;
   outline: string;
+  powerupFiltered?: { tags: number; children: number };
 }
 
 export class TreeReadHandler {
@@ -30,13 +31,14 @@ export class TreeReadHandler {
     }
 
     const depth = (payload.depth as number) ?? 3;
+    const includePowerup = (payload.includePowerup as boolean) ?? false;
 
     // 检查旧缓存
     const cacheKey = 'tree:' + remId;
     const previousCachedAt = this.cache.getCreatedAt(cacheKey);
 
     // 转发到 Plugin 的 read_tree service
-    const result = await this.forwardToPlugin('read_tree', { remId, depth }) as TreeReadResult;
+    const result = await this.forwardToPlugin('read_tree', { remId, depth, includePowerup }) as TreeReadResult;
 
     // 缓存大纲文本（key = 'tree:' + remId）+ 缓存 depth（key = 'tree-depth:' + remId）
     this.cache.set(cacheKey, result.outline);

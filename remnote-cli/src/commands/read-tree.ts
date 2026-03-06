@@ -13,6 +13,7 @@ import { jsonOutput } from '../utils/output';
 export interface ReadTreeOptions {
   json?: boolean;
   depth?: string;
+  includePowerup?: boolean;
 }
 
 export async function readTreeCommand(remId: string, options: ReadTreeOptions = {}): Promise<void> {
@@ -31,7 +32,7 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
 
   let result: unknown;
   try {
-    result = await sendDaemonRequest('read_tree', { remId, depth });
+    result = await sendDaemonRequest('read_tree', { remId, depth, includePowerup: options.includePowerup });
   } catch (err) {
     if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
       if (json) {
@@ -55,12 +56,19 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
   const data = result as Record<string, unknown>;
   const cacheOverridden = data._cacheOverridden as { id: string; previousCachedAt: string } | undefined;
   delete data._cacheOverridden;
+  const powerupFiltered = data.powerupFiltered as { tags: number; children: number } | undefined;
+  delete data.powerupFiltered;
 
   if (json) {
-    jsonOutput({ ok: true, command: 'read-tree', data, ...(cacheOverridden ? { cacheOverridden } : {}) });
+    jsonOutput({ ok: true, command: 'read-tree', data, ...(cacheOverridden ? { cacheOverridden } : {}), ...(powerupFiltered ? { powerupFiltered } : {}) });
   } else {
     if (cacheOverridden) {
       console.warn(`注意: Tree ${cacheOverridden.id} 的缓存（${cacheOverridden.previousCachedAt}）已被本次 read 覆盖`);
+    }
+    if (powerupFiltered) {
+      console.warn(`⚠ 已过滤 Powerup 系统数据（${powerupFiltered.tags} 个 Tag、${powerupFiltered.children} 个隐藏子 Rem）。`);
+      console.warn('  Powerup 是 RemNote 的格式渲染机制，其产生的 Tag 和子 Rem 在 UI 中不可见。');
+      console.warn('  如需查看完整数据，请加 --includePowerup 选项。');
     }
     console.log(data.outline);
   }
