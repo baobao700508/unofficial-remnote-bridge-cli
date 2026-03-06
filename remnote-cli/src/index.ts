@@ -16,6 +16,7 @@ import { readTreeCommand } from './commands/read-tree';
 import { editTreeCommand } from './commands/edit-tree';
 import { readGlobeCommand } from './commands/read-globe';
 import { readContextCommand } from './commands/read-context';
+import { searchCommand } from './commands/search';
 
 const program = new Command();
 
@@ -202,6 +203,33 @@ program
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       if (!cmdOpts.oldStr || !cmdOpts.newStr) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
       await editTreeCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
+    }
+  });
+
+program
+  .command('search [queryOrJson]')
+  .description('在知识库中按文本搜索 Rem')
+  .option('--limit <limit>', '结果数量上限（默认 20）')
+  .action(async (queryOrJson: string | undefined, cmdOpts: { limit?: string }) => {
+    const { json } = program.opts();
+    if (json) {
+      let input: Record<string, unknown> = {};
+      if (queryOrJson) {
+        try { input = JSON.parse(queryOrJson); } catch {
+          console.log(JSON.stringify({ ok: false, command: 'search', error: `JSON 解析失败: ${queryOrJson}` }));
+          process.exitCode = 1;
+          return;
+        }
+      }
+      if (!input.query) {
+        console.log(JSON.stringify({ ok: false, command: 'search', error: 'JSON 参数中缺少 query 字段' }));
+        process.exitCode = 1;
+        return;
+      }
+      await searchCommand(input.query as string, { json, limit: input.numResults?.toString() });
+    } else {
+      if (!queryOrJson) { console.error('错误: 缺少搜索关键词'); process.exitCode = 1; return; }
+      await searchCommand(queryOrJson, { json, ...cmdOpts });
     }
   });
 

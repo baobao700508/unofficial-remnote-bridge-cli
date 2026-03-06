@@ -18,6 +18,7 @@ import { createRem } from '../services/create-rem';
 import { deleteRem } from '../services/delete-rem';
 import { moveRem } from '../services/move-rem';
 import { reorderChildren } from '../services/reorder-children';
+import { search } from '../services/search';
 
 /**
  * 创建消息路由处理器
@@ -46,6 +47,8 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
         return readGlobe(plugin, request.payload as { depth?: number; maxNodes?: number; maxSiblings?: number });
       case 'read_context':
         return readContext(plugin, request.payload as { mode?: 'focus' | 'page'; ancestorLevels?: number; maxNodes?: number; maxSiblings?: number; depth?: number });
+      case 'search':
+        return search(plugin, request.payload as { query: string; numResults?: number });
 
       default:
         throw new Error(`未实现的 action: ${request.action}`);
