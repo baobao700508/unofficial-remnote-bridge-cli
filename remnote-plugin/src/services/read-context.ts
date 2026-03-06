@@ -10,17 +10,16 @@
 
 import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 import {
-  type SerializableRem,
   type OutlineNode,
   type TreeNode,
   type ElidedNode,
   buildOutline,
-  serializeElidedLine,
-  isElidedNode,
+  createMinimalSerializableRem,
 } from '../utils/tree-serializer';
-import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
+import { filterNoisyChildren } from './powerup-filter';
 import { sliceSiblings } from '../utils/elision';
-import { buildBreadcrumb } from '../utils/breadcrumb';
+import { buildBreadcrumb } from './breadcrumb';
+import { buildFullSerializableRem as buildFullRem } from './rem-builder';
 
 export interface ReadContextPayload {
   mode?: 'focus' | 'page';
@@ -75,7 +74,7 @@ async function readContextPage(
   let nodeCount = 0;
   const budget = { remaining: opts.maxNodes };
 
-  const rootNode = await buildSubtreeNode(plugin, pageRem, 0, opts.depth, opts.maxSiblings, budget, (n) => { nodeCount = n; });
+  const rootNode = await buildSubtreeNode(plugin, pageRem, 0, opts.depth, opts.maxSiblings, budget);
   nodeCount = opts.maxNodes - budget.remaining;
 
   const header = `<!-- page: ${breadcrumb[breadcrumb.length - 1] || remId} -->\n<!-- path: ${breadcrumb.join(' > ')} -->`;
@@ -269,7 +268,6 @@ async function buildSubtreeNode(
   maxDepth: number,
   maxSiblings: number,
   budget: { remaining: number },
-  _onCount?: (n: number) => void,
 ): Promise<OutlineNode> {
   budget.remaining--;
 
@@ -278,7 +276,7 @@ async function buildSubtreeNode(
   const shouldFold = maxDepth !== -1 && currentDepth >= maxDepth;
   const folded = shouldFold && children.length > 0;
 
-  const serializable = await buildFullSerializableRem(plugin, rem, children);
+  const serializable = await buildFullRem(plugin, rem, children);
 
   const childNodes: TreeNode[] = [];
   if (!folded) {
@@ -349,120 +347,18 @@ async function buildMinimalSerializableRem(
   rem: Rem,
   childrenCount: number,
   isFocusRem: boolean,
-): Promise<SerializableRem> {
-  const [markdownText, isDocument, parentRem] = await Promise.all([
+) {
+  const [markdownText, isDocument] = await Promise.all([
     plugin.richText.toMarkdown(rem.text ?? []),
     rem.isDocument(),
-    rem.getParentRem(),
   ]);
 
-  return {
+  return createMinimalSerializableRem({
     id: rem._id,
     markdownText: (isFocusRem ? '* ' : '') + markdownText.replace(/\n/g, ' '),
-    markdownBackText: null,
-    type: 'default',
-    hasMultilineChildren: false,
-    practiceDirection: 'none',
-    isCardItem: false,
-    isDocument,
-    isPortal: false,
     childrenCount,
-    tagCount: 0,
-    hasCloze: false,
-    fontSize: null,
-    isTodo: false,
-    todoStatus: null,
-    isCode: false,
-    isDivider: false,
-    highlightColor: null,
-    isQuote: false,
-    isListItem: false,
-    isTopLevel: !parentRem,
-  };
+    isDocument,
+    isTopLevel: rem.parent === null,
+  });
 }
 
-async function buildFullSerializableRem(
-  plugin: ReactRNPlugin,
-  rem: Rem,
-  children: Rem[],
-): Promise<SerializableRem> {
-  const [
-    markdownText,
-    markdownBackText,
-    remType,
-    isCardItem,
-    isDocument,
-    tagRems,
-    practiceDirection,
-    fontSize,
-    isTodo,
-    todoStatus,
-    isCode,
-    hasDvPowerup,
-    highlightColor,
-    isQuote,
-    isListItem,
-    parentRem,
-  ] = await Promise.all([
-    plugin.richText.toMarkdown(rem.text ?? []),
-    rem.backText ? plugin.richText.toMarkdown(rem.backText) : Promise.resolve(null),
-    rem.getType(),
-    rem.isCardItem(),
-    rem.isDocument(),
-    rem.getTagRems().then(tags => filterNoisyTags(tags)),
-    rem.getPracticeDirection(),
-    rem.getFontSize(),
-    rem.isTodo(),
-    rem.getTodoStatus(),
-    rem.isCode(),
-    rem.hasPowerup('dv'),
-    rem.getHighlightColor(),
-    rem.isQuote(),
-    rem.isListItem(),
-    rem.getParentRem(),
-  ]);
-
-  let hasMultilineChildren = false;
-  if (children.length > 0) {
-    const cardItemFlags = await Promise.all(children.map(c => c.isCardItem()));
-    hasMultilineChildren = cardItemFlags.some(Boolean);
-  }
-
-  const hasCloze = (rem.text ?? []).some(
-    el => typeof el === 'object' && el !== null && 'cId' in el,
-  );
-  const isDivider = hasDvPowerup && (rem.text ?? []).length === 0;
-
-  const remTypeStr = (() => {
-    switch (remType as number) {
-      case 1: return 'concept';
-      case 2: return 'descriptor';
-      case 6: return 'portal';
-      default: return 'default';
-    }
-  })();
-
-  return {
-    id: rem._id,
-    markdownText: markdownText.replace(/\n/g, ' '),
-    markdownBackText: markdownBackText !== null ? markdownBackText.replace(/\n/g, ' ') : null,
-    type: remTypeStr,
-    hasMultilineChildren,
-    practiceDirection: (practiceDirection as string) ?? 'none',
-    isCardItem,
-    isDocument,
-    isPortal: rem.type === 6,
-    childrenCount: children.length,
-    tagCount: tagRems.length,
-    hasCloze,
-    fontSize: (fontSize as 'H1' | 'H2' | 'H3' | null) ?? null,
-    isTodo,
-    todoStatus: (todoStatus as 'Finished' | 'Unfinished' | null) ?? null,
-    isCode,
-    isDivider,
-    highlightColor: (highlightColor as string | null) ?? null,
-    isQuote,
-    isListItem,
-    isTopLevel: !parentRem,
-  };
-}

@@ -182,6 +182,39 @@ function buildMetadata(rem: SerializableRem, folded: boolean): string[] {
   return parts;
 }
 
+// ────────────────────────── 工厂函数 ──────────────────────────
+
+/**
+ * 创建一个带合理默认值的 SerializableRem。
+ *
+ * 用于 read-globe、read-context 等场景中只需基础字段的节点。
+ * 必须提供 id、markdownText、childrenCount，其余字段使用默认值。
+ */
+export function createMinimalSerializableRem(
+  overrides: Partial<SerializableRem> & Pick<SerializableRem, 'id' | 'markdownText' | 'childrenCount'>,
+): SerializableRem {
+  return {
+    markdownBackText: null,
+    type: 'default',
+    hasMultilineChildren: false,
+    practiceDirection: 'none',
+    isCardItem: false,
+    isDocument: false,
+    isPortal: false,
+    tagCount: 0,
+    hasCloze: false,
+    fontSize: null,
+    isTodo: false,
+    todoStatus: null,
+    isCode: false,
+    isDivider: false,
+    highlightColor: null,
+    isQuote: false,
+    isListItem: false,
+    ...overrides,
+  };
+}
+
 // ────────────────────────── 公开 API ──────────────────────────
 
 /**

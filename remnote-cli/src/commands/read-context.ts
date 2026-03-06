@@ -37,12 +37,12 @@ export async function readContextCommand(options: ReadContextOptions = {}): Prom
     return;
   }
 
-  const ancestorLevels = options.ancestorLevels !== undefined ? parseInt(options.ancestorLevels, 10) : 2;
-  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : 3;
-  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : 200;
-  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : 20;
+  const ancestorLevels = options.ancestorLevels !== undefined ? parseInt(options.ancestorLevels, 10) : undefined;
+  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : undefined;
+  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : undefined;
+  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : undefined;
 
-  if (isNaN(ancestorLevels) || isNaN(depth) || isNaN(maxNodes) || isNaN(maxSiblings)) {
+  if ((ancestorLevels !== undefined && isNaN(ancestorLevels)) || (depth !== undefined && isNaN(depth)) || (maxNodes !== undefined && isNaN(maxNodes)) || (maxSiblings !== undefined && isNaN(maxSiblings))) {
     const errMsg = 'numeric options must be numbers';
     if (json) {
       jsonOutput({ ok: false, command: 'read-context', error: errMsg });

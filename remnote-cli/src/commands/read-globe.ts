@@ -20,11 +20,11 @@ export interface ReadGlobeOptions {
 
 export async function readGlobeCommand(options: ReadGlobeOptions = {}): Promise<void> {
   const { json } = options;
-  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : -1;
-  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : 200;
-  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : 20;
+  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : undefined;
+  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : undefined;
+  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : undefined;
 
-  if (isNaN(depth) || isNaN(maxNodes) || isNaN(maxSiblings)) {
+  if ((depth !== undefined && isNaN(depth)) || (maxNodes !== undefined && isNaN(maxNodes)) || (maxSiblings !== undefined && isNaN(maxSiblings))) {
     const errMsg = '--depth, --max-nodes, --max-siblings must be numbers';
     if (json) {
       jsonOutput({ ok: false, command: 'read-globe', error: errMsg });

@@ -11,14 +11,14 @@
 
 import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 import {
-  type SerializableRem,
   type OutlineNode,
   type TreeNode,
   type ElidedNode,
   buildOutline,
 } from '../utils/tree-serializer';
-import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
+import { filterNoisyChildren } from './powerup-filter';
 import { sliceSiblings } from '../utils/elision';
+import { buildFullSerializableRem, sanitizeNewlines } from './rem-builder';
 
 export interface ReadTreePayload {
   remId: string;
@@ -93,86 +93,15 @@ export async function readTree(
     const shouldFold = maxDepth !== -1 && currentDepth >= maxDepth;
     const folded = shouldFold && children.length > 0;
 
-    // 并行获取序列化所需的字段
-    const [
-      markdownText,
-      markdownBackText,
-      remType,
-      isCardItem,
-      isDocument,
-      isPortal,
-      tagRems,
-      practiceDirection,
-      fontSize,
-      isTodo,
-      todoStatus,
-      isCode,
-      hasDvPowerup,
-      highlightColor,
-      isQuote,
-      isListItem,
-    ] = await Promise.all([
-      plugin.richText.toMarkdown(rem.text ?? []),
-      rem.backText ? plugin.richText.toMarkdown(rem.backText) : Promise.resolve(null),
-      rem.getType(),
-      rem.isCardItem(),
-      rem.isDocument(),
-      Promise.resolve(rem.type === 6), // portal type enum = 6
-      rem.getTagRems().then(tags => includePowerup ? tags : filterNoisyTags(tags).then(filtered => {
-        totalFilteredTags += tags.length - filtered.length;
-        return filtered;
-      })),
-      rem.getPracticeDirection(),
-      rem.getFontSize(),
-      rem.isTodo(),
-      rem.getTodoStatus(),
-      rem.isCode(),
-      rem.hasPowerup('dv'),
-      rem.getHighlightColor(),
-      rem.isQuote(),
-      rem.isListItem(),
-    ]);
+    const serializable = await buildFullSerializableRem(plugin, rem, children, {
+      includePowerup,
+      onFilteredTags: (count) => { totalFilteredTags += count; },
+    });
 
-    // 检测是否有 multiline children（children 中有 isCardItem 的）
-    let hasMultilineChildren = false;
-    if (!folded && children.length > 0) {
-      const cardItemFlags = await Promise.all(children.map(c => c.isCardItem()));
-      hasMultilineChildren = cardItemFlags.some(Boolean);
-    } else if (folded) {
-      // 折叠时无法确定，保守设为 false（元数据 fc 可能不完全准确）
-      hasMultilineChildren = false;
+    // 折叠时无法确定 multiline，保守设为 false
+    if (folded) {
+      serializable.hasMultilineChildren = false;
     }
-
-    // 检测 cloze
-    const hasCloze = (rem.text ?? []).some(
-      el => typeof el === 'object' && el !== null && 'cId' in el,
-    );
-
-    // Divider = 有 dv powerup 且 text 为空
-    const isDivider = hasDvPowerup && (rem.text ?? []).length === 0;
-
-    const serializable: SerializableRem = {
-      id: rem._id,
-      markdownText: sanitizeNewlines(markdownText),
-      markdownBackText: markdownBackText !== null ? sanitizeNewlines(markdownBackText) : null,
-      type: remTypeToString(remType as number),
-      hasMultilineChildren,
-      practiceDirection: (practiceDirection as string) ?? 'none',
-      isCardItem,
-      isDocument,
-      isPortal,
-      childrenCount: children.length,
-      tagCount: tagRems.length,
-      hasCloze,
-      fontSize: (fontSize as 'H1' | 'H2' | 'H3' | null) ?? null,
-      isTodo,
-      todoStatus: (todoStatus as 'Finished' | 'Unfinished' | null) ?? null,
-      isCode,
-      isDivider,
-      highlightColor: (highlightColor as string | null) ?? null,
-      isQuote,
-      isListItem,
-    };
 
     // 递归处理子节点（带省略逻辑）
     const childNodes: TreeNode[] = [];
@@ -291,19 +220,3 @@ export async function readTree(
   return result;
 }
 
-// ── 辅助函数 ──
-
-/** toMarkdown 可能返回多行，替换为空格以保持"每 Rem 一行" */
-function sanitizeNewlines(text: string): string {
-  return text.replace(/\n/g, ' ');
-}
-
-/** SDK RemType 枚举值 → 字符串 */
-function remTypeToString(type: number): string {
-  switch (type) {
-    case 1: return 'concept';
-    case 2: return 'descriptor';
-    case 6: return 'portal';
-    default: return 'default';
-  }
-}

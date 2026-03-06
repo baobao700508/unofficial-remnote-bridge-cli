@@ -43,10 +43,3 @@ export function sliceSiblings(
     },
   };
 }
-
-/**
- * 检查全局预算是否耗尽。
- */
-export function isBudgetExhausted(budget: { remaining: number }): boolean {
-  return budget.remaining <= 0;
-}

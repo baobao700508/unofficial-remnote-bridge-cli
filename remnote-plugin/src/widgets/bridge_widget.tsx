@@ -140,6 +140,29 @@ function BridgeWidget() {
           )}
         </div>
       </div>
+
+      {/* 配置按钮 */}
+      <button
+        onClick={() => window.open('http://127.0.0.1:3003', '_blank')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          width: '100%',
+          marginTop: '12px',
+          padding: '8px 0',
+          background: '#f9fafb',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '13px',
+          color: '#374151',
+        }}
+      >
+        <span style={{ fontSize: '16px' }}>⚙</span>
+        <span>打开配置页面</span>
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 /**
  * breadcrumb.ts — 面包屑路径构建
  *
- * 纯函数辅助工具。被 read-globe、read-context 共享。
+ * SDK 辅助函数。被 read-globe、read-context 共享。
  */
 
 import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';

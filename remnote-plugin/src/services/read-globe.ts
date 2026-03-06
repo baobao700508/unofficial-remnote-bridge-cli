@@ -11,16 +11,16 @@
 
 import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 import {
-  type SerializableRem,
   type OutlineNode,
   type TreeNode,
   type ElidedNode,
   isElidedNode,
   buildOutline,
   serializeElidedLine,
+  createMinimalSerializableRem,
 } from '../utils/tree-serializer';
 import { sliceSiblings } from '../utils/elision';
-import { filterNoisyChildren } from '../utils/powerup-filter';
+import { filterNoisyChildren } from './powerup-filter';
 
 export interface ReadGlobePayload {
   depth?: number;
@@ -43,23 +43,13 @@ export async function readGlobe(
     maxSiblings = 20,
   } = payload;
 
-  // 获取所有顶层 Rem（parent === null）
+  // 获取所有顶层 Rem（同步属性 rem.parent === null）
   const allRems = await plugin.rem.getAll();
-  const topLevelRems: Rem[] = [];
-  for (const rem of allRems) {
-    const parent = await rem.getParentRem();
-    if (!parent) {
-      topLevelRems.push(rem);
-    }
-  }
+  const topLevelRems = allRems.filter(rem => rem.parent === null);
 
-  // 过滤出 Document
-  const topDocs: Rem[] = [];
-  for (const rem of topLevelRems) {
-    if (await rem.isDocument()) {
-      topDocs.push(rem);
-    }
-  }
+  // 过滤出 Document（并行）
+  const docFlags = await Promise.all(topLevelRems.map(r => r.isDocument()));
+  const topDocs = topLevelRems.filter((_, i) => docFlags[i]);
 
   let nodeCount = 0;
   const budget = { remaining: maxNodes };
@@ -91,33 +81,13 @@ export async function readGlobe(
 
     const markdownText = await plugin.richText.toMarkdown(rem.text ?? []);
 
-    // 检测是否为顶级 Rem
-    const parentRem = await rem.getParentRem();
-    const isTopLevel = !parentRem;
-
-    const serializable: SerializableRem = {
+    const serializable = createMinimalSerializableRem({
       id: rem._id,
       markdownText: markdownText.replace(/\n/g, ' '),
-      markdownBackText: null,
-      type: 'default',
-      hasMultilineChildren: false,
-      practiceDirection: 'none',
-      isCardItem: false,
-      isDocument: true,
-      isPortal: false,
       childrenCount: children.length,
-      tagCount: 0,
-      hasCloze: false,
-      fontSize: null,
-      isTodo: false,
-      todoStatus: null,
-      isCode: false,
-      isDivider: false,
-      highlightColor: null,
-      isQuote: false,
-      isListItem: false,
-      isTopLevel,
-    };
+      isDocument: true,
+      isTopLevel: rem.parent === null,
+    });
 
     const childNodes: TreeNode[] = [];
     if (!folded && docChildren.length > 0) {

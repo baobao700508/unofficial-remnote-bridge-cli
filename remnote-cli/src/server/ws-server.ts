@@ -18,6 +18,8 @@ import type {
   StatusResult,
 } from '../protocol';
 import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol';
+import type { DefaultsConfig } from '../config';
+import { DEFAULT_DEFAULTS } from '../config';
 import { RemCache } from '../handlers/rem-cache';
 import { ReadHandler } from '../handlers/read-handler';
 import { EditHandler } from '../handlers/edit-handler';
@@ -37,6 +39,8 @@ export interface BridgeServerConfig {
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
   /** 获取守护进程超时剩余秒数（由 daemon 注入） */
   getTimeoutRemaining?: () => number;
+  /** 业务默认值（由 daemon 注入） */
+  defaults?: DefaultsConfig;
 }
 
 export class BridgeServer {
@@ -60,8 +64,9 @@ export class BridgeServer {
   private treeEditHandler: TreeEditHandler;
   private globeReadHandler: GlobeReadHandler;
   private contextReadHandler: ContextReadHandler;
+  private defaults: DefaultsConfig;
 
-  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining'>> & {
+  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
     getTimeoutRemaining?: () => number;
   };
@@ -79,16 +84,18 @@ export class BridgeServer {
       getTimeoutRemaining: config.getTimeoutRemaining,
     };
 
-    const remCache = new RemCache();
+    this.defaults = config.defaults ?? DEFAULT_DEFAULTS;
+    const defaults = this.defaults;
+    const remCache = new RemCache(defaults.cacheMaxSize);
     const forwardFn = (action: string, payload: Record<string, unknown>) =>
       this.forwardToPlugin(action, payload);
 
     this.readHandler = new ReadHandler(remCache, forwardFn, config.onLog);
     this.editHandler = new EditHandler(remCache, forwardFn);
-    this.treeReadHandler = new TreeReadHandler(remCache, forwardFn, config.onLog);
-    this.treeEditHandler = new TreeEditHandler(remCache, forwardFn);
-    this.globeReadHandler = new GlobeReadHandler(forwardFn);
-    this.contextReadHandler = new ContextReadHandler(forwardFn);
+    this.treeReadHandler = new TreeReadHandler(remCache, forwardFn, config.onLog, defaults);
+    this.treeEditHandler = new TreeEditHandler(remCache, forwardFn, defaults);
+    this.globeReadHandler = new GlobeReadHandler(forwardFn, defaults);
+    this.contextReadHandler = new ContextReadHandler(forwardFn, defaults);
   }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -278,6 +285,13 @@ export class BridgeServer {
         result = await this.editHandler.handleEditRem(
           request.payload as { remId: string; oldStr: string; newStr: string },
         );
+      } else if (request.action === 'search') {
+        // search：注入默认 numResults 后转发给 Plugin
+        const searchPayload = { ...request.payload };
+        if (searchPayload.numResults == null) {
+          searchPayload.numResults = this.defaults.searchNumResults;
+        }
+        result = await this.forwardToPlugin('search', searchPayload);
       } else {
         // 其他 action：直接转发给 Plugin
         result = await this.forwardToPlugin(request.action, request.payload);

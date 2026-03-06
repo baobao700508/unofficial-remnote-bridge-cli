@@ -7,6 +7,8 @@
  * 3. 返回大纲结果给 CLI command
  */
 
+import type { DefaultsConfig } from '../config';
+import { DEFAULT_DEFAULTS } from '../config';
 import { RemCache } from './rem-cache';
 
 export interface TreeReadResult {
@@ -18,11 +20,16 @@ export interface TreeReadResult {
 }
 
 export class TreeReadHandler {
+  private defaults: DefaultsConfig;
+
   constructor(
     private cache: RemCache,
     private forwardToPlugin: (action: string, payload: Record<string, unknown>) => Promise<unknown>,
     private onLog?: (message: string, level: 'info' | 'warn' | 'error') => void,
-  ) {}
+    defaults?: DefaultsConfig,
+  ) {
+    this.defaults = defaults ?? DEFAULT_DEFAULTS;
+  }
 
   async handleReadTree(payload: Record<string, unknown>): Promise<TreeReadResult> {
     const remId = payload.remId as string;
@@ -30,11 +37,11 @@ export class TreeReadHandler {
       throw new Error('缺少 remId 参数');
     }
 
-    const depth = (payload.depth as number) ?? 3;
-    const maxNodes = (payload.maxNodes as number) ?? 200;
-    const maxSiblings = (payload.maxSiblings as number) ?? 20;
-    const ancestorLevels = (payload.ancestorLevels as number) ?? 0;
-    const includePowerup = (payload.includePowerup as boolean) ?? false;
+    const depth = (payload.depth as number) ?? this.defaults.readTreeDepth;
+    const maxNodes = (payload.maxNodes as number) ?? this.defaults.maxNodes;
+    const maxSiblings = (payload.maxSiblings as number) ?? this.defaults.maxSiblings;
+    const ancestorLevels = (payload.ancestorLevels as number) ?? this.defaults.readTreeAncestorLevels;
+    const includePowerup = (payload.includePowerup as boolean) ?? this.defaults.readTreeIncludePowerup;
 
     // 检查旧缓存
     const cacheKey = 'tree:' + remId;

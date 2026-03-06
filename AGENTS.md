@@ -84,8 +84,8 @@ RemNote SDK
 |:--|:--|:--|
 | **widgets** | 插件入口 + 状态展示（React 组件、生命周期） | 禁止包含业务逻辑（不直接调用 SDK 数据 API） |
 | **bridge** | WS 传输 + 请求路由（websocket-client、message-router） | 禁止调用 RemNote SDK；禁止业务数据转换 |
-| **services** | 业务操作（每个文件封装一条 SDK 操作链） | 禁止管理 WS 连接；禁止依赖 bridge/widgets |
-| **utils** | 无状态纯函数（富文本解析、Rem 分类等） | 禁止有副作用；禁止依赖任何其他层 |
+| **services** | 业务操作（每个文件封装一条 SDK 操作链）+ SDK 共享辅助函数（如 powerup-filter、breadcrumb、rem-builder） | 禁止管理 WS 连接；禁止依赖 bridge/widgets |
+| **utils** | 无状态纯函数（tree-serializer、elision 等），**禁止调用 SDK** | 禁止有副作用；禁止依赖任何其他层；禁止调用 SDK |
 
 核心区分：**bridge 不碰 SDK，services 不碰 WebSocket**。
 

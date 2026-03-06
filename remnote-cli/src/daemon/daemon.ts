@@ -12,15 +12,17 @@
 import path from 'path';
 import fs from 'fs';
 import { BridgeServer } from '../server/ws-server';
+import { ConfigServer } from '../server/config-server';
 import { DevServerManager } from './dev-server';
 import { writePid, removePid } from './pid';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config';
+import type { BridgeConfig } from '../config';
 
 let shutdownInProgress = false;
 
 async function main() {
   const projectRoot = findProjectRoot();
-  const config = loadConfig(projectRoot);
+  let config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
   const logPath = logFilePath(projectRoot);
 
@@ -34,7 +36,7 @@ async function main() {
   }
 
   // 超时管理
-  const timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
+  let timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
   let timeoutTimer: ReturnType<typeof setTimeout>;
   let lastResetTime = Date.now();
 
@@ -52,18 +54,50 @@ async function main() {
     return Math.max(0, Math.floor((timeoutMs - elapsed) / 1000));
   }
 
-  // 启动 WS Server
-  const server = new BridgeServer({
-    port: config.wsPort,
-    host: '127.0.0.1',
-    onLog: log,
-    getTimeoutRemaining,
-  });
+  // 创建 WS Server（抽取为函数，供软重启复用）
+  function createServer(cfg: BridgeConfig): BridgeServer {
+    const srv = new BridgeServer({
+      port: cfg.wsPort,
+      host: '127.0.0.1',
+      onLog: log,
+      getTimeoutRemaining,
+      defaults: cfg.defaults,
+    });
+    srv.onCliRequest = () => resetTimeout();
+    return srv;
+  }
 
-  // CLI 请求刷新超时
-  server.onCliRequest = () => {
+  let server = createServer(config);
+
+  // 软重启：关闭旧 WS Server → 重新读配置 → 创建新 WS Server → 启动
+  async function reload() {
+    log('开始软重启...');
+    try {
+      await server.stop();
+      log('旧 WS Server 已关闭');
+    } catch (err) {
+      log(`旧 WS Server 关闭失败: ${err}`, 'error');
+    }
+
+    config = loadConfig(projectRoot);
+    timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
+
+    server = createServer(config);
+    await server.start();
+    log(`新 WS Server 已启动 (端口 ${config.wsPort})`);
+
     resetTimeout();
-  };
+    log('软重启完成');
+  }
+
+  // 启动 ConfigServer
+  const configServer = new ConfigServer({
+    port: config.configPort,
+    host: '127.0.0.1',
+    projectRoot,
+    onRestart: reload,
+    onLog: log,
+  });
 
   // 启动 webpack-dev-server
   const pluginDir = path.join(projectRoot, 'remnote-plugin');
@@ -91,6 +125,13 @@ async function main() {
       log('WS Server 已关闭');
     } catch (err) {
       log(`WS Server 关闭失败: ${err}`, 'error');
+    }
+
+    try {
+      await configServer.stop();
+      log('ConfigServer 已关闭');
+    } catch (err) {
+      log(`ConfigServer 关闭失败: ${err}`, 'error');
     }
 
     try {
@@ -122,6 +163,14 @@ async function main() {
   }
 
   try {
+    await configServer.start();
+    log(`ConfigServer 已启动 (端口 ${config.configPort})`);
+  } catch (err) {
+    log(`ConfigServer 启动失败: ${err}`, 'warn');
+    // ConfigServer 非关键，启动失败不阻塞
+  }
+
+  try {
     devServer.start();
     log(`webpack-dev-server 启动中 (端口 ${config.devServerPort})`);
   } catch (err) {
@@ -143,6 +192,7 @@ async function main() {
     type: 'ready',
     wsPort: config.wsPort,
     devServerPort: config.devServerPort,
+    configPort: config.configPort,
     pid: process.pid,
   });
 

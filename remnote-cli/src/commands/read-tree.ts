@@ -21,12 +21,12 @@ export interface ReadTreeOptions {
 
 export async function readTreeCommand(remId: string, options: ReadTreeOptions = {}): Promise<void> {
   const { json } = options;
-  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : 3;
-  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : 200;
-  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : 20;
-  const ancestorLevels = options.ancestorLevels !== undefined ? parseInt(options.ancestorLevels, 10) : 0;
+  const depth = options.depth !== undefined ? parseInt(options.depth, 10) : undefined;
+  const maxNodes = options.maxNodes !== undefined ? parseInt(options.maxNodes, 10) : undefined;
+  const maxSiblings = options.maxSiblings !== undefined ? parseInt(options.maxSiblings, 10) : undefined;
+  const ancestorLevels = options.ancestorLevels !== undefined ? parseInt(options.ancestorLevels, 10) : undefined;
 
-  if (isNaN(depth) || isNaN(maxNodes) || isNaN(maxSiblings) || isNaN(ancestorLevels)) {
+  if ((depth !== undefined && isNaN(depth)) || (maxNodes !== undefined && isNaN(maxNodes)) || (maxSiblings !== undefined && isNaN(maxSiblings)) || (ancestorLevels !== undefined && isNaN(ancestorLevels))) {
     const errMsg = '--depth, --max-nodes, --max-siblings, --ancestor-levels must be numbers';
     if (json) {
       jsonOutput({ ok: false, command: 'read-tree', error: errMsg });

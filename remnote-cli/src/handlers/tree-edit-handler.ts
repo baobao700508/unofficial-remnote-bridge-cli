@@ -8,6 +8,8 @@
  * 4. 成功后重新 read-tree 更新缓存
  */
 
+import type { DefaultsConfig } from '../config';
+import { DEFAULT_DEFAULTS } from '../config';
 import { RemCache } from './rem-cache';
 import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiffError } from './tree-parser';
 
@@ -25,10 +27,15 @@ export interface TreeEditResult {
 }
 
 export class TreeEditHandler {
+  private defaults: DefaultsConfig;
+
   constructor(
     private cache: RemCache,
     private forwardToPlugin: (action: string, payload: Record<string, unknown>) => Promise<unknown>,
-  ) {}
+    defaults?: DefaultsConfig,
+  ) {
+    this.defaults = defaults ?? DEFAULT_DEFAULTS;
+  }
 
   async handleEditTree(payload: TreeEditPayload): Promise<TreeEditResult> {
     const { remId, oldStr, newStr } = payload;
@@ -51,9 +58,9 @@ export class TreeEditHandler {
     const cachedDepthStr = this.cache.get('tree-depth:' + remId);
     const cachedMaxNodesStr = this.cache.get('tree-maxNodes:' + remId);
     const cachedMaxSiblingsStr = this.cache.get('tree-maxSiblings:' + remId);
-    const depth = cachedDepthStr ? Number(cachedDepthStr) : 3;
-    const maxNodes = cachedMaxNodesStr ? Number(cachedMaxNodesStr) : 200;
-    const maxSiblings = cachedMaxSiblingsStr ? Number(cachedMaxSiblingsStr) : 20;
+    const depth = cachedDepthStr ? Number(cachedDepthStr) : this.defaults.readTreeDepth;
+    const maxNodes = cachedMaxNodesStr ? Number(cachedMaxNodesStr) : this.defaults.maxNodes;
+    const maxSiblings = cachedMaxSiblingsStr ? Number(cachedMaxSiblingsStr) : this.defaults.maxSiblings;
     const freshResult = await this.forwardToPlugin('read_tree', { remId, depth, maxNodes, maxSiblings }) as {
       outline: string;
       depth: number;

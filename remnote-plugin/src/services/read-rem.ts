@@ -15,7 +15,7 @@ import type {
   PortalType,
   PropertyTypeValue,
 } from '../types';
-import { filterNoisyChildren, filterNoisyTags } from '../utils/powerup-filter';
+import { filterNoisyChildren, filterNoisyTags } from './powerup-filter';
 
 /**
  * 读取单个 Rem，组装为完整 RemObject。

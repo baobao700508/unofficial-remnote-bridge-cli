@@ -22,6 +22,7 @@ interface ReadyMessage {
   type: 'ready';
   wsPort: number;
   devServerPort: number;
+  configPort: number;
   pid: number;
 }
 
@@ -144,12 +145,14 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     jsonOutput({
       ok: true, command: 'connect', alreadyRunning: false,
       pid: ready.pid, wsPort: ready.wsPort, devServerPort: ready.devServerPort,
+      configPort: ready.configPort,
       timeoutMinutes: config.daemonTimeoutMinutes,
     });
   } else {
     console.log(`守护进程已启动（PID: ${ready.pid}）`);
     console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);
     console.log(`  webpack-dev-server: http://localhost:${ready.devServerPort}`);
+    console.log(`  配置页面:          http://127.0.0.1:${ready.configPort}`);
     console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
   }
   process.exitCode = 0;
