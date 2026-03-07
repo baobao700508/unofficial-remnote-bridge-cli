@@ -152,4 +152,4 @@ RemNote SDK → 知识库
 
 ## 许可证
 
-Proprietary
+MIT

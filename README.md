@@ -150,4 +150,4 @@ All values have sensible defaults — the config file is not required.
 
 ## License
 
-Proprietary
+MIT
