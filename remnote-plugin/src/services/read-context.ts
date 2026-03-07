@@ -348,9 +348,11 @@ async function buildMinimalSerializableRem(
   childrenCount: number,
   isFocusRem: boolean,
 ) {
-  const [markdownText, isDocument] = await Promise.all([
+  const isPortal = rem.type === 6;
+  const [markdownText, isDocument, portalIncludedRems] = await Promise.all([
     plugin.richText.toMarkdown(rem.text ?? []),
     rem.isDocument(),
+    isPortal ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
   ]);
 
   return createMinimalSerializableRem({
@@ -359,6 +361,8 @@ async function buildMinimalSerializableRem(
     childrenCount,
     isDocument,
     isTopLevel: rem.parent === null,
+    isPortal,
+    ...(isPortal ? { type: 'portal' as const, portalRefs: portalIncludedRems.map((r: Rem) => r._id) } : {}),
   });
 }
 

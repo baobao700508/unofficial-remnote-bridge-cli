@@ -79,7 +79,11 @@ export async function readGlobe(
     const shouldFold = maxDepth !== -1 && currentDepth >= maxDepth;
     const folded = shouldFold && docChildren.length > 0;
 
-    const markdownText = await plugin.richText.toMarkdown(rem.text ?? []);
+    const isPortal = rem.type === 6;
+    const [markdownText, portalIncludedRems] = await Promise.all([
+      plugin.richText.toMarkdown(rem.text ?? []),
+      isPortal ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
+    ]);
 
     const serializable = createMinimalSerializableRem({
       id: rem._id,
@@ -87,6 +91,8 @@ export async function readGlobe(
       childrenCount: children.length,
       isDocument: true,
       isTopLevel: rem.parent === null,
+      isPortal,
+      ...(isPortal ? { type: 'portal' as const, portalRefs: portalIncludedRems.map((r: Rem) => r._id) } : {}),
     });
 
     const childNodes: TreeNode[] = [];
