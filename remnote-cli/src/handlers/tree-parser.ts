@@ -29,7 +29,7 @@ export interface OutlineNode {
 export type TreeOp =
   | { type: 'create'; content: string; parentId: string; position: number; parentIsMultiline?: boolean }
   | { type: 'delete'; remId: string }
-  | { type: 'move'; remId: string; fromParentId: string; toParentId: string; position: number; fromParentIsMultiline?: boolean; toParentIsMultiline?: boolean }
+  | { type: 'move'; remId: string; fromParentId: string; toParentId: string; position: number; fromParentIsMultiline?: boolean; toParentIsMultiline?: boolean; selfHasPracticeDirection?: boolean }
   | { type: 'reorder'; parentId: string; order: string[] };
 
 export interface TreeDiffResult {
@@ -337,6 +337,7 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
           // 新增行不能作为根节点的兄弟（根 remId 为 null 时理论不会到这里）
           throw new Error('新增行缺少父节点');
         }
+        const myIndex = result.length;
         result.push({
           content: child.rawContent,
           parentId,
@@ -344,7 +345,7 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
           parentIsMultiline: isContentMultiline(node.rawContent),
         });
         // 新增行也可能有子节点（嵌套新增）
-        collectNewLinesUnderNew(child, result);
+        collectNewLinesUnderNew(child, result, myIndex);
       } else {
         walk(child, child.remId);
       }
@@ -361,19 +362,20 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
 /**
  * 新增行下面的嵌套新增行。
  * 这些行的 parentId 需要在创建时动态分配（临时占位标记）。
+ * parentIndex 是父行在 result 数组中的索引，所有兄弟子行共享同一个父引用。
  */
-function collectNewLinesUnderNew(parent: OutlineNode, result: NewLineInfo[]): void {
+function collectNewLinesUnderNew(parent: OutlineNode, result: NewLineInfo[], parentIndex: number): void {
   let childPos = 0;
   for (const child of parent.children) {
-    // parent 是新增行（无 remId），用占位标记
+    const myIndex = result.length;
     result.push({
       content: child.rawContent,
-      parentId: `__new_${result.length - 1}__`,
+      parentId: `__new_${parentIndex}__`,
       position: childPos,
       parentIsMultiline: isContentMultiline(parent.rawContent),
     });
     if (child.children.length > 0) {
-      collectNewLinesUnderNew(child, result);
+      collectNewLinesUnderNew(child, result, myIndex);
     }
     childPos++;
   }
@@ -516,6 +518,8 @@ export function diffTrees(
       // 从新旧树中查找父节点内容以检测 multiline
       const fromParentNode = oldInfo.parentId ? findNodeById(oldRoots, oldInfo.parentId) : null;
       const toParentNode = findNodeById(newRoots, newInfo.parentId);
+      // 检测被移动节点自身是否有 practiceDirection（箭头分隔符）
+      const selfPd = parsePowerupPrefix(oldInfo.content).practiceDirection;
       operations.push({
         type: 'move',
         remId,
@@ -524,6 +528,7 @@ export function diffTrees(
         position: newInfo.position,
         fromParentIsMultiline: fromParentNode ? isContentMultiline(fromParentNode.rawContent) : false,
         toParentIsMultiline: toParentNode ? isContentMultiline(toParentNode.rawContent) : false,
+        selfHasPracticeDirection: selfPd !== undefined,
       });
     }
   }

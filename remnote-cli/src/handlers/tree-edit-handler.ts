@@ -148,7 +148,14 @@ export class TreeEditHandler {
           if (backText !== undefined) changes.backText = backText;
           if (practiceDirection !== undefined) changes.practiceDirection = practiceDirection;
           // 父节点为 multiline 时，子行标记 isCardItem
-          if (op.parentIsMultiline) changes.isCardItem = true;
+          // ⚠ SDK bug: setIsCardItem(true) 会偷偷设 practiceDirection: "forward"
+          // 但 practiceDirection 应该只存在于父行（问题行），card-item（答案行）上不应该有。
+          // 如果 card-item 带着 practiceDirection: "forward" 且有子行，会被 RemNote 错误渲染成 multiline 卡片。
+          // 对策：setIsCardItem(true) 后立即用 practiceDirection: 'none' 覆盖掉副作用。
+          if (op.parentIsMultiline) {
+            changes.isCardItem = true;
+            if (!changes.practiceDirection) changes.practiceDirection = 'none';
+          }
 
           if (Object.keys(changes).length > 0) {
             await this.forwardToPlugin('write_rem_fields', {
@@ -173,14 +180,22 @@ export class TreeEditHandler {
           });
           // 同步 isCardItem：移入 multiline 父节点 → true，移出 → false
           if (op.toParentIsMultiline && !op.fromParentIsMultiline) {
+            // ⚠ SDK bug: setIsCardItem(true) 会偷设 practiceDirection: "forward"
+            // 对策：覆盖为 'none'，但如果 Rem 自身有合法的 practiceDirection（如 ↔ 闪卡）则保留
+            const changes: Record<string, unknown> = { isCardItem: true };
+            if (!op.selfHasPracticeDirection) changes.practiceDirection = 'none';
             await this.forwardToPlugin('write_rem_fields', {
               remId: op.remId,
-              changes: { isCardItem: true },
+              changes,
             });
           } else if (!op.toParentIsMultiline && op.fromParentIsMultiline) {
+            // ⚠ SDK bug: setIsCardItem(false) 不会清 practiceDirection（不对称行为）
+            // 移出时清掉 SDK 副作用残留，但如果 Rem 自身有合法的 practiceDirection 则保留
+            const changes: Record<string, unknown> = { isCardItem: false };
+            if (!op.selfHasPracticeDirection) changes.practiceDirection = 'none';
             await this.forwardToPlugin('write_rem_fields', {
               remId: op.remId,
-              changes: { isCardItem: false },
+              changes,
             });
           }
           break;
