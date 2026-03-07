@@ -6,35 +6,66 @@
  *
  * SDK 调用（toMarkdown、getChildrenRem 等）在 services/read-tree.ts 中完成，
  * 本文件只接收已转换好的字符串数据。
+ *
+ * ── 分隔符设计（v2）──
+ *
+ * 行内分隔符只表示 practiceDirection，不编码 type 信息。
+ * type（concept/descriptor）由元数据标记 `type:` 承载。
+ *
+ * | 箭头 | 含义                           |
+ * |:-----|:-------------------------------|
+ * | →    | 有 backText, forward           |
+ * | ←    | 有 backText, backward          |
+ * | ↔    | 有 backText, both              |
+ * | ↓    | multiline, forward（无 backText）|
+ * | ↑    | multiline, backward            |
+ * | ↕    | multiline, both                |
+ *
+ * ── 元数据标记 ──
+ *
+ * | 标记            | 含义                            |
+ * |:----------------|:--------------------------------|
+ * | type:concept    | Rem type = concept              |
+ * | type:descriptor | Rem type = descriptor           |
+ * | type:portal     | Rem type = portal               |
+ * | doc             | isDocument = true               |
+ * | role:card-item  | isCardItem = true（多行答案行）  |
+ * | children:N      | 折叠时的隐藏子节点数            |
+ * | tag:Name(id)    | 每个 tag 独立一个标记           |
+ * | top             | 知识库顶级 Rem                  |
  */
 
 // ────────────────────────── 接口 ──────────────────────────
+
+/** Tag 信息 */
+export interface TagInfo {
+  id: string;
+  name: string;
+}
 
 /** services/read-tree.ts 准备好的单个 Rem 数据 */
 export interface SerializableRem {
   id: string;
   markdownText: string;
   markdownBackText: string | null;
-  /** 'concept' | 'descriptor' | 'default' */
+  /** 'concept' | 'descriptor' | 'default' | 'portal' */
   type: string;
   hasMultilineChildren: boolean;
+  /** 'forward' | 'backward' | 'both' | 'none' */
   practiceDirection: string;
   isCardItem: boolean;
   isDocument: boolean;
   isPortal: boolean;
+  /** Portal 直接引用的 Rem ID 列表（仅 Portal 类型有值） */
+  portalRefs: string[];
   childrenCount: number;
-  tagCount: number;
-  hasCloze: boolean;
-  // P0: Markdown 语法映射
+  tags: TagInfo[];
+  // Markdown 语法映射
   fontSize: 'H1' | 'H2' | 'H3' | null;
   isTodo: boolean;
   todoStatus: 'Finished' | 'Unfinished' | null;
   isCode: boolean;
   isDivider: boolean;
-  // P2: 元数据注释
-  highlightColor: string | null;
-  isQuote: boolean;
-  isListItem: boolean;
   /** 是否为知识库顶级 Rem（无父节点） */
   isTopLevel?: boolean;
 }
@@ -71,40 +102,29 @@ export function isElidedNode(node: TreeNode): node is ElidedNode {
 // ────────────────────────── 行内容拼接 ──────────────────────────
 
 /**
- * 推导分隔符并拼接行内容（不含缩进和元数据标记）。
+ * 根据 practiceDirection 选择方向箭头，拼接行内容（不含缩进和元数据标记）。
  *
- * 推导规则严格遵循 spec 中的优先级链。
+ * 箭头只表示 direction，不编码 type。type 由元数据标记承载。
  */
 function buildLineContent(rem: SerializableRem): string {
   // Divider（最高优先）
   if (rem.isDivider) return '---';
 
-  const { markdownText, markdownBackText, type, hasMultilineChildren, practiceDirection } = rem;
+  const { markdownText, markdownBackText, hasMultilineChildren, practiceDirection } = rem;
 
-  // 基础内容（concept/descriptor/>> 等分隔符逻辑）
   let baseContent: string;
-  if (type === 'concept' && hasMultilineChildren) {
-    baseContent = markdownText + ' ::>';
-  } else if (type === 'concept' && markdownBackText !== null) {
-    baseContent = markdownText + ' :: ' + markdownBackText;
-  } else if (type === 'descriptor' && hasMultilineChildren) {
-    baseContent = markdownText + ' ;;>';
-  } else if (type === 'descriptor' && markdownBackText !== null) {
-    baseContent = markdownText + ' ;; ' + markdownBackText;
-  } else if (markdownBackText !== null) {
-    if (practiceDirection === 'forward') {
-      baseContent = markdownText + ' >> ' + markdownBackText;
-    } else if (practiceDirection === 'backward') {
-      baseContent = markdownText + ' << ' + markdownBackText;
-    } else if (practiceDirection === 'both') {
-      baseContent = markdownText + ' <> ' + markdownBackText;
-    } else {
-      baseContent = markdownText;
-    }
+
+  if (markdownBackText !== null) {
+    // 有 backText：按 direction 选择水平/垂直箭头
+    const arrow = hasMultilineChildren
+      ? (practiceDirection === 'backward' ? ' ↑ ' : practiceDirection === 'both' ? ' ↕ ' : ' ↓ ')
+      : (practiceDirection === 'backward' ? ' ← ' : practiceDirection === 'both' ? ' ↔ ' : ' → ');
+    baseContent = markdownText + arrow + markdownBackText;
   } else if (hasMultilineChildren) {
-    baseContent = markdownText + ' >>>';
+    // 无 backText + multiline：尾部箭头
+    const arrow = practiceDirection === 'backward' ? ' ↑' : practiceDirection === 'both' ? ' ↕' : ' ↓';
+    baseContent = markdownText + arrow;
   } else {
-    // hasCloze 的情况：cloze 已由 toMarkdown 处理为 {{...}}，直接输出 text
     baseContent = markdownText;
   }
 
@@ -126,58 +146,38 @@ function buildLineContent(rem: SerializableRem): string {
   return baseContent;
 }
 
-// ────────────────────────── 元数据推导 ──────────────────────────
+// ────────────────────────── 元数据 ──────────────────────────
 
 /**
- * 推导 fc 元数据值。无闪卡时返回 null。
- */
-function deriveFc(rem: SerializableRem): string | null {
-  const { type, markdownBackText, hasMultilineChildren, practiceDirection, hasCloze } = rem;
-
-  if (type === 'concept' && hasMultilineChildren) return 'concept-multiline';
-  if (type === 'concept' && markdownBackText !== null) return 'concept';
-  if (type === 'descriptor' && hasMultilineChildren) return 'descriptor-multiline';
-  if (type === 'descriptor' && markdownBackText !== null) return 'descriptor';
-  if (markdownBackText !== null) {
-    if (practiceDirection === 'forward') return 'forward';
-    if (practiceDirection === 'backward') return 'backward';
-    if (practiceDirection === 'both') return 'both';
-  }
-  if (hasMultilineChildren) return 'multiline';
-  if (hasCloze) return 'cloze';
-  return null;
-}
-
-/**
- * 构建元数据 key:value 对列表。
+ * 构建元数据标记列表。每个标记对应一个独立字段，不合并。
  */
 function buildMetadata(rem: SerializableRem, folded: boolean): string[] {
   const parts: string[] = [];
 
-  // fc
-  const fc = deriveFc(rem);
-  if (fc) parts.push('fc:' + fc);
+  // type（default 不输出）
+  if (rem.type === 'concept') parts.push('type:concept');
+  else if (rem.type === 'descriptor') parts.push('type:descriptor');
+  else if (rem.type === 'portal') {
+    parts.push('type:portal');
+    if (rem.portalRefs.length > 0) parts.push('refs:' + rem.portalRefs.join(','));
+  }
+
+  // doc（独立于 type 的维度）
+  if (rem.isDocument) parts.push('doc');
 
   // role
   if (rem.isCardItem) parts.push('role:card-item');
 
-  // type（非默认值时输出）
-  if (rem.isDocument) parts.push('type:document');
-  else if (rem.isPortal) parts.push('type:portal');
-
-  // tags
-  if (rem.tagCount > 0) parts.push('tags:' + rem.tagCount);
-
   // children（折叠时才输出）
   if (folded && rem.childrenCount > 0) parts.push('children:' + rem.childrenCount);
 
+  // tags（每个 tag 独立一个标记）
+  for (const tag of rem.tags) {
+    parts.push('tag:' + tag.name + '(' + tag.id + ')');
+  }
+
   // 顶级标记
   if (rem.isTopLevel) parts.push('top');
-
-  // P2: Powerup 元数据
-  if (rem.highlightColor) parts.push('hl:' + rem.highlightColor);
-  if (rem.isQuote) parts.push('quote');
-  if (rem.isListItem) parts.push('list');
 
   return parts;
 }
@@ -201,16 +201,13 @@ export function createMinimalSerializableRem(
     isCardItem: false,
     isDocument: false,
     isPortal: false,
-    tagCount: 0,
-    hasCloze: false,
+    portalRefs: [],
+    tags: [],
     fontSize: null,
     isTodo: false,
     todoStatus: null,
     isCode: false,
     isDivider: false,
-    highlightColor: null,
-    isQuote: false,
-    isListItem: false,
     ...overrides,
   };
 }

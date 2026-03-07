@@ -201,7 +201,7 @@ program
       await editTreeCommand(input.remId, { json, oldStr: input.oldStr, newStr: input.newStr });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
-      if (!cmdOpts.oldStr || !cmdOpts.newStr) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
+      if (!cmdOpts.oldStr || cmdOpts.newStr === undefined) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
       await editTreeCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
     }
   });
@@ -246,7 +246,7 @@ program
       await editRemCommand(input.remId, { json, oldStr: input.oldStr, newStr: input.newStr });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
-      if (!cmdOpts.oldStr || !cmdOpts.newStr) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
+      if (!cmdOpts.oldStr || cmdOpts.newStr === undefined) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
       await editRemCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
     }
   });

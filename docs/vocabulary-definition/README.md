@@ -1,243 +1,110 @@
-# RemNote 术语定义与辨析
+# RemNote 术语字典
 
-> RemNote SDK 中存在大量历史遗留命名、同义词和语义重叠，容易造成混淆。
-> 本文档记录经实测验证的术语真实含义，避免被表面命名误导。
-> 最后更新：2026-03-05
+> RemNote 的完整术语定义与辨析，供 AI Agent 理解和操作 RemNote 知识库。
+> 最后更新：2026-03-06
+>
+> **使用方法：**
+> - 快速查找：使用下方字母索引表定位术语
+> - 按主题浏览：进入对应分类文件
+> - Agent 按需加载：只加载相关分类文件，节省 token
 >
 > **验证状态说明：**
-> - ✅ 实测验证 — 通过 SDK 调用 + read-rem/read-tree 数据对比确认
+> - ✅ 实测验证 — 通过 SDK 调用 + CLI 数据对比确认
 > - 📖 SDK 文档 — 来自官方文档描述，未做独立实测
 > - ⚠️ 易混淆 — 特别标注容易踩坑的命名陷阱
 
 ---
 
-## 1. Slot vs Property ⚠️
+## 分类导航
 
-**结论：同一概念的两个名字，底层完全相同。**
-
-### 定义
-
-| 术语 | 使用语境 | 含义 |
-|:-----|:---------|:-----|
-| **Slot** | Powerup 开发语境 | Powerup 的数据插槽，存储键值对（值为 RichText） |
-| **Property** | 表格/Tag 语境 | Tag 的结构化属性列（表格的列定义） |
-
-### 为什么是同一概念 ✅
-
-- `setIsSlot(true)` 和 `setIsProperty(true)` 注入**同一个** Powerup Tag（`vD8KGEg5dkj9bzkRn`，名为"模板插槽"）
-- 调用任一方法后，`isSlot()` 和 `isProperty()` **同时**返回 `true`
-- UI 表现完全一致：bullet 变为方形图标
-
-### 底层机制：Tag + Property 继承 ✅
-
-Slot/Property 的运作基于 RemNote 的一个核心特性——**Tag 可以携带 Property，Property 会被复制到被标记的 Rem 下**：
-
-1. **任何 Rem 都可以作为 Tag** 去标记（Tag）别的 Rem
-2. **作为 Tag 的 Rem 可以定义 Property**——即标记为 `isProperty=true` 的子 Rem，每个 Property 是一个独立的数据字段
-3. **当 Tag 被应用到目标 Rem 时**，Tag 所携带的 Property 会以**复制粘贴**（而非 Portal 引用）的方式，直接成为目标 Rem 的子 Rem
-
-关键点：**Property 是复制过去的，不是引用。** 每个被标记的 Rem 都拥有自己独立的 Property 子 Rem 副本。
-
-这个机制解释了 Powerup 渲染的全部行为：
-- `setHighlightColor('Red')` → 给 Rem 打上"高亮" Tag → Tag 的 `[Color]` Property 被复制到 Rem 下，值填为 `[Red]`
-- `setFontSize('H1')` → 给 Rem 打上"标题" Tag → Tag 的 `[Size]` Property 被复制到 Rem 下，值填为 `[H1]`
-- `setIsCode(true)` → 给 Rem 打上"代码" Tag → 该 Tag 无 Property，所以不生成子 Rem
-
-**Powerup 渲染机制本质上就是 RemNote 的 Tag + Property 继承的一个应用**，前端渲染引擎读取这些 Tag 和 Property 来决定 UI 样式。详见 [Powerup 渲染机制研究](../powerup-rendering/README.md)。
-
-> **注意区分**：Property 是 Rem 级别的数据字段（`isProperty=true` 的子 Rem），而 Template（模板）是文档级别的内容模板（`BuiltInPowerupCodes.Template`），两者是不同的概念。Powerup 渲染只用到 Tag + Property，不涉及 Template。
-
-### 历史演变 📖
-
-1. **早期 SDK**：`registerPowerup()` 用 `slots` 数组定义数据插槽，读写用 `setPowerupProperty(code, slot, value)`
-2. **表格功能上线**：RemNote 将 Tag 的子 Rem 作为表格列，称为 Property，读写用 `setTagPropertyValue(propertyId, value)`
-3. **当前状态**：两套 API 共存，底层是同一个 Powerup Tag，SDK 未统一命名
-
-### 相关 API 对照
-
-| Slot 系列 API | Property 系列 API | 作用 |
-|:-------------|:-----------------|:-----|
-| `isSlot()` | `isProperty()` | 判断（结果相同） |
-| `setIsSlot(bool)` | `setIsProperty(bool)` | 设置（效果相同） |
-| `isPowerupSlot()` | `isPowerupProperty()` | Powerup 细分判断 |
-| `getPowerupSlotByCode()` | — | 按 code 获取 Slot Rem |
-| `setPowerupProperty(code, slot, value)` | `setTagPropertyValue(propId, value)` | 写入值（入参不同，底层相同） |
-| `getPowerupProperty(code, slot)` | `getTagPropertyValue(propId)` | 读取值（入参不同，底层相同） |
-
-### 两套读写 API 的区别
-
-| 维度 | Powerup API | Tag Property API |
-|:-----|:-----------|:----------------|
-| 定位方式 | `powerupCode` + `slotCode`（字符串 code） | `propertyId`（Rem ID） |
-| 值类型 | RichText | RichText |
-| 适用场景 | 插件开发者自定义 Powerup | 用户创建的表格/Tag 属性 |
+| # | 分类 | 内容概述 | 文件 |
+|:--|:-----|:---------|:-----|
+| 01 | **核心数据模型** | Rem、Document、Folder、KB、RemType、RichText、Card | [01-core-data-model.md](01-core-data-model.md) |
+| 02 | **层级与导航** | Parent/Child、Zoom、Breadcrumb、Pane、Omnibar、Daily Doc | [02-hierarchy-and-navigation.md](02-hierarchy-and-navigation.md) |
+| 03 | **链接与引用** | Reference、Tag、Powerup、Portal、Backlink、Alias | [03-linking-and-references.md](03-linking-and-references.md) |
+| 04 | **闪卡系统** | 分隔符、CDF、practiceDirection、SRS 概念 | [04-flashcard-system.md](04-flashcard-system.md) |
+| 05 | **格式与富文本** | RichText 元素、行内格式、Powerup 渲染、Slot vs Property | [05-formatting-and-richtext.md](05-formatting-and-richtext.md) |
+| 06 | **表格与属性** | Property、PropertyType、Table、Template | [06-tables-and-properties.md](06-tables-and-properties.md) |
+| 07 | **搜索与查询** | Global Search、Search Portal、Query Language | [07-search-and-query.md](07-search-and-query.md) |
 
 ---
 
-## 2. Powerup vs Tag ⚠️
+## 快速查找表（按字母排序）
 
-**结论：Powerup 是一种特殊的 Tag，但不是所有 Tag 都是 Powerup。**
-
-### 定义
-
-| 术语 | 含义 |
-|:-----|:-----|
-| **Tag** | 可以标记到 Rem 上的任意 Rem（通过 `addTag(remId)` 或 UI 中 `##` 输入） |
-| **Powerup** | 带有特殊行为的系统 Tag（`isPowerup()=true`），影响 Rem 的渲染和功能 |
-
-### 关系 ✅
-
-- 每个 Powerup 都是一个 `isPowerup=true` 的 Rem，存在于知识库中
-- 用户创建的普通 Tag（如"重要"、"待复习"）的 `isPowerup=false`
-- `tags` 数组会混合返回两者，无法从数据结构区分，需逐个检查 `isPowerup`
-- SDK 的 `setIsCode(true)` 等方法本质是 `addTag(对应PowerupTag的ID)`
-
-### 内置 Powerup 列表（本知识库实测） ✅
-
-| 显示名称 | Powerup Code | 对应 SDK 快捷方法 |
-|:---------|:-------------|:-----------------|
-| 标题 | Header (`r`) | `setFontSize()` |
-| 高亮 | Highlight (`h`) | `setHighlightColor()` |
-| 代码 | Code (`cd`) | `setIsCode()` |
-| 引用 | Quote (`qt`) | `setIsQuote()` |
-| 列表项 | List (`i`) | `setIsListItem()` |
-| 待办 | Todo (`t`) | `setIsTodo()` |
-| 卡片条目 | MultiLineCard (`w`) | `setIsCardItem()` |
-| 文档 | Document (`o`) | `setIsDocument()` |
-| 模板插槽 | Slot (`y`) | `setIsSlot()` / `setIsProperty()` |
-| 稍后编辑 | EditLater (`e`) | — |
-| 分割线 | Divider (`dv`) | — |
-
-> 注意：Powerup Tag ID 是知识库级别的，不同用户的知识库中同一 Powerup 的 ID 不同。
-
----
-
-## 3. Concept vs Descriptor vs Default ⚠️
-
-**结论：这三个是 Rem 的 `type` 字段值，由用户输入的分隔符决定。**
-
-| type 值 | 触发分隔符 | 含义 | UI 表现 |
-|:--------|:----------|:-----|:--------|
-| `concept` | `::` 或 `::>` | 概念定义（双向闪卡） | 文字**加粗** |
-| `descriptor` | `;;` 或 `;;>` | 描述/属性（单向闪卡） | 文字*斜体* |
-| `default` | 无分隔符、`>>`、`<<`、`<>`、`>>>`、`{{}}` | 普通 Rem | 正常字重 |
-| `portal` | 无法通过分隔符创建 | 嵌入引用容器 | 紫色左边框 |
-
-### 易混淆点 ⚠️
-
-- `concept` 和 `descriptor` 是**闪卡语义**，不是"概念 vs 描述"的通用含义
-- `default` 不是"默认类型"——它是一个明确的类型值，表示"无闪卡类型标记"
-- `type` 和 `isDocument` 是两个**独立维度**：一个 `concept` Rem 可以同时是 Document
-- SDK 的 `SetRemType` 枚举不包含 `PORTAL`，Portal 只能通过 `createPortal()` 创建
-
-详见 [Rem 类型与分隔符映射](../rem-type-mapping/README.md)。
-
----
-
-## 4. RichText vs Text ⚠️
-
-**结论：RichText 是 JSON 数组格式，不是纯文本字符串。**
-
-| 术语 | 实际类型 | 含义 |
-|:-----|:---------|:-----|
-| **RichText** | `Array<string \| object>` | SDK 中所有文本内容的底层格式，元素可以是纯字符串或格式化对象 |
-| **text** | `RichText` | Rem 的正面内容（`rem.text`），类型是 RichText 数组 |
-| **backText** | `RichText \| null` | Rem 的背面内容，`null` 表示无背面 |
-| **plainText** | — | SDK 中不存在此概念；需要纯文本时，自行遍历 RichText 拼接字符串部分 |
-
-### RichText 元素类型 📖
-
-| `i` 字段值 | 含义 | 示例 |
-|:----------|:-----|:-----|
-| （无，纯 string） | 纯文本片段 | `"hello"` |
-| `"m"` | 带格式文本 | bold/italic/underline/code/highlight/cloze |
-| `"q"` | Rem 引用 | `{ _id: "xxx", i: "q" }` |
-| `"i"` | 图片 | `{ url, width, height, i: "i" }` |
-| `"g"` | 全局名称 | — |
-
-详见 [RichText 底层 JSON 格式参考](../richtext-format/README.md)。
-
----
-
-## 5. Card vs Rem ⚠️
-
-**结论：Card 是 RemNote 根据 Rem 自动生成的，不需要也不应该直接操控。**
-
-| 术语 | 含义 |
-|:-----|:-----|
-| **Rem** | 知识库中的基本数据单元，可读可写 |
-| **Card** | RemNote 根据 Rem 的 type、backText、practiceDirection 等属性**自动生成**的闪卡 |
-
-### 红线
-
-- 本项目**不操控** Card / Flashcard
-- Card 由 RemNote 内部规则自动生成，SDK 中 Card 相关 API（`getCards()`、`CardNamespace`）不在使用范围内
-- 要改变闪卡行为，修改 Rem 的属性即可（如 `type`、`backText`、`practiceDirection`、`enablePractice`）
-
----
-
-## 6. removePowerup vs removeTag ⚠️
-
-**结论：`removePowerup` 是 `removeTag` 的超集，会额外清理所有 Slot 子 Rem。**
-
-| 方法 | 移除 Tag 引用 | 移除参数子 Rem（Slots） | 适用场景 |
-|:-----|:-------------|:----------------------|:---------|
-| `removeTag(tagId)` | ✅ | 默认不移除（`removeProperties=false`） | 移除普通 Tag |
-| `removeTag(tagId, true)` | ✅ | ✅ | 移除 Tag 并清理属性 |
-| `removePowerup(code)` | ✅ | ✅（always） | 移除 Powerup 效果 |
-
-SDK CHANGELOG 原文：*"Added `Rem.removePowerup(powerupCode)`. It will always remove all powerup slots."*
-
-### 实测案例：清除高亮 ✅
-
-`setHighlightColor(null)` 被 SDK 拒绝（Invalid input），但 `removePowerup('h')` 成功清除：
-- Tag 引用从 `tags` 数组移除
-- `[Color] ;; [Blue]` descriptor 子 Rem 被删除
-- `getHighlightColor()` 恢复返回 `null`
-
----
-
-## 7. Document vs Rem ⚠️
-
-**结论：Document 是 Rem 的一个布尔属性，不是独立的数据类型。**
-
-| 表述 | 含义 |
-|:-----|:-----|
-| `isDocument: true` | 该 Rem 可作为独立页面打开（UI 上 bullet 变为文档图标） |
-| `isDocument: false` | 该 Rem 是普通的行内条目 |
-
-### 底层机制 ✅
-
-`setIsDocument(true)` 通过 Powerup 机制实现：注入"文档" Tag + 自动创建 `[Status] ;; [Draft]` descriptor 子 Rem。
-
-`isDocument` 和 `type` 是**两个独立维度**——一个 `concept` 类型的 Rem 可以同时是 Document。
-
----
-
-## 8. Position 的两种含义 ⚠️
-
-| API | 含义 | 参数来源 |
-|:----|:-----|:---------|
-| `positionAmongstSiblings()` | 在**所有**兄弟中的位置（0 起始） | 无参数 |
-| `positionAmongstVisibleSiblings(portalId?)` | 在**可见**兄弟中的位置（折叠状态影响） | 需要 Portal 上下文 |
-| `setParent(parentId, position?)` | 移动到新父级的指定位置 | position 可选 |
-
-`positionAmongstSiblings` 是静态数据（不依赖视图），`positionAmongstVisibleSiblings` 依赖 Portal 折叠状态。
-
----
-
-## 9. Property vs Template ⚠️
-
-**结论：完全不同的概念，不要混淆。**
-
-| 术语 | 粒度 | 含义 | 示例 |
-|:-----|:-----|:-----|:-----|
-| **Property** | Rem 级别 | Tag 下标记为 `isProperty=true` 的子 Rem，定义一个数据字段 | "高亮"Tag 的 `[Color]` Property |
-| **Template** | 文档级别 | 一种内置 Powerup（`BuiltInPowerupCodes.Template`），整个文档作为模板 | 会议记录模板、日记模板 |
-
-- Property 是结构化数据字段（键值对），参与 Powerup 渲染和表格系统
-- Template 是内容模板（整个文档结构），用于批量创建相似文档
-- Powerup 渲染机制只涉及 **Tag + Property**，不涉及 Template
+| 术语 | 一句话定义 | 所在文件 |
+|:-----|:----------|:---------|
+| Advanced Table | 基于 Tag + Property 驱动的结构化表格 | [06](06-tables-and-properties.md) |
+| Alias | Rem 的替代名称，搜索和引用时都能匹配 | [03](03-linking-and-references.md) |
+| Ancestor | 从当前 Rem 到根 Rem 路径上的所有节点 | [02](02-hierarchy-and-navigation.md) |
+| Anki SM-2 | SuperMemo 2 经典间隔重复算法 | [04](04-flashcard-system.md) |
+| backText | Rem 的背面内容（RichText 或 null） | [04](04-flashcard-system.md) |
+| Backlink | 反向链接——所有引用了当前 Rem 的 Rem 列表 | [03](03-linking-and-references.md) |
+| Breadcrumb | 面包屑导航，从根到当前 Rem 的路径 | [02](02-hierarchy-and-navigation.md) |
+| Card | RemNote 根据 Rem 自动生成的闪卡（本项目不操控） | [01](01-core-data-model.md) |
+| Child / Children | 父 Rem 下的直接子级 Rem 有序列表 | [02](02-hierarchy-and-navigation.md) |
+| Cloze | `{{}}` 完形填空，RichText 中嵌入 cId 元素 | [04](04-flashcard-system.md) |
+| Code Block | 整个 Rem 渲染为代码块（Powerup `cd`） | [05](05-formatting-and-richtext.md) |
+| Concept | `type=concept`，`::` 创建的双向闪卡概念 | [01](01-core-data-model.md) |
+| CDF | Concept-Descriptor Framework，知识结构化方法 | [04](04-flashcard-system.md) |
+| Daily Document | 以日期命名的自动创建文档 | [02](02-hierarchy-and-navigation.md) |
+| Default | `type=default`，无闪卡类型标记的普通 Rem | [01](01-core-data-model.md) |
+| Descendant | 当前 Rem 下所有层级的子孙节点 | [02](02-hierarchy-and-navigation.md) |
+| Descriptor | `type=descriptor`，`;;` 创建的单向闪卡描述 | [01](01-core-data-model.md) |
+| Difficulty | FSRS 参数：卡片的固有学习难度 | [04](04-flashcard-system.md) |
+| Divider | 水平分割线（Powerup `dv`） | [05](05-formatting-and-richtext.md) |
+| Document | `isDocument=true` 的 Rem，可作为独立页面打开 | [01](01-core-data-model.md) |
+| Due for Review | 闪卡达到计划复习时间 | [04](04-flashcard-system.md) |
+| Extra Card Detail | 为闪卡添加额外提示的 Power-up | [04](04-flashcard-system.md) |
+| Folder | 只含 Document 子节点的 Document | [01](01-core-data-model.md) |
+| FSRS | Free Spaced Repetition Scheduler 间隔重复算法 | [04](04-flashcard-system.md) |
+| Global Search | 知识库全文搜索 | [07](07-search-and-query.md) |
+| Heading | Rem 级别标题（Powerup `r`，H1/H2/H3） | [05](05-formatting-and-richtext.md) |
+| Hierarchy | 树形层级结构，RemNote 的核心组织方式 | [02](02-hierarchy-and-navigation.md) |
+| Hierarchical Search | 限定范围搜索 | [07](07-search-and-query.md) |
+| Highlight | Rem 级别背景色高亮（Powerup `h`） | [05](05-formatting-and-richtext.md) |
+| Image Occlusion | 图片遮挡闪卡 | [04](04-flashcard-system.md) |
+| Interval | 间隔——两次复习之间的天数 | [04](04-flashcard-system.md) |
+| isCardItem | 多行闪卡的答案行标记（Powerup `w`） | [04](04-flashcard-system.md) |
+| Knowledge Base | 用户的笔记空间（Synced/Local） | [01](01-core-data-model.md) |
+| Leech | 反复遗忘的顽固闪卡 | [04](04-flashcard-system.md) |
+| Link | 指向外部 URL 的超链接 | [03](03-linking-and-references.md) |
+| Omnibar | Ctrl+P 全能搜索栏 | [02](02-hierarchy-and-navigation.md) |
+| Pane | 分屏窗格 | [02](02-hierarchy-and-navigation.md) |
+| Parent | Rem 的直接上级节点 | [02](02-hierarchy-and-navigation.md) |
+| Pin | 固定引用到侧边栏 | [03](03-linking-and-references.md) |
+| Portal | `((` 创建的实时嵌入引用，编辑同步 | [03](03-linking-and-references.md) |
+| Position | 兄弟节点中的位置（有两种含义） | [02](02-hierarchy-and-navigation.md) |
+| Powerup | `isPowerup=true` 的特殊系统 Tag，影响渲染 | [03](03-linking-and-references.md) |
+| Practice Queue | 当前需要复习的闪卡列表 | [04](04-flashcard-system.md) |
+| practiceDirection | 练习方向：forward/backward/both | [04](04-flashcard-system.md) |
+| Property | Tag 下 `isProperty=true` 的子 Rem，定义数据字段 | [06](06-tables-and-properties.md) |
+| PropertyType | Property 的数据类型（text/number/checkbox 等） | [06](06-tables-and-properties.md) |
+| Query Builder | Search Portal 的图形化查询构建器 | [07](07-search-and-query.md) |
+| Query Language | Search Portal 的查询条件语法 | [07](07-search-and-query.md) |
+| Quote Block | 整个 Rem 渲染为引用块（Powerup `qt`） | [05](05-formatting-and-richtext.md) |
+| Rem | RemNote 的基本数据单元，一切皆 Rem | [01](01-core-data-model.md) |
+| Rem Reference | `[[` 创建的 Rem 间引用，RichText `i:"q"` 元素 | [03](03-linking-and-references.md) |
+| RemType | Rem 的 type 字段：concept/descriptor/default/portal | [01](01-core-data-model.md) |
+| removePowerup vs removeTag | removePowerup 是 removeTag 的超集，额外清理 Slot | [05](05-formatting-and-richtext.md) |
+| Retrievability | FSRS 参数：当前能回忆起的概率 | [04](04-flashcard-system.md) |
+| RichText | JSON 数组格式的富文本（非纯字符串） | [01](01-core-data-model.md) |
+| Search Portal | 基于查询条件动态显示匹配 Rem 的 Portal | [07](07-search-and-query.md) |
+| Sibling | 共享同一 Parent 的 Rem | [02](02-hierarchy-and-navigation.md) |
+| Simple Table | 独立网格表格 | [06](06-tables-and-properties.md) |
+| Slot vs Property | 同一概念的两个名字，底层完全相同 | [05](05-formatting-and-richtext.md) |
+| Spaced Repetition | 间隔重复学习方法 | [04](04-flashcard-system.md) |
+| Stability | FSRS 参数：记忆保持的时间长度 | [04](04-flashcard-system.md) |
+| Stub | 被引用但无内容的 Rem | [02](02-hierarchy-and-navigation.md) |
+| Tab | 浏览器式标签页 | [02](02-hierarchy-and-navigation.md) |
+| Tag | `##` 创建的标签，Tag 本身也是 Rem | [03](03-linking-and-references.md) |
+| Template | 文档级内容模板（Powerup） | [06](06-tables-and-properties.md) |
+| text | Rem 的正面内容（RichText 数组） | [04](04-flashcard-system.md) |
+| Todo | 带复选框的待办 Rem（Powerup `t`） | [05](05-formatting-and-richtext.md) |
+| Top-level Rem | `parent=null` 的顶级 Rem | [01](01-core-data-model.md) |
+| Universal Descriptor | `~` 前缀的可跨 Concept 复用的描述符 | [04](04-flashcard-system.md) |
+| Zen Mode | 隐藏 UI 元素的专注模式 | [02](02-hierarchy-and-navigation.md) |
+| Zoom | 聚焦到 Rem 作为独立页面查看 | [02](02-hierarchy-and-navigation.md) |
+| /-menu | 斜杠命令菜单 | [02](02-hierarchy-and-navigation.md) |
 
 ---
 

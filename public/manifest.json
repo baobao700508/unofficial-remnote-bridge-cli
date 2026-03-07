@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "id": "unofficial_remnote_bridge",
+  "name": "Unofficial RemNote Bridge",
+  "author": "baobao700508",
+  "repoUrl": "https://github.com/baobao700508/unofficial-remnote-bridge-cli",
+  "version": {
+    "major": 0,
+    "minor": 1,
+    "patch": 0
+  },
+  "theme": [],
+  "enableOnMobile": false,
+  "description": "Unofficial RemNote Bridge 桥接插件：通过 WebSocket 将 RemNote API 暴露给外部 CLI/MCP 调用",
+  "requestNative": false,
+  "requiredScopes": [
+    {
+      "type": "All",
+      "level": "ReadCreateModifyDelete"
+    }
+  ]
+}

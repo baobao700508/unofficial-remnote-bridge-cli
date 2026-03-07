@@ -44,9 +44,7 @@ export async function buildFullSerializableRem(
     todoStatus,
     isCode,
     hasDvPowerup,
-    highlightColor,
-    isQuote,
-    isListItem,
+    portalIncludedRems,
   ] = await Promise.all([
     plugin.richText.toMarkdown(rem.text ?? []),
     rem.backText ? plugin.richText.toMarkdown(rem.backText) : Promise.resolve(null),
@@ -67,9 +65,7 @@ export async function buildFullSerializableRem(
     rem.getTodoStatus(),
     rem.isCode(),
     rem.hasPowerup('dv'),
-    rem.getHighlightColor(),
-    rem.isQuote(),
-    rem.isListItem(),
+    rem.type === 6 ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
   ]);
 
   let hasMultilineChildren = false;
@@ -78,10 +74,15 @@ export async function buildFullSerializableRem(
     hasMultilineChildren = cardItemFlags.some(Boolean);
   }
 
-  const hasCloze = (rem.text ?? []).some(
-    el => typeof el === 'object' && el !== null && 'cId' in el,
-  );
   const isDivider = hasDvPowerup && (rem.text ?? []).length === 0;
+
+  // 获取每个 tag 的 name（并行）
+  const tags = await Promise.all(
+    tagRems.map(async (t) => ({
+      id: t._id,
+      name: sanitizeNewlines(await plugin.richText.toMarkdown(t.text ?? [])),
+    })),
+  );
 
   return {
     id: rem._id,
@@ -93,17 +94,14 @@ export async function buildFullSerializableRem(
     isCardItem,
     isDocument,
     isPortal: rem.type === 6,
+    portalRefs: portalIncludedRems.map((r: Rem) => r._id),
     childrenCount: children.length,
-    tagCount: tagRems.length,
-    hasCloze,
+    tags,
     fontSize: (fontSize as 'H1' | 'H2' | 'H3' | null) ?? null,
     isTodo,
     todoStatus: (todoStatus as 'Finished' | 'Unfinished' | null) ?? null,
     isCode,
     isDivider,
-    highlightColor: (highlightColor as string | null) ?? null,
-    isQuote,
-    isListItem,
     isTopLevel: rem.parent === null,
   };
 }

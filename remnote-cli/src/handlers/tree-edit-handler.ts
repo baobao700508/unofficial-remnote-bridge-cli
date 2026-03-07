@@ -134,8 +134,8 @@ export class TreeEditHandler {
             parentId = actualId;
           }
 
-          // 解析 Markdown 前缀 → Powerup 属性
-          const { cleanContent, powerups } = parsePowerupPrefix(op.content);
+          // 解析 Markdown 前缀 + 箭头分隔符 → 属性
+          const { cleanContent, powerups, backText, practiceDirection } = parsePowerupPrefix(op.content);
 
           const createResult = await this.forwardToPlugin('create_rem', {
             content: cleanContent,
@@ -143,11 +143,17 @@ export class TreeEditHandler {
             position: op.position,
           }) as { remId: string };
 
-          // 设置 Powerup 属性
-          if (Object.keys(powerups).length > 0) {
+          // 合并所有需要写入的属性（Powerup + 箭头分隔符推导的字段）
+          const changes: Record<string, unknown> = { ...powerups };
+          if (backText !== undefined) changes.backText = backText;
+          if (practiceDirection !== undefined) changes.practiceDirection = practiceDirection;
+          // 父节点为 multiline 时，子行标记 isCardItem
+          if (op.parentIsMultiline) changes.isCardItem = true;
+
+          if (Object.keys(changes).length > 0) {
             await this.forwardToPlugin('write_rem_fields', {
               remId: createResult.remId,
-              changes: powerups,
+              changes,
             });
           }
 
@@ -165,6 +171,18 @@ export class TreeEditHandler {
             newParentId: op.toParentId,
             position: op.position,
           });
+          // 同步 isCardItem：移入 multiline 父节点 → true，移出 → false
+          if (op.toParentIsMultiline && !op.fromParentIsMultiline) {
+            await this.forwardToPlugin('write_rem_fields', {
+              remId: op.remId,
+              changes: { isCardItem: true },
+            });
+          } else if (!op.toParentIsMultiline && op.fromParentIsMultiline) {
+            await this.forwardToPlugin('write_rem_fields', {
+              remId: op.remId,
+              changes: { isCardItem: false },
+            });
+          }
           break;
         }
         case 'reorder': {

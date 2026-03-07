@@ -27,9 +27,9 @@ export interface OutlineNode {
 
 /** diff 操作类型 */
 export type TreeOp =
-  | { type: 'create'; content: string; parentId: string; position: number }
+  | { type: 'create'; content: string; parentId: string; position: number; parentIsMultiline?: boolean }
   | { type: 'delete'; remId: string }
-  | { type: 'move'; remId: string; fromParentId: string; toParentId: string; position: number }
+  | { type: 'move'; remId: string; fromParentId: string; toParentId: string; position: number; fromParentIsMultiline?: boolean; toParentIsMultiline?: boolean }
   | { type: 'reorder'; parentId: string; order: string[] };
 
 export interface TreeDiffResult {
@@ -133,12 +133,26 @@ export function parseOutline(text: string): OutlineNode[] {
 export interface PowerupPrefixResult {
   cleanContent: string;
   powerups: Record<string, unknown>;
+  /** 箭头分隔符后的 backText（有 backText 时） */
+  backText?: string;
+  /** 箭头分隔符推导的 practiceDirection */
+  practiceDirection?: string;
+  /** 是否为 multiline（↓ ↑ ↕） */
+  isMultiline?: boolean;
 }
 
 /**
- * 从新增行的 rawContent 中解析 Markdown 前缀，提取 Powerup 属性。
+ * 从新增行的 rawContent 中解析 Markdown 前缀和箭头分隔符，提取属性。
  *
- * 解析顺序与 read-tree 输出的嵌套顺序对称：Header → Todo → Code。
+ * 解析顺序与 read-tree 输出的嵌套顺序对称：Header → Todo → Code → 箭头分隔符。
+ *
+ * 箭头分隔符（v2 格式）：
+ *   中间箭头（有 backText）：` → ` ` ← ` ` ↔ ` ` ↓ ` ` ↑ ` ` ↕ `
+ *   尾部箭头（无 backText，multiline）：` ↓` ` ↑` ` ↕`
+ *
+ * ⚠️ 已知限制：使用 indexOf 匹配第一个箭头，如果用户新增行的内容本身包含
+ *   箭头字符（如 `A → B → C`），会被误切割为 text + backText。
+ *   对于 read→edit 往返的已有行不受影响（序列化/反序列化对称）。
  */
 export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
   const powerups: Record<string, unknown> = {};
@@ -164,8 +178,71 @@ export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
     content = content.slice(1, -1);
   }
 
-  if (Object.keys(powerups).length === 0) return { cleanContent: rawContent, powerups: {} };
-  return { cleanContent: content, powerups };
+  // 箭头分隔符解析
+  let backText: string | undefined;
+  let practiceDirection: string | undefined;
+  let isMultiline: boolean | undefined;
+
+  // 中间箭头（有 backText）— 按搜索顺序逐个匹配
+  const midArrows: Array<[string, string, boolean]> = [
+    [' ↔ ', 'both', false],
+    [' ↕ ', 'both', true],
+    [' → ', 'forward', false],
+    [' ← ', 'backward', false],
+    [' ↓ ', 'forward', true],
+    [' ↑ ', 'backward', true],
+  ];
+
+  for (const [arrow, dir, multi] of midArrows) {
+    const idx = content.indexOf(arrow);
+    if (idx !== -1) {
+      backText = content.slice(idx + arrow.length);
+      content = content.slice(0, idx);
+      practiceDirection = dir;
+      isMultiline = multi;
+      break;
+    }
+  }
+
+  // 尾部箭头（无 backText，multiline）
+  if (backText === undefined) {
+    const tailArrows: Array<[string, string]> = [
+      [' ↕', 'both'],
+      [' ↓', 'forward'],
+      [' ↑', 'backward'],
+    ];
+    for (const [arrow, dir] of tailArrows) {
+      if (content.endsWith(arrow)) {
+        content = content.slice(0, -arrow.length);
+        practiceDirection = dir;
+        isMultiline = true;
+        break;
+      }
+    }
+  }
+
+  const hasChanges = Object.keys(powerups).length > 0
+    || backText !== undefined
+    || practiceDirection !== undefined;
+
+  if (!hasChanges) return { cleanContent: rawContent, powerups: {} };
+
+  const result: PowerupPrefixResult = { cleanContent: content, powerups };
+  if (backText !== undefined) result.backText = backText;
+  if (practiceDirection !== undefined) result.practiceDirection = practiceDirection;
+  if (isMultiline !== undefined) result.isMultiline = isMultiline;
+  return result;
+}
+
+// ────────────────────────── Multiline 检测 ──────────────────────────
+
+/** multiline 箭头正则：中间箭头 ↓↑↕ 或尾部箭头 ↓↑↕ */
+const MULTILINE_MID_RE = / [↓↑↕] /;
+const MULTILINE_TAIL_RE = / [↓↑↕]$/;
+
+/** 从行内容判断是否为 multiline 父节点（内容包含 ↓↑↕ 箭头） */
+export function isContentMultiline(rawContent: string): boolean {
+  return MULTILINE_MID_RE.test(rawContent) || MULTILINE_TAIL_RE.test(rawContent);
 }
 
 // ────────────────────────── Diff 算法 ──────────────────────────
@@ -246,6 +323,7 @@ interface NewLineInfo {
   content: string;
   parentId: string;
   position: number;
+  parentIsMultiline: boolean;
 }
 
 function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
@@ -259,7 +337,12 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
           // 新增行不能作为根节点的兄弟（根 remId 为 null 时理论不会到这里）
           throw new Error('新增行缺少父节点');
         }
-        result.push({ content: child.rawContent, parentId, position: childPos });
+        result.push({
+          content: child.rawContent,
+          parentId,
+          position: childPos,
+          parentIsMultiline: isContentMultiline(node.rawContent),
+        });
         // 新增行也可能有子节点（嵌套新增）
         collectNewLinesUnderNew(child, result);
       } else {
@@ -287,6 +370,7 @@ function collectNewLinesUnderNew(parent: OutlineNode, result: NewLineInfo[]): vo
       content: child.rawContent,
       parentId: `__new_${result.length - 1}__`,
       position: childPos,
+      parentIsMultiline: isContentMultiline(parent.rawContent),
     });
     if (child.children.length > 0) {
       collectNewLinesUnderNew(child, result);
@@ -420,6 +504,7 @@ export function diffTrees(
       content: nl.content,
       parentId: nl.parentId,
       position: nl.position,
+      parentIsMultiline: nl.parentIsMultiline,
     });
   }
 
@@ -428,12 +513,17 @@ export function diffTrees(
     const oldInfo = oldMap.get(remId);
     if (!oldInfo) continue; // 新节点不在旧树中（不应该出现，已有 remId 的节点应该在旧树中）
     if (oldInfo.parentId !== newInfo.parentId && newInfo.parentId !== null) {
+      // 从新旧树中查找父节点内容以检测 multiline
+      const fromParentNode = oldInfo.parentId ? findNodeById(oldRoots, oldInfo.parentId) : null;
+      const toParentNode = findNodeById(newRoots, newInfo.parentId);
       operations.push({
         type: 'move',
         remId,
         fromParentId: oldInfo.parentId ?? '',
         toParentId: newInfo.parentId,
         position: newInfo.position,
+        fromParentIsMultiline: fromParentNode ? isContentMultiline(fromParentNode.rawContent) : false,
+        toParentIsMultiline: toParentNode ? isContentMultiline(toParentNode.rawContent) : false,
       });
     }
   }

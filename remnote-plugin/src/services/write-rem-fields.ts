@@ -110,7 +110,15 @@ async function applyField(
       await rem.setText(value as RichTextInterface);
       break;
     case 'backText':
-      await rem.setBackText(value === null ? [] : value as RichTextInterface);
+      if (value === null) {
+        await rem.setBackText([]);
+      } else if (typeof value === 'string') {
+        // 从 edit-tree 箭头分隔符解析出的 backText 是纯文本字符串，
+        // 需要包装为 RichText 数组才能被 SDK 接受
+        await rem.setBackText([value]);
+      } else {
+        await rem.setBackText(value as RichTextInterface);
+      }
       break;
 
     // 类型系统
@@ -234,11 +242,13 @@ async function applySourcesDiff(rem: Rem, targetIds: string[]): Promise<void> {
   }
 }
 
-/** 字符串类型值 → SDK RemType 枚举数值 */
-function remTypeStringToEnum(type: string): number | string {
+/** 字符串类型值 → SDK SetRemType 枚举数值。Portal 不可通过 setType() 设置。 */
+function remTypeStringToEnum(type: string): 1 | 2 | 'DEFAULT_TYPE' {
   switch (type) {
     case 'concept': return 1;
     case 'descriptor': return 2;
-    default: return 'DEFAULT_TYPE';
+    case 'default': return 'DEFAULT_TYPE';
+    case 'portal': throw new Error('Portal 不可通过 setType() 设置，只能通过 createPortal() 创建');
+    default: throw new Error(`未知的 Rem 类型: ${type}`);
   }
 }
