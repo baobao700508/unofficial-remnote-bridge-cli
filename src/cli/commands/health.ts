@@ -36,7 +36,7 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
       console.log('❌ 守护进程  未运行');
       console.log('❌ Plugin    未连接');
       console.log('❌ SDK       不可用');
-      console.log('\n提示: 执行 `remnote connect` 启动守护进程');
+      console.log('\n提示: 执行 `remnote-bridge connect` 启动守护进程');
     }
     process.exitCode = 2;
     return;

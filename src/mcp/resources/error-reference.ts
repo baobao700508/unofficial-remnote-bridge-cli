@@ -9,7 +9,7 @@ export const ERROR_REFERENCE_CONTENT = `
 
 | 错误信息 | 触发命令 | 原因 | 恢复操作 |
 |:---------|:---------|:-----|:---------|
-| 守护进程未运行，请先执行 remnote connect | 所有业务命令 | 未执行 connect 或 daemon 已超时关闭 | 执行 \\\`connect\\\` |
+| 守护进程未运行，请先执行 remnote-bridge connect | 所有业务命令 | 未执行 connect 或 daemon 已超时关闭 | 执行 \\\`connect\\\` |
 | Plugin 未连接 | health / 业务命令 | RemNote 未打开或插件未加载 | 打开 RemNote 并确认插件加载 |
 | SDK 未就绪 | health | 知识库尚未加载完成 | 等待几秒后重试 \\\`health\\\` |
 | 连接超时 | connect | daemon 启动但 Plugin 未在超时时间内连接 | 确认 RemNote 已打开、插件已加载；检查端口配置 |

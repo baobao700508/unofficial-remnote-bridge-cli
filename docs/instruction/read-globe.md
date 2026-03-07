@@ -21,7 +21,7 @@
 ### 人类模式
 
 ```bash
-remnote read-globe [--depth <N>] [--max-nodes <N>] [--max-siblings <N>]
+remnote-bridge read-globe [--depth <N>] [--max-nodes <N>] [--max-siblings <N>]
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -47,7 +47,7 @@ remnote read-globe [--depth <N>] [--max-nodes <N>] [--max-siblings <N>]
 ### JSON 模式
 
 ```bash
-remnote read-globe --json '{"depth":-1,"maxNodes":100,"maxSiblings":10}'
+remnote-bridge read-globe --json '{"depth":-1,"maxNodes":100,"maxSiblings":10}'
 ```
 
 ---
@@ -84,7 +84,7 @@ remnote read-globe --json '{"depth":-1,"maxNodes":100,"maxSiblings":10}'
 {
   "ok": false,
   "command": "read-globe",
-  "error": "守护进程未运行，请先执行 remnote connect",
+  "error": "守护进程未运行，请先执行 remnote-bridge connect",
   "timestamp": "2026-03-07T10:00:00.000Z"
 }
 ```

@@ -22,7 +22,7 @@
 
 ## 前置条件
 
-- [ ] CLI 守护进程已运行（`remnote connect`）
+- [ ] CLI 守护进程已运行（`remnote-bridge connect`）
 - [ ] RemNote 在浏览器中打开
 - [ ] Plugin dev server 运行中（`cd remnote-plugin && npm run dev`）
 - [ ] 有一个已知的测试文档（如 "mcp 测试"），记下其 Rem ID
@@ -39,27 +39,27 @@
 
 | 步骤 | 操作 | 命令/动作 |
 |:--|:--|:--|
-| 1a | 读取空 Rem | `remnote read-rem <id1> --json` → 保存为 `before-plain.json` |
+| 1a | 读取空 Rem | `remnote-bridge read-rem <id1> --json` → 保存为 `before-plain.json` |
 | 1b | 浏览器输入 | 在该 Rem 中输入 `这是一个普通行` |
-| 1c | 读取已改 Rem | `remnote read-rem <id1> --json` → 保存为 `after-plain.json` |
+| 1c | 读取已改 Rem | `remnote-bridge read-rem <id1> --json` → 保存为 `after-plain.json` |
 | 1d | 对比 | diff before/after，记录 text 字段变化 |
 
 ### Case 2: Concept — 双冒号 `::`
 
 | 步骤 | 操作 | 命令/动作 |
 |:--|:--|:--|
-| 2a | 读取空 Rem | `remnote read-rem <id2> --json` → `before-concept.json` |
+| 2a | 读取空 Rem | `remnote-bridge read-rem <id2> --json` → `before-concept.json` |
 | 2b | 浏览器输入 | 输入 `线性回归 :: 最基本的回归模型` |
-| 2c | 读取已改 Rem | `remnote read-rem <id2> --json` → `after-concept.json` |
+| 2c | 读取已改 Rem | `remnote-bridge read-rem <id2> --json` → `after-concept.json` |
 | 2d | 对比 | **重点关注**：type 是否变为 1 (CONCEPT)？text 和 backText 怎么拆分？ |
 
 ### Case 3: Descriptor — 双分号 `;;`
 
 | 步骤 | 操作 | 命令/动作 |
 |:--|:--|:--|
-| 3a | 读取空 Rem | `remnote read-rem <id3> --json` → `before-descriptor.json` |
+| 3a | 读取空 Rem | `remnote-bridge read-rem <id3> --json` → `before-descriptor.json` |
 | 3b | 浏览器输入 | 输入 `细胞核 ;; 控制细胞活动的中心` |
-| 3c | 读取已改 Rem | `remnote read-rem <id3> --json` → `after-descriptor.json` |
+| 3c | 读取已改 Rem | `remnote-bridge read-rem <id3> --json` → `after-descriptor.json` |
 | 3d | 对比 | **重点关注**：type 是否变为 2 (DESCRIPTOR)？text/backText 拆分？ |
 
 ### Case 4: Forward Arrow — `>>`

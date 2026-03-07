@@ -147,7 +147,7 @@ src/cli 内部按语义分为**基础设施**和**业务编排**两类：
 
 ### 2.3 CLI 命令输出规范（红线）
 
-所有 remnote-cli 命令**必须**同时支持人类可读输出和 `--json` 结构化输出。
+所有 CLI 命令**必须**同时支持人类可读输出和 `--json` 结构化输出。
 
 #### 规则
 
@@ -300,10 +300,10 @@ remnote-bridge-cli/                    (repo root = npm 包根)
 #### 会话定义
 
 - **会话（Session）= 守护进程（daemon）的生命周期**
-- `remnote-cli connect` 启动守护进程 → 会话开始
-- `remnote-cli disconnect` 关闭守护进程 → 会话结束，缓存全部清空
+- `remnote-bridge connect` 启动守护进程 → 会话开始
+- `remnote-bridge disconnect` 关闭守护进程 → 会话结束，缓存全部清空
 - 每次 CLI 命令调用（`read-rem`、`edit-rem` 等）都是**独立的 OS 进程**，命令进程本身无状态
-- 守护进程是 remnote-cli 层的内部组件，不违反层间依赖方向
+- 守护进程是 CLI 层的内部组件，不违反层间依赖方向
 
 #### 缓存存储位置
 

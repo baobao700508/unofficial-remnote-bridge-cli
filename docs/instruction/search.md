@@ -15,7 +15,7 @@
 ### 人类模式
 
 ```bash
-remnote search <query> [--limit <N>]
+remnote-bridge search <query> [--limit <N>]
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -42,7 +42,7 @@ remnote search <query> [--limit <N>]
 ### JSON 模式
 
 ```bash
-remnote search --json '{"query":"机器学习","numResults":10}'
+remnote-bridge search --json '{"query":"机器学习","numResults":10}'
 ```
 
 ---
@@ -108,7 +108,7 @@ remnote search --json '{"query":"机器学习","numResults":10}'
 {
   "ok": false,
   "command": "search",
-  "error": "守护进程未运行，请先执行 remnote connect",
+  "error": "守护进程未运行，请先执行 remnote-bridge connect",
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
 ```

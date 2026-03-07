@@ -1,8 +1,8 @@
 /**
- * remnote-mcp — MCP Server 入口
+ * remnote-bridge MCP Server 入口
  *
  * 通过 FastMCP 将 RemNote 知识库操作暴露为 MCP 工具。
- * 所有业务逻辑委托给 remnote-cli（通过 daemon-client 子进程调用）。
+ * 所有业务逻辑委托给 remnote-bridge CLI（通过 daemon-client 子进程调用）。
  */
 
 import { FastMCP } from 'fastmcp';
@@ -18,7 +18,7 @@ import { SEPARATOR_FLASHCARD_CONTENT } from './resources/separator-flashcard.js'
 
 export async function startMcpServer(): Promise<void> {
   const server = new FastMCP({
-    name: 'remnote-mcp',
+    name: 'remnote-bridge',
     version: '0.1.0',
     instructions: SERVER_INSTRUCTIONS,
   });

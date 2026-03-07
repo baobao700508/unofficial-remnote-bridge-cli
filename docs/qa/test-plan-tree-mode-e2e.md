@@ -28,7 +28,7 @@
 ## 前置条件
 
 - [ ] Claude in Chrome 浏览器扩展已安装且已连接
-- [ ] CLI 守护进程已运行（`remnote connect`）
+- [ ] CLI 守护进程已运行（`remnote-bridge connect`）
 - [ ] RemNote 在 Chrome 中打开
 - [ ] Plugin dev server 运行中（`cd remnote-plugin && npm run dev`）
 - [ ] 有一个已知的测试文档（如 "mcp 测试"），记下其 Rem ID
@@ -46,7 +46,7 @@
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
 | 1 | Claude in Chrome 截图 RemNote 中测试文档的子树结构 | 作为基准截图 |
-| 2 | 终端执行 `remnote read-tree <docId> --depth 3` | 命令成功，输出大纲 |
+| 2 | 终端执行 `remnote-bridge read-tree <docId> --depth 3` | 命令成功，输出大纲 |
 | 3 | 逐行核对大纲 vs 截图 | 每行 Rem 对应正确、层级缩进正确 |
 
 **Expected:**
@@ -77,7 +77,7 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree <docId> --depth 3` | 输出大纲 |
+| 1 | `remnote-bridge read-tree <docId> --depth 3` | 输出大纲 |
 | 2 | 逐行核对上表的分隔符 | 10 种全部正确 |
 | 3 | 逐行核对 fc 元数据 | 10 种全部正确 |
 
@@ -89,7 +89,7 @@
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
 | 1 | 准备包含 document、portal、带标签、card-item 子行的树 | — |
-| 2 | `remnote read-tree <docId> --depth -1` | 全展开 |
+| 2 | `remnote-bridge read-tree <docId> --depth -1` | 全展开 |
 | 3 | 检查 document Rem | 含 `type:document` 元数据 |
 | 4 | 检查 portal Rem | 含 `type:portal` 元数据 |
 | 5 | 检查带 3 个标签的 Rem | 含 `tags:3` 元数据 |
@@ -102,11 +102,11 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree <docId> --depth 1` | 只显示直接子节点，孙子节点折叠 |
+| 1 | `remnote-bridge read-tree <docId> --depth 1` | 只显示直接子节点，孙子节点折叠 |
 | 2 | 折叠行有 `children:N` 标记 | N 等于实际子节点数 |
-| 3 | `remnote read-tree <docId> --depth 0` | 只显示根节点自身 |
-| 4 | `remnote read-tree <docId> --depth -1` | 全部展开，无折叠标记 |
-| 5 | `remnote read-tree <docId>` (默认) | 展开 3 层 |
+| 3 | `remnote-bridge read-tree <docId> --depth 0` | 只显示根节点自身 |
+| 4 | `remnote-bridge read-tree <docId> --depth -1` | 全部展开，无折叠标记 |
+| 5 | `remnote-bridge read-tree <docId>` (默认) | 展开 3 层 |
 
 ### TC-RT-005: --json 输出格式
 
@@ -115,7 +115,7 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree <docId> --json` | 输出一行合法 JSON |
+| 1 | `remnote-bridge read-tree <docId> --json` | 输出一行合法 JSON |
 | 2 | 解析 JSON | 含 `ok: true`, `command: "read-tree"` |
 | 3 | `data` 字段 | 含 `rootId`, `depth`, `nodeCount`, `outline` |
 | 4 | `nodeCount` 与大纲行数一致 | — |
@@ -149,7 +149,7 @@
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
 | 1 | 找到或构建一棵超过 500 节点的子树 | — |
-| 2 | `remnote read-tree <docId> --depth -1 --json` | 返回错误 |
+| 2 | `remnote-bridge read-tree <docId> --depth -1 --json` | 返回错误 |
 | 3 | 错误消息 | 含 "exceeds 500 nodes" 和建议 |
 
 ### TC-RT-008: 不存在的 remId
@@ -159,7 +159,7 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree nonexistent123 --json` | `ok: false` |
+| 1 | `remnote-bridge read-tree nonexistent123 --json` | `ok: false` |
 | 2 | 错误消息 | 含 "Rem not found" |
 | 3 | 退出码 | 1 |
 
@@ -174,8 +174,8 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | 重启守护进程（清空缓存） | `remnote disconnect && remnote connect` |
-| 2 | 直接 `remnote edit-tree <docId> --old-str "x" --new-str "y" --json` | `ok: false` |
+| 1 | 重启守护进程（清空缓存） | `remnote-bridge disconnect && remnote-bridge connect` |
+| 2 | 直接 `remnote-bridge edit-tree <docId> --old-str "x" --new-str "y" --json` | `ok: false` |
 | 3 | 错误消息 | 含 "has not been read yet. Use read-tree first" |
 
 ### TC-ET-002: 防线 2 — 树被外部修改
@@ -201,8 +201,8 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree <docId>` | 读取缓存 |
-| 2 | `remnote edit-tree <docId> --old-str "不存在的文本" --new-str "x" --json` | `ok: false` |
+| 1 | `remnote-bridge read-tree <docId>` | 读取缓存 |
+| 2 | `remnote-bridge edit-tree <docId> --old-str "不存在的文本" --new-str "x" --json` | `ok: false` |
 | 3 | 错误消息 | 含 "old_str not found" |
 
 ### TC-ET-004: 防线 3 — old_str 多次匹配
@@ -213,8 +213,8 @@
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
 | 1 | 准备树中有两个相同文本的行 | — |
-| 2 | `remnote read-tree <docId>` | 读取 |
-| 3 | `remnote edit-tree <docId> --old-str "重复文本" --new-str "x" --json` | `ok: false` |
+| 2 | `remnote-bridge read-tree <docId>` | 读取 |
+| 3 | `remnote-bridge edit-tree <docId> --old-str "重复文本" --new-str "x" --json` | `ok: false` |
 | 4 | 错误消息 | 含 "matches 2 locations" |
 
 ### TC-ET-005: noop — old_str == new_str
@@ -224,8 +224,8 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote read-tree <docId>` | 读取 |
-| 2 | `remnote edit-tree <docId> --old-str "X" --new-str "X" --json` | `ok: true` |
+| 1 | `remnote-bridge read-tree <docId>` | 读取 |
+| 2 | `remnote-bridge edit-tree <docId> --old-str "X" --new-str "X" --json` | `ok: true` |
 | 3 | operations | 空数组 `[]` |
 
 ---
@@ -569,8 +569,8 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote disconnect`（确保已停止） | — |
-| 2 | `remnote read-tree <docId> --json` | exitCode=2 |
+| 1 | `remnote-bridge disconnect`（确保已停止） | — |
+| 2 | `remnote-bridge read-tree <docId> --json` | exitCode=2 |
 | 3 | 错误消息 | 含守护进程相关提示 |
 
 ### TC-DAEMON-002: 守护进程未启动时 edit-tree
@@ -580,8 +580,8 @@
 
 | 步骤 | 操作 | 验证 |
 |:--|:--|:--|
-| 1 | `remnote disconnect` | — |
-| 2 | `remnote edit-tree <docId> --old-str "x" --new-str "y" --json` | exitCode=2 |
+| 1 | `remnote-bridge disconnect` | — |
+| 2 | `remnote-bridge edit-tree <docId> --old-str "x" --new-str "y" --json` | exitCode=2 |
 
 ---
 

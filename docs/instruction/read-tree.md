@@ -23,7 +23,7 @@
 ### 人类模式
 
 ```bash
-remnote read-tree <remId> [--depth N] [--max-nodes N] [--max-siblings N] [--ancestor-levels N] [--includePowerup]
+remnote-bridge read-tree <remId> [--depth N] [--max-nodes N] [--max-siblings N] [--ancestor-levels N] [--includePowerup]
 ```
 
 | 参数/选项 | 类型 | 必需 | 默认值 | 说明 |
@@ -49,7 +49,7 @@ remnote read-tree <remId> [--depth N] [--max-nodes N] [--max-siblings N] [--ance
 ### JSON 模式
 
 ```bash
-remnote read-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","depth":2,"maxSiblings":10}'
+remnote-bridge read-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","depth":2,"maxSiblings":10}'
 ```
 
 ---
@@ -138,7 +138,7 @@ remnote read-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","depth":2,"maxSiblings":1
 {
   "ok": false,
   "command": "read-tree",
-  "error": "守护进程未运行，请先执行 remnote connect",
+  "error": "守护进程未运行，请先执行 remnote-bridge connect",
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
 ```

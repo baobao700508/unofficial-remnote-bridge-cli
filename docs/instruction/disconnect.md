@@ -21,7 +21,7 @@
 ### 人类模式
 
 ```bash
-remnote disconnect
+remnote-bridge disconnect
 ```
 
 输出示例：
@@ -34,7 +34,7 @@ remnote disconnect
 ### JSON 模式
 
 ```bash
-remnote --json disconnect
+remnote-bridge --json disconnect
 ```
 
 ---

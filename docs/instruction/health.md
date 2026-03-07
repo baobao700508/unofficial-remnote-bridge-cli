@@ -18,7 +18,7 @@
 ### 人类模式
 
 ```bash
-remnote health
+remnote-bridge health
 ```
 
 输出示例（全部健康）：
@@ -48,13 +48,13 @@ remnote health
 ❌ Plugin    未连接
 ❌ SDK       不可用
 
-提示: 执行 `remnote connect` 启动守护进程
+提示: 执行 `remnote-bridge connect` 启动守护进程
 ```
 
 ### JSON 模式
 
 ```bash
-remnote --json health
+remnote-bridge --json health
 ```
 
 ---

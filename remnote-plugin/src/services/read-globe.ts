@@ -65,16 +65,10 @@ export async function readGlobe(
     const allChildren = await rem.getChildrenRem();
     const children = await filterNoisyChildren(allChildren);
 
-    // 过滤出 Document 子节点
-    const docChildren: Rem[] = [];
-    let nonDocCount = 0;
-    for (const child of children) {
-      if (await child.isDocument()) {
-        docChildren.push(child);
-      } else {
-        nonDocCount++;
-      }
-    }
+    // 过滤出 Document 子节点（并行）
+    const childDocFlags = await Promise.all(children.map(c => c.isDocument()));
+    const docChildren = children.filter((_, i) => childDocFlags[i]);
+    const nonDocCount = children.length - docChildren.length;
 
     const shouldFold = maxDepth !== -1 && currentDepth >= maxDepth;
     const folded = shouldFold && docChildren.length > 0;

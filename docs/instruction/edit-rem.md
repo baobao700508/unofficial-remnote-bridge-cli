@@ -33,7 +33,7 @@
 ### 人类模式
 
 ```bash
-remnote edit-rem <remId> --old-str <oldStr> --new-str <newStr>
+remnote-bridge edit-rem <remId> --old-str <oldStr> --new-str <newStr>
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -57,7 +57,7 @@ remnote edit-rem <remId> --old-str <oldStr> --new-str <newStr>
 ### JSON 模式
 
 ```bash
-remnote edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept\"","newStr":"\"descriptor\""}'
+remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept\"","newStr":"\"descriptor\""}'
 ```
 
 ---
@@ -506,4 +506,4 @@ str_replace 操作的对象是 `JSON.stringify(remObject, null, 2)` 的文本—
 | `invalid JSON` | 替换后的文本不是合法 JSON | 检查 newStr 的引号、逗号、括号完整性 |
 | `Failed to update field` | SDK setter 调用失败 | 检查字段值是否在允许范围内（如 type 不能设为 portal） |
 | `Field '...' is read-only and was ignored` | 修改了只读字段 | 该字段只能读取，不可通过 edit-rem 修改 |
-| `守护进程未运行` | daemon 未启动 | 执行 `remnote connect` |
+| `守护进程未运行` | daemon 未启动 | 执行 `remnote-bridge connect` |

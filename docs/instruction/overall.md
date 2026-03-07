@@ -1,4 +1,4 @@
-# Overall — remnote-bridge-cli Agent 操作指南
+# Overall — remnote-bridge Agent 操作指南
 
 > 本文档面向 AI Agent（MCP / Skills 层），提供操作 RemNote 知识库所需的概念理解、命令决策和技术参考。
 > 各命令的详细参数、输出格式和错误码见各自的 instruction 文件。
@@ -142,7 +142,7 @@ RemNote 的格式设置（fontSize、highlightColor、isCode 等）底层通过 
 AI Agent（Claude Code / MCP Client）
     │  调用 CLI 命令（短进程，无状态）
     ↓
-remnote-cli（命令层）
+remnote-bridge（命令层）
     │  WebSocket IPC
     ↓
 daemon（守护进程，长生命周期）

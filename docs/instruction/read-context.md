@@ -27,7 +27,7 @@
 ### 人类模式
 
 ```bash
-remnote read-context [--mode <mode>] [--ancestor-levels <N>] [--depth <N>] [--max-nodes <N>] [--max-siblings <N>]
+remnote-bridge read-context [--mode <mode>] [--ancestor-levels <N>] [--depth <N>] [--max-nodes <N>] [--max-siblings <N>]
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -72,8 +72,8 @@ Page 模式输出示例：
 ### JSON 模式
 
 ```bash
-remnote read-context --json '{"mode":"focus","ancestorLevels":3,"maxNodes":100}'
-remnote read-context --json '{"mode":"page","depth":5,"maxSiblings":10}'
+remnote-bridge read-context --json '{"mode":"focus","ancestorLevels":3,"maxNodes":100}'
+remnote-bridge read-context --json '{"mode":"page","depth":5,"maxSiblings":10}'
 ```
 
 ---
@@ -172,7 +172,7 @@ remnote read-context --json '{"mode":"page","depth":5,"maxSiblings":10}'
 {
   "ok": false,
   "command": "read-context",
-  "error": "守护进程未运行，请先执行 remnote connect",
+  "error": "守护进程未运行，请先执行 remnote-bridge connect",
   "timestamp": "2026-03-07T10:00:00.000Z"
 }
 ```

@@ -17,7 +17,7 @@ const DEFAULT_RESPONSE_TIMEOUT_MS = 30_000;
 
 export class DaemonNotRunningError extends Error {
   constructor() {
-    super('守护进程未运行，请先执行 remnote connect');
+    super('守护进程未运行，请先执行 remnote-bridge connect');
     this.name = 'DaemonNotRunningError';
   }
 }

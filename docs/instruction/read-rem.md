@@ -21,7 +21,7 @@
 ### 人类模式
 
 ```bash
-remnote read-rem <remId> [--fields <fieldList>] [--full] [--includePowerup]
+remnote-bridge read-rem <remId> [--fields <fieldList>] [--full] [--includePowerup]
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -45,7 +45,7 @@ remnote read-rem <remId> [--fields <fieldList>] [--full] [--includePowerup]
 ### JSON 模式
 
 ```bash
-remnote read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
+remnote-bridge read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
 ```
 
 ---
@@ -135,7 +135,7 @@ remnote read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
 {
   "ok": false,
   "command": "read-rem",
-  "error": "守护进程未运行，请先执行 remnote connect",
+  "error": "守护进程未运行，请先执行 remnote-bridge connect",
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
 ```

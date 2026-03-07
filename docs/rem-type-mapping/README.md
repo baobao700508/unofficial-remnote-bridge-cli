@@ -2,7 +2,7 @@
 
 > 基于 RemNote Plugin SDK，通过浏览器模拟输入 + CLI `read-rem` 回读实测验证。
 > 最后验证时间：2026-03-05
-> 环境：RemNote Web + remnote-plugin dev server + unofficial-remnote-bridge daemon
+> 环境：RemNote Web + remnote-plugin dev server + remnote-bridge daemon
 >
 > **验证状态说明：**
 > - ✅ 实测验证 — 通过浏览器输入分隔符，再用 CLI `read-rem --full` 回读 Rem Object 对比

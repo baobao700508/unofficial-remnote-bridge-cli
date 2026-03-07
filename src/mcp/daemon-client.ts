@@ -1,13 +1,13 @@
 /**
  * daemon-client.ts
  *
- * 封装对 remnote-cli 的子进程调用（--json 模式）。
+ * 封装对 remnote-bridge CLI 的子进程调用（--json 模式）。
  * MCP Server 通过此模块与 CLI 守护进程通信。
  *
- * 调用约定（来自 remnote-cli/src/index.ts）：
+ * 调用约定（来自 src/cli/main.ts）：
  *   --json 是全局选项，位于命令名之前。
- *   无 payload：unofficial-remnote-bridge --json <command>
- *   有 payload：unofficial-remnote-bridge --json <command> '<JSON>'
+ *   无 payload：remnote-bridge --json <command>
+ *   有 payload：remnote-bridge --json <command> '<JSON>'
  */
 
 import { execFile } from 'node:child_process';
@@ -46,7 +46,7 @@ export class CliError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
- * 通过子进程调用 remnote-cli --json 模式。
+ * 通过子进程调用 remnote-bridge --json 模式。
  *
  * @param command  CLI 命令名（如 'read-rem', 'edit-tree', 'health'）
  * @param payload  JSON 参数对象（无参数的命令可省略）

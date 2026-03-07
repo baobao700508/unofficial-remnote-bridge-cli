@@ -25,7 +25,7 @@
 ### 人类模式
 
 ```bash
-remnote edit-tree <remId> --old-str <text> --new-str <text>
+remnote-bridge edit-tree <remId> --old-str <text> --new-str <text>
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
@@ -37,7 +37,7 @@ remnote edit-tree <remId> --old-str <text> --new-str <text>
 ### JSON 模式
 
 ```bash
-remnote edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"  旧行 <!--id1-->","newStr":"  新行\n  旧行 <!--id1-->"}'
+remnote-bridge edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"  旧行 <!--id1-->","newStr":"  新行\n  旧行 <!--id1-->"}'
 ```
 
 ---
@@ -137,7 +137,7 @@ remnote edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"  旧行 <!--id
 {
   "ok": false,
   "command": "edit-tree",
-  "error": "守护进程未运行，请先执行 remnote connect"
+  "error": "守护进程未运行，请先执行 remnote-bridge connect"
 }
 ```
 
@@ -397,23 +397,23 @@ RemNote SDK 存在已知 bug：
 ### 在指定位置插入新行
 
 ```bash
-remnote edit-tree kLr --old-str '  子节点 A <!--idA-->' --new-str '  新增行\n  子节点 A <!--idA-->'
+remnote-bridge edit-tree kLr --old-str '  子节点 A <!--idA-->' --new-str '  新增行\n  子节点 A <!--idA-->'
 ```
 
 ### 删除一个叶子节点
 
 ```bash
-remnote edit-tree kLr --old-str '    叶子节点 <!--leaf-->\n' --new-str ''
+remnote-bridge edit-tree kLr --old-str '    叶子节点 <!--leaf-->\n' --new-str ''
 ```
 
 ### 调换两个兄弟的顺序
 
 ```bash
-remnote edit-tree kLr --old-str '  节点 A <!--idA-->\n  节点 B <!--idB-->' --new-str '  节点 B <!--idB-->\n  节点 A <!--idA-->'
+remnote-bridge edit-tree kLr --old-str '  节点 A <!--idA-->\n  节点 B <!--idB-->' --new-str '  节点 B <!--idB-->\n  节点 A <!--idA-->'
 ```
 
 ### 将节点移到另一个父节点下
 
 ```bash
-remnote edit-tree kLr --old-str '  旧父 <!--oldP-->\n    目标 <!--target-->\n  新父 <!--newP-->' --new-str '  旧父 <!--oldP-->\n  新父 <!--newP-->\n    目标 <!--target-->'
+remnote-bridge edit-tree kLr --old-str '  旧父 <!--oldP-->\n    目标 <!--target-->\n  新父 <!--newP-->' --new-str '  旧父 <!--oldP-->\n  新父 <!--newP-->\n    目标 <!--target-->'
 ```

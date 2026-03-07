@@ -1,11 +1,11 @@
 ---
-name: remnote-cli
-description: "RemNote 知识库操作指南。通过 remnote-bridge-cli 命令行工具读取、编辑、搜索 RemNote 知识库中的内容。当用户需要操作 RemNote 知识库时使用此 skill——包括读取笔记、编辑内容、搜索、浏览知识库结构、创建闪卡、修改文档属性等。触发关键词包括：RemNote、知识库、笔记、Rem、闪卡、文档、read-rem、edit-rem、read-tree、edit-tree、search、read-globe、read-context。即使用户没有明确提到 CLI 命令，只要意图是操作 RemNote 中的数据，都应触发此 skill。"
+name: remnote-bridge
+description: "RemNote 知识库操作指南。通过 remnote-bridge 命令行工具读取、编辑、搜索 RemNote 知识库中的内容。当用户需要操作 RemNote 知识库时使用此 skill——包括读取笔记、编辑内容、搜索、浏览知识库结构、创建闪卡、修改文档属性等。触发关键词包括：RemNote、知识库、笔记、Rem、闪卡、文档、read-rem、edit-rem、read-tree、edit-tree、search、read-globe、read-context。即使用户没有明确提到 CLI 命令，只要意图是操作 RemNote 中的数据，都应触发此 skill。"
 ---
 
 # RemNote CLI 操作指南
 
-本 skill 指导 AI Agent 通过 remnote-bridge-cli 操作 RemNote 知识库。
+本 skill 指导 AI Agent 通过 remnote-bridge 操作 RemNote 知识库。
 
 **详细命令文档**位于 `docs/instruction/` 目录下，执行具体命令前务必先读取对应文件：
 
@@ -163,11 +163,11 @@ Agent 应始终使用 JSON 模式调用命令。
 
 ```bash
 # 正确：位置参数 = JSON 字符串
-remnote read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","fields":["text","type"]}'
-remnote search --json '{"query":"机器学习","numResults":10}'
+remnote-bridge read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","fields":["text","type"]}'
+remnote-bridge search --json '{"query":"机器学习","numResults":10}'
 
 # 错误：禁止混用裸 remId + --json
-remnote read-rem kLrIOHJLyMd8Y2lyA --json   # 会失败！
+remnote-bridge read-rem kLrIOHJLyMd8Y2lyA --json   # 会失败！
 ```
 
 注意：search 的 JSON 参数名是 `numResults`（不是 `limit`）。
