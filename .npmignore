@@ -1,0 +1,19 @@
+remnote-plugin/test/
+remnote-plugin/node_modules/
+test/
+scripts/
+docs/plans/
+docs/brainstorms/
+docs/solutions/
+docs/qa/
+docs/archive/
+docs/初始需求/
+docs/rem-type-mapping/
+docs/RemNote API Reference/
+docs/RemNote Help Center/
+docs/vocabulary-definition/
+reference_repository/
+.claude/
+AGENTS.md
+vitest.config.ts
+tsconfig.json

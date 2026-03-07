@@ -9,7 +9,13 @@
   },
   "files": [
     "dist/",
-    "remnote-plugin/",
+    "remnote-plugin/src/",
+    "remnote-plugin/public/",
+    "remnote-plugin/package.json",
+    "remnote-plugin/postcss.config.js",
+    "remnote-plugin/tailwind.config.js",
+    "remnote-plugin/webpack.config.js",
+    "remnote-plugin/tsconfig.json",
     "skill/",
     "docs/instruction/"
   ],
