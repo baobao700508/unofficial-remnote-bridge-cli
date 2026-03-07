@@ -10,7 +10,7 @@
     "strictNullChecks": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "declaration": true,
+    "declaration": false,
     "resolveJsonModule": true
   },
   "include": ["src"],

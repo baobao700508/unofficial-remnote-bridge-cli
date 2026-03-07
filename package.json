@@ -1,6 +1,6 @@
 {
   "name": "remnote-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "RemNote 自动化桥接工具集：CLI + MCP Server + Plugin",
   "type": "module",
   "bin": {
@@ -8,8 +8,15 @@
     "unofficial-remnote-bridge": "./dist/cli/main.js"
   },
   "files": [
-    "dist/",
-    "remnote-plugin/src/",
+    "dist/**/*.js",
+    "remnote-plugin/src/bridge/",
+    "remnote-plugin/src/services/",
+    "remnote-plugin/src/utils/",
+    "remnote-plugin/src/widgets/",
+    "remnote-plugin/src/index.css",
+    "remnote-plugin/src/style.css",
+    "remnote-plugin/src/settings.ts",
+    "remnote-plugin/src/types.ts",
     "remnote-plugin/public/",
     "remnote-plugin/package.json",
     "remnote-plugin/postcss.config.js",
