@@ -1,3 +1,158 @@
 # connect
 
-> TODO: 待补充
+> 启动守护进程，建立 CLI ↔ Plugin 通信通道。这是所有业务命令的前置步骤。
+
+---
+
+## 功能
+
+`connect` 以 fork 子进程方式启动后台守护进程（daemon），daemon 内部启动三个服务：
+
+| 服务 | 默认端口 | 用途 |
+|------|----------|------|
+| WS Server | 3002 | CLI 命令 ↔ daemon ↔ Plugin 的双向通信 |
+| webpack-dev-server | 8080 | 将 remnote-plugin 热加载到 RemNote 浏览器 |
+| ConfigServer | 3003 | HTTP 配置管理界面 |
+
+daemon 启动后脱离父进程（detached），CLI 进程退出但 daemon 继续运行。
+
+---
+
+## 用法
+
+### 人类模式
+
+```bash
+remnote connect
+```
+
+输出示例：
+
+```
+守护进程已启动（PID: 12345）
+  WS Server:         ws://127.0.0.1:3002
+  webpack-dev-server: http://localhost:8080
+  配置页面:          http://127.0.0.1:3003
+  超时: 30 分钟无 CLI 交互后自动关闭
+```
+
+### JSON 模式
+
+```bash
+remnote --json connect
+```
+
+---
+
+## JSON 输出
+
+### 首次启动
+
+```json
+{
+  "ok": true,
+  "command": "connect",
+  "alreadyRunning": false,
+  "pid": 12345,
+  "wsPort": 3002,
+  "devServerPort": 8080,
+  "configPort": 3003,
+  "timeoutMinutes": 30,
+  "timestamp": "2026-03-06T10:00:00.000Z"
+}
+```
+
+### 已在运行
+
+```json
+{
+  "ok": true,
+  "command": "connect",
+  "alreadyRunning": true,
+  "pid": 12345,
+  "wsPort": 3002,
+  "devServerPort": 8080,
+  "timestamp": "2026-03-06T10:00:00.000Z"
+}
+```
+
+### 启动失败
+
+```json
+{
+  "ok": false,
+  "command": "connect",
+  "error": "守护进程启动超时（10 秒）",
+  "timestamp": "2026-03-06T10:00:00.000Z"
+}
+```
+
+---
+
+## 启动流程
+
+```
+1. 检查 PID 文件 (.remnote-bridge.pid)
+   ├─ 已在运行 → 返回 ok + alreadyRunning: true
+   └─ 未运行 / stale PID → 继续
+
+2. fork 守护进程（detached, stdio 全部 ignore）
+
+3. daemon 内部按顺序启动：
+   ├─ WS Server（必须成功，否则 daemon 退出）
+   ├─ ConfigServer（非关键，失败不阻塞）
+   └─ webpack-dev-server（必须成功，否则 daemon 退出）
+
+4. daemon 写入 PID 文件
+
+5. daemon 通过 IPC 发送 ready 信号给父进程
+
+6. 父进程（CLI）收到 ready → 输出结果 → 退出
+   ├─ 10 秒内未收到 → 超时失败
+   └─ 收到 error → 启动失败
+```
+
+---
+
+## 超时机制
+
+daemon 启动后开始计时，默认 **30 分钟无 CLI 交互**自动关闭（执行优雅 shutdown）。每次收到 CLI 请求时重置计时器。
+
+超时时间可通过配置文件 `.remnote-bridge.json` 的 `daemonTimeoutMinutes` 字段调整。
+
+---
+
+## 幂等性
+
+重复调用 `connect` 是安全的。如果 daemon 已在运行，命令直接返回 `ok: true, alreadyRunning: true`，不会启动第二个实例。
+
+---
+
+## 退出码
+
+| 退出码 | 含义 |
+|--------|------|
+| 0 | 启动成功，或已在运行 |
+| 1 | 启动失败（超时、端口冲突、webpack-dev-server 异常等） |
+
+---
+
+## 配置依赖
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| wsPort | 3002 | WS Server 监听端口 |
+| devServerPort | 8080 | webpack-dev-server 端口 |
+| configPort | 3003 | ConfigServer 端口 |
+| daemonTimeoutMinutes | 30 | 无活动自动关闭的分钟数 |
+
+三个端口不允许冲突（配置加载时校验）。
+
+---
+
+## 产生的文件
+
+| 文件 | 位置 | 生命周期 |
+|------|------|----------|
+| `.remnote-bridge.pid` | 项目根目录 | daemon 运行期间存在，关闭时删除 |
+| `.remnote-bridge.log` | 项目根目录 | 追加写入，跨会话保留 |

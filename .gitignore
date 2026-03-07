@@ -1,6 +1,7 @@
 reference_repository/
 .cache/
 node_modules/
+dist/
 .mcp.json
 .claude/worktrees/
 
