@@ -150,6 +150,24 @@ RemNote SDK → 知识库
 
 所有值都有合理的默认值，无需配置文件即可使用。
 
+## 致谢
+
+本项目的架构设计受到以下项目的启发：
+
+- [remnote-mcp-bridge](https://github.com/quentintou/remnote-mcp-bridge)（[@quentintou](https://github.com/quentintou)）— 原始的 RemNote MCP 桥接项目，首创了通过 MCP 协议将 RemNote SDK 能力暴露给 AI 助手的方案。
+- [remnote-mcp-bridge (fork)](https://github.com/robert7/remnote-mcp-bridge)（[@robert7](https://github.com/robert7)）— 在原项目基础上扩展为通用的 WebSocket 桥接架构。其 Plugin ↔ WebSocket ↔ CLI 的分层设计为本项目提供了宝贵的架构参考。
+
+## 未来方向
+
+- **MCP 工具拆分** — 将目前与 CLI 一对一映射的 MCP 工具拆分为更细粒度的工具，让 AI Agent 拥有更灵活、可组合的操作能力
+- **优化 Agent 指令** — 改进 Skill 文档和 MCP Server 的 instruction 表述，提升 AI Agent 的理解准确度
+- **RAG 搜索** — 研究 RemNote 本地数据库的数据结构，用检索增强生成（RAG）方式重构现有的全文搜索，实现更高效的语义检索
+- **多语言支持** — 国际化适配，服务更广泛的用户群体
+
+## 社区
+
+- **RemNote 中文社区** QQ 群：`853031358`
+
 ## 许可证
 
 MIT

@@ -148,6 +148,20 @@ Optional config file: `.remnote-bridge.json` in project root.
 
 All values have sensible defaults — the config file is not required.
 
+## Acknowledgements
+
+This project was inspired by and learned from:
+
+- [remnote-mcp-bridge](https://github.com/quentintou/remnote-mcp-bridge) by [@quentintou](https://github.com/quentintou) — The original MCP bridge connecting RemNote to AI assistants. Pioneered the idea of bridging RemNote SDK to external tools via MCP.
+- [remnote-mcp-bridge (fork)](https://github.com/robert7/remnote-mcp-bridge) by [@robert7](https://github.com/robert7) — Extended the original with a generic, extensible WebSocket bridge architecture. Its Plugin ↔ WebSocket ↔ CLI layered design gave us valuable architectural insights.
+
+## Roadmap
+
+- **MCP tool decomposition** — Break the current 1:1 CLI-to-MCP mapping into finer-grained tools, giving AI agents more flexible and composable operations
+- **Improved agent instructions** — Refine Skill documentation and MCP server instructions for better AI agent comprehension
+- **RAG-powered search** — Research RemNote's local database structure to enable retrieval-augmented search, replacing the current SDK-based full-text search with more efficient semantic retrieval
+- **Multi-language support** — Internationalization for broader accessibility
+
 ## License
 
 MIT
