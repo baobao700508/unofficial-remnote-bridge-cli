@@ -10,6 +10,35 @@ Bridge toolkit that exposes your RemNote knowledge base to AI agents. Single pac
 npm install -g remnote-bridge
 ```
 
+## Super Quick Start (with AI)
+
+One step to connect, then let AI guide you through the rest.
+
+### Option A: Install Skill (works with Claude Code, Cursor, Windsurf, and 40+ tools)
+
+```bash
+npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
+```
+
+### Option B: Configure MCP Server (for any MCP-compatible AI client)
+
+Add the following to your AI client's MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "remnote-bridge": {
+      "command": "remnote-bridge",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Once connected, the AI will guide you through connecting to RemNote, loading the plugin, and everything else.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -70,7 +99,7 @@ remnote-bridge disconnect
 | Command | Description |
 |:--------|:------------|
 | `mcp` | Start the MCP Server (stdio transport) |
-| `install skill` | Install Claude Code skill to `~/.claude/skills/remnote-bridge/` |
+| `install skill` | Install AI agent skill (via [Vercel Skills](https://github.com/vercel-labs/skills)) |
 
 ## MCP Server
 
@@ -89,13 +118,46 @@ Use `remnote-bridge mcp` as an MCP server for AI clients:
 
 The MCP server exposes all CLI commands as tools, plus documentation resources.
 
-## Claude Code Skill
+## AI Agent Skill
+
+The Skill provides detailed instructions (SKILL.md + 11 command docs) that teach AI agents how to use remnote-bridge — including command selection, workflows, safety rules, and flashcard operations.
+
+### Install via Vercel Skills (recommended)
+
+Powered by the [Vercel Skills](https://github.com/vercel-labs/skills) ecosystem. Supports **40+ AI coding tools** including Claude Code, Cursor, Windsurf, GitHub Copilot, Cline, and more.
 
 ```bash
+# Direct — interactive agent selection
+npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
+
+# Or through the built-in wrapper (same interactive experience)
 remnote-bridge install skill
 ```
 
-Installs the skill to `~/.claude/skills/remnote-bridge/`, enabling Claude Code to operate your RemNote knowledge base through natural language.
+The interactive installer will detect your installed AI tools and let you choose which ones to install the skill for.
+
+### Fallback: Claude Code only
+
+If `npx` is not available, or you prefer manual installation:
+
+```bash
+remnote-bridge install skill --copy
+```
+
+This copies the skill files directly to `~/.claude/skills/remnote-bridge/`.
+
+### What gets installed
+
+```
+<agent-skills-dir>/remnote-bridge/
+├── SKILL.md              # Core skill — command decisions, workflows, safety rules
+└── instructions/         # Detailed per-command documentation
+    ├── overall.md        # Global overview
+    ├── connect.md        # connect command
+    ├── read-tree.md      # read-tree command
+    ├── edit-tree.md      # edit-tree command
+    └── ...               # 8 more command docs
+```
 
 ## JSON Mode
 

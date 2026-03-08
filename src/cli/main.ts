@@ -16,7 +16,7 @@ import { editTreeCommand } from './commands/edit-tree.js';
 import { readGlobeCommand } from './commands/read-globe.js';
 import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
-import { installSkillCommand } from './commands/install-skill.js';
+import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 
 const program = new Command();
 
@@ -56,7 +56,7 @@ function parseJsonInput(command: string, jsonStr: string | undefined, requiredFi
 program
   .name('remnote-bridge')
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
-  .version('0.1.1')
+  .version('0.1.2')
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 
 program
@@ -262,7 +262,14 @@ program.command('mcp')
 // install 子命令组
 const installCmd = program.command('install').description('安装组件');
 installCmd.command('skill')
-  .description('安装 Skill 到 ~/.claude/skills/remnote-bridge/')
-  .action(async () => { await installSkillCommand(); });
+  .description('安装 Skill（推荐使用 npx skills add，或 --copy 直接复制）')
+  .option('--copy', '直接复制到 ~/.claude/skills/（不使用 Vercel Skills CLI）')
+  .action(async (opts: { copy?: boolean }) => {
+    if (opts.copy) {
+      await installSkillCopyCommand();
+    } else {
+      await installSkillCommand();
+    }
+  });
 
 program.parse();

@@ -1,6 +1,6 @@
 {
   "name": "remnote-bridge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "RemNote 自动化桥接工具集：CLI + MCP Server + Plugin",
   "type": "module",
   "bin": {
@@ -23,8 +23,7 @@
     "remnote-plugin/tailwind.config.js",
     "remnote-plugin/webpack.config.js",
     "remnote-plugin/tsconfig.json",
-    "skill/",
-    "docs/instruction/"
+    "skills/"
   ],
   "scripts": {
     "build": "tsc",

@@ -243,9 +243,10 @@ remnote-bridge-cli/                    (repo root = npm 包根)
 │       ├── bridge/                    # 核心链入口：WS 传输 + 消息路由
 │       ├── services/                  # 核心链：业务操作（与 CLI 命令同态命名）
 │       └── utils/                     # 核心链：无状态纯函数辅助工具
-├── skill/
-│   └── SKILL.md                       # Agent Skill 定义
-├── docs/instruction/                  # 命令详细文档（随包发布）
+├── skills/
+│   └── remnote-bridge/                # Vercel Skills 生态兼容
+│       ├── SKILL.md                   # Agent Skill 定义
+│       └── instructions/              # 命令详细文档（11 个 .md）
 ├── scripts/                           # 脚本工具
 ├── docs/                              # 项目文档
 │   └── RemNote API Reference/         # RemNote Plugin SDK 文档（151 页）

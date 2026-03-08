@@ -51,7 +51,7 @@ Agent 的核心任务是将用户的自然语言请求翻译为 CLI 命令。以
 | 用户表述 | 操作类型 | CLI 命令 |
 |:---------|:---------|:---------|
 | "改文本"、"改标题"、"改颜色"、"改类型" | 修改 Rem 属性 | `edit-rem` |
-| "创建一个概念定义 (::)" | 修改 type + backText | `edit-rem` |
+| "创建一个概念定义"、"做个 :: 卡" | 新增行（edit-tree 箭头）+ 改 type（edit-rem） | `edit-tree` + `edit-rem` |
 | "新增一个子节点"、"添加笔记" | 结构操作：新增 | `edit-tree` |
 | "删除这个"、"移除" | 结构操作：删除 | `edit-tree` |
 | "移动到…下面" | 结构操作：移动 | `edit-tree` |
@@ -66,42 +66,52 @@ Rem 有两个**独立维度**的类型：
 
 #### type 字段（闪卡语义）
 
-| type 值 | 触发分隔符 | 含义 | UI 表现 |
-|:--------|:----------|:-----|:--------|
-| `concept` | `::` 或 `::>` | 概念定义 | 文字**加粗** |
-| `descriptor` | `;;` 或 `;;>` | 描述/属性 | 文字*斜体* |
-| `default` | 无分隔符 / `>>` / `<<` / `<>` / `>>>` / `{{}}` | 普通 Rem | 正常字重 |
-| `portal` | — | 嵌入引用容器 | 紫色左边框（**只读**，不可通过 setType 设置） |
+| type 值 | 含义 | UI 表现 | CLI 设置方式 |
+|:--------|:-----|:--------|:-------------|
+| `concept` | 概念定义 | 文字**加粗** | `edit-rem` 设 `type: "concept"` |
+| `descriptor` | 描述/属性 | 文字*斜体* | `edit-rem` 设 `type: "descriptor"` |
+| `default` | 普通 Rem | 正常字重 | `edit-rem` 设 `type: "default"` |
+| `portal` | 嵌入引用容器 | 紫色左边框 | **只读**，不可通过 CLI 设置 |
 
 #### isDocument 字段（页面语义）
 
 `isDocument` 与 `type` 完全独立——一个 `concept` 类型的 Rem 可以同时是 Document。
 
-### 2.4 分隔符与闪卡
+### 2.4 闪卡的 CLI 操作方式
 
-用户输入的分隔符决定了 Rem 的 `type`、`backText` 和默认 `practiceDirection`。理解分隔符是理解用户创建闪卡意图的关键。
+闪卡由 `type`、`backText`、`practiceDirection` 三个字段控制。通过 CLI 操作闪卡，修改的是这些**字段**和大纲**箭头**。
 
-| 分隔符 | type | backText | 默认方向 | 用途 |
-|:-------|:-----|:---------|:---------|:-----|
-| （无） | `default` | `null` | — | 无闪卡行为 |
-| `::` | `concept` | 后半部分 | `both` | 概念定义（CDF 框架） |
-| `;;` | `descriptor` | 后半部分 | `forward` | 描述属性（CDF 框架） |
-| `>>` | `default` | 后半部分 | `forward` | 正向问答 |
-| `<<` | `default` | 后半部分 | `backward` | 反向问答 |
-| `<>` | `default` | 后半部分 | `both` | 双向问答 |
-| `>>>` | `default` | `null` | `forward` | 多行答案（子 Rem 为答案） |
-| `::>` | `concept` | `null` | `both` | 概念型多行答案 |
-| `;;>` | `descriptor` | `null` | `forward` | 描述型多行答案 |
-| `{{}}` | `default` | `null` | `forward` | 完形填空（Cloze） |
+**禁止**：在文本中插入分隔符（`::`、`;;`、`>>`、`<<` 等）来创建闪卡。分隔符是 RemNote 编辑器的输入语法，CLI 无法识别。
 
-**重要**：分隔符决定创建时的**默认**方向，用户可以事后独立修改 `practiceDirection`。`practiceDirection` 的取值：`forward`（正向）、`backward`（反向）、`both`（双向）、`none`（不练习）。
+| 闪卡操作 | CLI 方法 |
+|:---------|:---------|
+| 创建概念定义 | `edit-tree` 新增行 `概念 ↔ 定义`，再 `edit-rem` 设 `type: "concept"` |
+| 创建正向问答 | `edit-tree` 新增行 `问题 → 答案` |
+| 创建反向问答 | `edit-tree` 新增行 `问题 ← 答案` |
+| 创建双向问答 | `edit-tree` 新增行 `问题 ↔ 答案` |
+| 创建多行答案 | `edit-tree` 新增行 `问题 ↓`（子行自动成为答案） |
+| 改变闪卡类型/方向 | `edit-rem` 修改 `type`、`backText`、`practiceDirection` |
 
-**CDF（Concept-Descriptor Framework）**：RemNote 推荐的知识结构化方法——`Concept` 是需要理解的概念，`Descriptor` 是概念的属性/描述。典型结构：
+`practiceDirection` 的取值：`forward`（正向）、`backward`（反向）、`both`（双向）、`none`（不练习）。
+
+### 2.5 理解用户意图：编辑器分隔符映射
+
+用户在 RemNote 编辑器中通过分隔符创建闪卡。当用户提到这些分隔符时，理解其意图并映射到上述 CLI 操作：
+
+| 用户说 / 编辑器分隔符 | 对应 type | 对应 practiceDirection |
+|:----------------------|:----------|:----------------------|
+| `::` | concept | both |
+| `;;` | descriptor | forward |
+| `>>` / `<<` / `<>` | default | forward / backward / both |
+| `>>>` / `::>` / `;;>` | default / concept / descriptor | 多行（子 Rem 为答案） |
+| `{{}}` | default | forward（完形填空） |
+
+**CDF（Concept-Descriptor Framework）**：RemNote 推荐的知识结构化方法——`Concept`（type:concept）是需要理解的概念，`Descriptor`（type:descriptor）是概念的属性/描述。在 CLI 大纲中的表现：
 
 ```
-线性回归 :: 最基本的回归模型        ← Concept
-  假设 ;; 因变量与自变量呈线性关系   ← Descriptor
-  损失函数 ;; 均方误差 (MSE)        ← Descriptor
+线性回归 ↔ 最基本的回归模型 <!--id1 type:concept-->
+  假设 → 因变量与自变量呈线性关系 <!--id2 type:descriptor-->
+  损失函数 → 均方误差 (MSE) <!--id3 type:descriptor-->
 ```
 
 ### 2.5 三种链接机制
@@ -170,10 +180,16 @@ RemNote SDK → 知识库
 一次**会话（Session）= 守护进程的生命周期**。
 
 ```
-connect → daemon 启动 → 会话开始
+connect → daemon 启动
+  ↓
+⚠️ 用户在 RemNote 中加载插件（首次填端口，非首次刷新页面）
+  ↓
+health → 确认三层就绪 → 会话可用
   ↕ (业务命令：read-rem, edit-tree, search, ...)
 disconnect → daemon 关闭 → 会话结束，缓存清空
 ```
+
+> **重要**：`connect` 成功只意味着 daemon 已启动，Plugin 并未自动连接。首次使用需用户在 RemNote「开发你的插件」中填入 `http://localhost:8080`；非首次只需刷新 RemNote 页面。必须引导用户完成此步后再用 `health` 确认就绪。
 
 `connect` 启动三个服务：
 
@@ -322,18 +338,19 @@ Agent 需要根据用户意图选择正确的读取命令：
 
 ```
 1. connect              ← 启动会话
-2. health               ← 确认系统就绪
-3. read-globe           ← 了解知识库结构（首次探索）
+2. ⚠️ 引导用户在 RemNote 中加载插件（首次填端口，非首次刷新页面）
+3. health               ← 确认系统就绪（daemon → Plugin → SDK 三层全通过）
+4. read-globe           ← 了解知识库结构（首次探索）
    或 read-context      ← 了解用户当前上下文
-4. search "关键词"       ← 定位目标 Rem（中文搜索可能需单字策略，详见 search.md）
-5. read-tree <id>       ← 展开目标区域的子树
-6. read-rem <id>        ← 读取详细属性（编辑前必需）
-7. edit-rem <id> ...    ← 修改 Rem 属性
+5. search "关键词"       ← 定位目标 Rem（中文搜索可能需单字策略，详见 search.md）
+6. read-tree <id>       ← 展开目标区域的子树
+7. read-rem <id>        ← 读取详细属性（编辑前必需）
+8. edit-rem <id> ...    ← 修改 Rem 属性
    或 edit-tree <id> ...← 修改树结构
-8. disconnect           ← 结束会话
+9. disconnect           ← 结束会话
 ```
 
-**注意**：步骤 6 是 `edit-rem` 的强制前置条件，步骤 5 是 `edit-tree` 的强制前置条件。跳过会触发防线 1 错误。
+**注意**：步骤 7 是 `edit-rem` 的强制前置条件，步骤 6 是 `edit-tree` 的强制前置条件。跳过会触发防线 1 错误。步骤 2 是必须的——connect 后不引导用户加载插件就直接调用业务命令，会报"Plugin 未连接"错误。
 
 ---
 

@@ -19,7 +19,7 @@ import { SEPARATOR_FLASHCARD_CONTENT } from './resources/separator-flashcard.js'
 export async function startMcpServer(): Promise<void> {
   const server = new FastMCP({
     name: 'remnote-bridge',
-    version: '0.1.1',
+    version: '0.1.2',
     instructions: SERVER_INSTRUCTIONS,
   });
 

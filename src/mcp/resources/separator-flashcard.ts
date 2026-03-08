@@ -1,30 +1,32 @@
 export const SEPARATOR_FLASHCARD_CONTENT = `
 # Separator & Flashcard Reference
 
-用户在 RemNote 中输入的分隔符决定了 Rem 的 type、backText 和默认 practiceDirection。理解分隔符是理解用户创建闪卡意图的关键。
+**重要**：分隔符（\\\`::\\\`、\\\`;;\\\`、\\\`>>\\\` 等）是 RemNote 编辑器的输入语法，**CLI 不使用分隔符**。通过 CLI 创建/修改闪卡，操作的是 \\\`type\\\`、\\\`backText\\\`、\\\`practiceDirection\\\` 字段和大纲箭头（\\\`→←↔↓↑↕\\\`）。本参考表用于理解用户意图——当用户提到分隔符时，映射到对应的 CLI 操作。
 
 ---
 
-## 分隔符完整映射表
+## 1. 用户意图映射：编辑器分隔符 → CLI 操作
 
-| 分隔符 | 用户输入示例 | type | backText | 默认 practiceDirection | 用途 |
-|:-------|:-------------|:-----|:---------|:-----------------------|:-----|
-| （无） | \\\`普通文本\\\` | \\\`default\\\` | \\\`null\\\` | — | 无闪卡行为 |
-| \\\`::\\\` | \\\`概念 :: 定义\\\` | \\\`concept\\\` | 后半部分 | \\\`both\\\` | 概念定义（CDF 框架） |
-| \\\`;;\\\` | \\\`属性 ;; 值\\\` | \\\`descriptor\\\` | 后半部分 | \\\`forward\\\` | 描述属性（CDF 框架） |
-| \\\`>>\\\` | \\\`问题 >> 答案\\\` | \\\`default\\\` | 后半部分 | \\\`forward\\\` | 正向问答 |
-| \\\`<<\\\` | \\\`问题 << 答案\\\` | \\\`default\\\` | 后半部分 | \\\`backward\\\` | 反向问答 |
-| \\\`<>\\\` | \\\`问题 <> 答案\\\` | \\\`default\\\` | 后半部分 | \\\`both\\\` | 双向问答 |
-| \\\`>>>\\\` | \\\`问题 >>>\\\` | \\\`default\\\` | \\\`null\\\` | \\\`forward\\\` | 多行答案（子 Rem 为答案） |
-| \\\`::>\\\` | \\\`概念 ::>\\\` | \\\`concept\\\` | \\\`null\\\` | \\\`both\\\` | 概念型多行答案 |
-| \\\`;;>\\\` | \\\`属性 ;;>\\\` | \\\`descriptor\\\` | \\\`null\\\` | \\\`forward\\\` | 描述型多行答案 |
-| \\\`{{}}\\\` | \\\`The {{capital}} of France is Paris\\\` | \\\`default\\\` | \\\`null\\\` | \\\`forward\\\` | 完形填空（Cloze） |
+当用户提到以下分隔符时，对应的 Rem 属性为：
+
+| 编辑器分隔符 | 用户输入示例 | type | backText | 默认 practiceDirection |
+|:-------------|:-------------|:-----|:---------|:-----------------------|
+| （无） | \\\`普通文本\\\` | \\\`default\\\` | \\\`null\\\` | — |
+| \\\`::\\\` | \\\`概念 :: 定义\\\` | \\\`concept\\\` | 后半部分 | \\\`both\\\` |
+| \\\`;;\\\` | \\\`属性 ;; 值\\\` | \\\`descriptor\\\` | 后半部分 | \\\`forward\\\` |
+| \\\`>>\\\` | \\\`问题 >> 答案\\\` | \\\`default\\\` | 后半部分 | \\\`forward\\\` |
+| \\\`<<\\\` | \\\`问题 << 答案\\\` | \\\`default\\\` | 后半部分 | \\\`backward\\\` |
+| \\\`<>\\\` | \\\`问题 <> 答案\\\` | \\\`default\\\` | 后半部分 | \\\`both\\\` |
+| \\\`>>>\\\` | \\\`问题 >>>\\\` | \\\`default\\\` | \\\`null\\\` | \\\`forward\\\`（多行） |
+| \\\`::>\\\` | \\\`概念 ::>\\\` | \\\`concept\\\` | \\\`null\\\` | \\\`both\\\`（多行） |
+| \\\`;;>\\\` | \\\`属性 ;;>\\\` | \\\`descriptor\\\` | \\\`null\\\` | \\\`forward\\\`（多行） |
+| \\\`{{}}\\\` | \\\`The {{capital}} of France\\\` | \\\`default\\\` | \\\`null\\\` | \\\`forward\\\`（完形填空） |
 
 ---
 
-## 大纲中的箭头分隔符
+## 2. CLI 操作方式：大纲箭头
 
-在 Markdown 大纲（read_tree / edit_tree）中，分隔符被编码为 Unicode 箭头：
+在 Markdown 大纲（read_tree / edit_tree）中，practiceDirection 编码为 Unicode 箭头：
 
 ### 单行箭头（有 backText）
 
@@ -46,7 +48,7 @@ export const SEPARATOR_FLASHCARD_CONTENT = `
 
 ---
 
-## practiceDirection 取值
+## 3. practiceDirection 取值
 
 | 值 | 含义 | 闪卡生成 |
 |:---|:-----|:---------|
@@ -57,28 +59,28 @@ export const SEPARATOR_FLASHCARD_CONTENT = `
 
 ---
 
-## CDF（Concept-Descriptor Framework）
+## 4. CDF（Concept-Descriptor Framework）
 
 RemNote 推荐的知识结构化方法：
 
-- **Concept**（\\\`::\\\`）：需要理解的核心概念——"X 是什么？"
-- **Descriptor**（\\\`;;\\\`）：概念的属性/描述——"X 的 Y 是什么？"
+- **Concept**（type:concept）：需要理解的核心概念——"X 是什么？"
+- **Descriptor**（type:descriptor）：概念的属性/描述——"X 的 Y 是什么？"
 
-典型结构：
+在 CLI 大纲中的表现（注意：用箭头和元数据标记，不用分隔符）：
 
 \\\`\\\`\\\`
-线性回归 :: 最基本的回归模型        ← Concept (type:concept, both)
-  假设 ;; 因变量与自变量呈线性关系   ← Descriptor (type:descriptor, forward)
-  损失函数 ;; 均方误差 (MSE)        ← Descriptor (type:descriptor, forward)
+线性回归 ↔ 最基本的回归模型 <!--id1 type:concept-->
+  假设 → 因变量与自变量呈线性关系 <!--id2 type:descriptor-->
+  损失函数 → 均方误差 (MSE) <!--id3 type:descriptor-->
 \\\`\\\`\\\`
 
 ---
 
-## 通过 CLI 创建闪卡
+## 5. 通过 CLI 创建闪卡
 
 ### 使用 edit_tree 新增行
 
-通过箭头分隔符创建：
+通过箭头创建（**禁止在文本中插入 \\\`::\\\`、\\\`;;\\\`、\\\`>>\\\` 等编辑器分隔符**）：
 
 | 要创建的闪卡类型 | edit_tree 新增行格式 | 额外步骤 |
 |:-----------------|:--------------------|:---------|
@@ -90,7 +92,7 @@ RemNote 推荐的知识结构化方法：
 | 多行正向 | \\\`问题 ↓\\\`（子行为答案） | — |
 | 多行双向 | \\\`问题 ↕\\\`（子行为答案） | — |
 
-### 使用 edit_rem 修改现有闪卡
+### 使用 edit_rem 修改现有 Rem 的闪卡行为
 
 修改闪卡行为的相关字段：
 
@@ -104,7 +106,7 @@ RemNote 推荐的知识结构化方法：
 
 ---
 
-## 完形填空（Cloze）
+## 6. 完形填空（Cloze）
 
 完形填空通过 RichText 中的 \\\`cId\\\` 标记实现：
 

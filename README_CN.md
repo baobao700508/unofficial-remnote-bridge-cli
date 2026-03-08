@@ -10,6 +10,35 @@ RemNote 自动化桥接工具集，将 RemNote 知识库能力暴露给 AI Agent
 npm install -g remnote-bridge
 ```
 
+## 超级快速开始 (with AI)
+
+只需一步接入，后续所有操作跟着 AI 引导即可完成。
+
+### 方式 A：安装 Skill（适用于 Claude Code、Cursor、Windsurf 等 40+ 工具）
+
+```bash
+npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
+```
+
+### 方式 B：配置 MCP Server（适用于支持 MCP 协议的 AI 客户端）
+
+将以下配置添加到你的 AI 客户端的 MCP 设置中：
+
+```json
+{
+  "mcpServers": {
+    "remnote-bridge": {
+      "command": "remnote-bridge",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+接入后，AI 会引导你完成连接 RemNote、加载插件等后续步骤。
+
+---
+
 ## 快速开始
 
 ```bash
@@ -70,7 +99,7 @@ remnote-bridge disconnect
 | 命令 | 说明 |
 |:-----|:-----|
 | `mcp` | 启动 MCP Server（stdio 传输） |
-| `install skill` | 安装 Claude Code Skill 到 `~/.claude/skills/remnote-bridge/` |
+| `install skill` | 安装 AI Agent Skill（通过 [Vercel Skills](https://github.com/vercel-labs/skills)） |
 
 ## MCP Server
 
@@ -89,13 +118,46 @@ remnote-bridge disconnect
 
 MCP Server 将所有 CLI 命令暴露为工具（tools），并提供文档资源（resources）。
 
-## Claude Code Skill
+## AI Agent Skill
+
+Skill 为 AI Agent 提供详细的操作指南（SKILL.md + 11 个命令文档），教会 AI 如何使用 remnote-bridge——包括命令选择、工作流、安全规则和闪卡操作。
+
+### 通过 Vercel Skills 安装（推荐）
+
+基于 [Vercel Skills](https://github.com/vercel-labs/skills) 生态，支持 **40+ AI 编程工具**，包括 Claude Code、Cursor、Windsurf、GitHub Copilot、Cline 等。
 
 ```bash
+# 直接使用 — 交互式选择目标工具
+npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
+
+# 或通过内置命令（同样的交互体验）
 remnote-bridge install skill
 ```
 
-将 Skill 安装到 `~/.claude/skills/remnote-bridge/`，让 Claude Code 能通过自然语言操作你的 RemNote 知识库。
+安装器会自动检测你已安装的 AI 编程工具，让你选择要安装到哪些工具。
+
+### 备选：仅安装到 Claude Code
+
+如果 `npx` 不可用，或你想手动安装：
+
+```bash
+remnote-bridge install skill --copy
+```
+
+这会直接将 skill 文件复制到 `~/.claude/skills/remnote-bridge/`。
+
+### 安装内容
+
+```
+<agent-skills-dir>/remnote-bridge/
+├── SKILL.md              # 核心 Skill — 命令决策、工作流、安全规则
+└── instructions/         # 逐命令详细文档
+    ├── overall.md        # 全局概览
+    ├── connect.md        # connect 命令
+    ├── read-tree.md      # read-tree 命令
+    ├── edit-tree.md      # edit-tree 命令
+    └── ...               # 还有 8 个命令文档
+```
 
 ## JSON 模式
 
