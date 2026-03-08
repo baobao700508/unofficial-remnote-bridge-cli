@@ -184,21 +184,21 @@ RemObject 共 51 个字段，按读写权限分为三类：
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `text` | `RichText` | RW | 正面文本（RichText 数组） |
-| `backText` | `RichText \| null` | RW | 背面文本。null=无背面；设值即产生闪卡正反面结构 |
+| `text` | `RichText` | RW | 正面文本（RichText 数组）。UI：文本内容立即更新显示 |
+| `backText` | `RichText \| null` | RW | 背面文本。null=无背面；设值即产生闪卡正反面结构。UI：显示为"正面 → 背面"箭头分隔格式 |
 
 ### 类型系统
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
 | `type` | `RemTypeValue` | RW | `concept` / `descriptor` / `default` / `portal` |
-| `isDocument` | `boolean` | RW | 是否作为独立文档页面。独立于 type |
+| `isDocument` | `boolean` | RW | 是否作为独立文档页面。独立于 type。UI：bullet(•)变为文档图标，可独立打开 |
 
 ### 结构
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `parent` | `string \| null` | RW | 父 Rem ID。null=顶级 |
+| `parent` | `string \| null` | RW | 父 Rem ID。null=顶级。UI：Rem 从原位置消失，出现在新父级下 |
 | `children` | `string[]` | R | 子 Rem ID 有序数组 |
 
 ### 格式 / 显示
@@ -206,21 +206,21 @@ RemObject 共 51 个字段，按读写权限分为三类：
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
 | `fontSize` | `FontSize \| null` | RW | 标题大小：`H1` / `H2` / `H3`。null=普通 |
-| `highlightColor` | `HighlightColor \| null` | RW | 高亮颜色（9 种）。null=无高亮 |
+| `highlightColor` | `HighlightColor \| null` | RW | 高亮颜色（9 种）。null=无高亮。UI：整行背景变为对应颜色，bullet 也着色 |
 
 ### 状态标记
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `isTodo` | `boolean` | RW | 是否待办。设为 true 时自动初始化 todoStatus |
-| `todoStatus` | `TodoStatus \| null` | RW | `Finished` / `Unfinished`。需先 isTodo=true |
-| `isCode` | `boolean` | RW | 是否代码块 |
-| `isQuote` | `boolean` | RW | 是否引用块 |
-| `isListItem` | `boolean` | RW | 是否列表项（有序列表样式） |
-| `isCardItem` | `boolean` | RW | 是否卡片项（多行答案行标记） |
+| `isTodo` | `boolean` | RW | 是否待办。设为 true 时自动初始化 todoStatus。UI：文本前出现空心 checkbox（☐） |
+| `todoStatus` | `TodoStatus \| null` | RW | `Finished` / `Unfinished`。需先 isTodo=true。UI：Finished=蓝色已勾选（☑）+文本删除线 |
+| `isCode` | `boolean` | RW | 是否代码块。UI：等宽字体、灰色背景、块级缩进 |
+| `isQuote` | `boolean` | RW | 是否引用块。UI：左侧灰色竖线+背景浅灰（blockquote 样式） |
+| `isListItem` | `boolean` | RW | 是否列表项。UI：bullet(•)变为数字编号"1."（有序列表） |
+| `isCardItem` | `boolean` | RW | 是否卡片项（多行答案行标记）。UI：无明显变化，在 Card View 中生效 |
 | `isTable` | `boolean` | R | 是否表格（只读） |
-| `isSlot` | `boolean` | RW | 是否 Powerup 插槽。与 isProperty 底层相同 |
-| `isProperty` | `boolean` | RW | 是否 Tag 属性（表格列）。与 isSlot 底层相同 |
+| `isSlot` | `boolean` | RW | 是否 Powerup 插槽。与 isProperty 底层相同。UI：bullet(•)变为方形图标（☐） |
+| `isProperty` | `boolean` | RW | 是否 Tag 属性（表格列）。与 isSlot 底层相同。UI：bullet(•)变为方形图标（☐） |
 
 ### Powerup 系统标识
 
@@ -249,15 +249,15 @@ RemObject 共 51 个字段，按读写权限分为三类：
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `enablePractice` | `boolean` | RW | 是否启用间隔重复练习 |
-| `practiceDirection` | `PracticeDirection` | RW | 练习方向：`forward` / `backward` / `both` / `none` |
+| `enablePractice` | `boolean` | RW | 是否启用间隔重复练习。UI：无明显变化 |
+| `practiceDirection` | `PracticeDirection` | RW | 练习方向：`forward` / `backward` / `both` / `none`。UI：无明显变化 |
 
 ### 关联 — 直接关系
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `tags` | `string[]` | RW | 标签 Rem ID 数组。写入时使用 diff 机制（add/remove） |
-| `sources` | `string[]` | RW | 来源 Rem ID 数组。写入时使用 diff 机制 |
+| `tags` | `string[]` | RW | 标签 Rem ID 数组。写入时使用 diff 机制（add/remove）。UI：行右侧出现标签徽章 |
+| `sources` | `string[]` | RW | 来源 Rem ID 数组。写入时使用 diff 机制。UI：Rem 下方出现灰色来源引用框 |
 | `aliases` | `string[]` | R | 别名 Rem ID 数组 |
 
 ### 关联 — 引用关系
@@ -290,7 +290,7 @@ RemObject 共 51 个字段，按读写权限分为三类：
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `positionAmongstSiblings` | `number \| null` | RW | 在兄弟间的位置（0 起始） |
+| `positionAmongstSiblings` | `number \| null` | RW | 在兄弟间的位置（0 起始）。UI：Rem 在父级子列表中的显示位置改变 |
 | `timesSelectedInSearch` | `number` | R-F | 搜索中被选次数 |
 | `lastTimeMovedTo` | `number` | R-F | 上次移动时间（毫秒时间戳） |
 | `schemaVersion` | `number` | R-F | Schema 版本号 |
@@ -394,37 +394,174 @@ localUpdatedAt, lastPracticed
 
 ---
 
+## 可编辑字段约束表
+
+以下为 20 个可编辑字段（RW）的写入约束：
+
+| 字段 | SDK setter | 约束 / 特殊处理 |
+|------|-----------|-----------------|
+| `text` | `rem.setText()` | RichText 数组 |
+| `backText` | `rem.setBackText()` | `null` → `setBackText([])`（清除背面）；裸字符串自动包装为 `[string]` |
+| `type` | `rem.setType()` | `portal` 不可设置（只能通过 `createPortal()` 创建） |
+| `isDocument` | `rem.setIsDocument()` | — |
+| `parent` | `rem.setParent(parentId, position?)` | 与 `positionAmongstSiblings` 联动（见下方说明） |
+| `fontSize` | `rem.setFontSize()` | `null` → `setFontSize(undefined)`（恢复普通大小） |
+| `highlightColor` | `rem.setHighlightColor()` / `rem.removePowerup('h')` | `null` → `removePowerup('h')`（SDK 不接受 null） |
+| `isTodo` | `rem.setIsTodo()` | 设为 true 时自动初始化 todoStatus |
+| `todoStatus` | `rem.setTodoStatus()` | `null` → 跳过（清除 todo 应通过 `isTodo=false`） |
+| `isCode` | `rem.setIsCode()` | — |
+| `isQuote` | `rem.setIsQuote()` | — |
+| `isListItem` | `rem.setIsListItem()` | — |
+| `isCardItem` | `rem.setIsCardItem()` | — |
+| `isSlot` | `rem.setIsSlot()` | 与 `isProperty` 底层相同 |
+| `isProperty` | `rem.setIsProperty()` | 与 `isSlot` 底层相同 |
+| `enablePractice` | `rem.setEnablePractice()` | — |
+| `practiceDirection` | `rem.setPracticeDirection()` | `forward` / `backward` / `both` / `none` |
+| `tags` | `rem.addTag()` / `rem.removeTag()` | **Diff 机制**：对比当前 vs 目标，增删差异项。必须列出完整目标数组，缺少的会被删除 |
+| `sources` | `rem.addSource()` / `rem.removeSource()` | **Diff 机制**：同 tags |
+| `positionAmongstSiblings` | `rem.setParent(parent, position)` | 与 `parent` 联动（见下方说明） |
+
+### parent + positionAmongstSiblings 联动
+
+这两个字段通过同一个 SDK 调用 `rem.setParent(parentId, position)` 写入：
+
+| 场景 | 行为 |
+|------|------|
+| 两个字段都变更 | 合并为一次 `setParent(newParent, newPosition)` 调用 |
+| 只有 `parent` 变更 | `setParent(newParent)` 不带 position（保持末尾） |
+| 只有 `positionAmongstSiblings` 变更 | 获取当前 parent → `setParent(currentParent, newPosition)` |
+
+**应在同一次 str_replace 中同时修改这两个字段。**
+
+---
+
 ## RichText 格式
 
 RemObject 中的 `text` 和 `backText` 字段使用 RichText 格式——一个 JSON 数组，每个元素为纯字符串或带 `i` 字段的格式化对象。
 
 ### 元素类型
 
-| `i` 值 | 含义 | 核心字段 |
-|--------|------|----------|
-| （纯 string） | 纯文本片段 | — |
-| `"m"` | 带格式文本 | `text` + 格式标记 |
-| `"q"` | Rem 引用 | `_id`（被引用 Rem ID） |
-| `"i"` | 图片 | `url`, `width`, `height` |
-| `"x"` | LaTeX | `text` |
-| `"a"` | 音频 | `url` |
+| `i` 值 | 含义 | 必填字段 | 可选字段 |
+|--------|------|----------|----------|
+| （纯 string） | 纯文本片段 | — | — |
+| `"m"` | 带格式文本 | `text` | 格式标记（见下表） |
+| `"q"` | Rem 引用 | `_id`（被引用 Rem ID） | `content`, `showFullName`, `aliasId` |
+| `"i"` | 图片 | `url` | `width`, `height`, `percent`(25/50/100) |
+| `"x"` | LaTeX | `text` | `block`(true=块级公式) |
+| `"a"` | 音频/视频 | `url`, `onlyAudio`（**必填**） | `width`, `height` |
+| `"s"` | 卡片分隔符 | — | `delimiterCharacterForSerialization` |
 
-### 行内格式标记（`i:"m"` 元素内）
+**注意**：`i:"a"` 的 `onlyAudio` 是**必填**字段（`true`=音频，`false`=视频），缺少会导致 SDK 拒绝写入（`Invalid input`）。
+
+### 格式标记（主要用于 `i:"m"`，但 `i:"q"` 等元素也支持）
 
 | 字段 | 类型 | 含义 |
 |------|------|------|
 | `b` | `true` | 加粗 |
-| `l` | `true` | 斜体 |
+| `l` | `true` | 斜体（小写字母 L，不是 I） |
 | `u` | `true` | 下划线 |
-| `h` | `number` | 高亮颜色（1=红, 2=橙, 3=黄, 4=绿, 5=蓝, 6=紫） |
-| `tc` | `number` | 文字颜色 |
-| `code` | `true` | 行内代码 |
+| `h` | `number` | 高亮颜色（见 RemColor 枚举） |
+| `tc` | `number` | 文字颜色（见 RemColor 枚举） |
+| `q` | `true` | 行内代码（红色等宽样式） |
+| `code` | `true` | 代码块（带语言标签和复制按钮） |
+| `language` | `string` | 代码块语言（如 `"javascript"`、`"python"`） |
 | `cId` | `string` | 完形填空 ID |
-| `iUrl` | `string` | 外部链接 URL |
+| `hiddenCloze` | `true` | 完形填空隐藏状态 |
+| `revealedCloze` | `true` | 完形填空已揭示状态 |
+| `iUrl` | `string` | 外部超链接 URL（**注意**：`url` 字段已废弃无效，必须用 `iUrl`） |
+| `qId` | `string` | 行内引用链接的 Rem ID |
+
+### RemColor 颜色枚举（`h` 和 `tc` 共用）
+
+| 值 | 颜色 | 值 | 颜色 | 值 | 颜色 |
+|:---|:-----|:---|:-----|:---|:-----|
+| 0 | 无颜色/默认 | 4 | Green | 7 | Gray |
+| 1 | Red | 5 | Purple | 8 | Brown |
+| 2 | Orange | 6 | Blue | 9 | Pink |
+| 3 | Yellow | — | — | — | — |
+
+### 常用构造示例
+
+以下示例展示实际 `JSON.stringify(null, 2)` 格式化后的样子（key 按字母序排列）：
+
+```jsonc
+// 粗体
+{
+  "b": true,
+  "i": "m",
+  "text": "粗体"
+}
+// 行内代码
+{
+  "i": "m",
+  "q": true,
+  "text": "console.log()"
+}
+// 超链接
+{
+  "i": "m",
+  "iUrl": "https://example.com",
+  "text": "点击访问"
+}
+// 红色高亮 + 粗体（h 是 RichText 行内格式标记，值为数字）
+{
+  "b": true,
+  "h": 1,
+  "i": "m",
+  "text": "重点"
+}
+// 完形填空
+{
+  "cId": "cloze1",
+  "i": "m",
+  "text": "答案内容"
+}
+// Rem 引用（_id 排在小写字母之前）
+{
+  "_id": "remId",
+  "i": "q"
+}
+// Rem 引用 + 加粗
+{
+  "_id": "remId",
+  "b": true,
+  "i": "q"
+}
+// LaTeX 块级公式
+{
+  "block": true,
+  "i": "x",
+  "text": "\\frac{a}{b}"
+}
+// 视频（onlyAudio 必填！）
+{
+  "i": "a",
+  "onlyAudio": false,
+  "url": "https://youtube.com/watch?v=xxx"
+}
+// 音频
+{
+  "i": "a",
+  "onlyAudio": true,
+  "url": "https://example.com/audio.mp3"
+}
+```
+
+### highlightColor（Rem 级别）vs h（RichText 行内格式）
+
+| 属性 | 位置 | 值类型 | 作用范围 | 示例 |
+|------|------|--------|----------|------|
+| `highlightColor` | RemObject 顶层字段 | 字符串（`"Red"`, `"Blue"` 等）或 `null` | 整个 Rem（整行背景色） | `"highlightColor": "Red"` |
+| `h` | RichText 元素内的格式标记 | 数字（0-9，见 RemColor 枚举） | 行内文字片段 | `{"h": 1, "i": "m", "text": "高亮"}` |
+
+两者完全独立。`highlightColor` 通过 `rem.setHighlightColor()` / `rem.removePowerup('h')` 写入；`h` 是 RichText JSON 内的字段，通过 `rem.setText()` 写入。
 
 ### 序列化确定性
 
 RichText 对象元素内部按 **key 字母序排列**（Plugin 端 `sortRichTextKeys()` 处理），确保同一内容的序列化 JSON 始终一致。这对 `edit-rem` 的 str_replace 和乐观并发检测至关重要。
+
+- `_`（下划线）在 Unicode 中排在所有小写字母之前（`_` = U+005F，`a` = U+0061），所以 `_id` 总是排在第一位
+- 排序由 `Object.keys().sort()` 决定，即 JavaScript 默认的 Unicode 字典序
 
 ---
 

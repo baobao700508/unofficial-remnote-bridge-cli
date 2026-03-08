@@ -474,16 +474,58 @@ Portal：portalType [R], portalDirectlyIncludedRem [R]
 ]
 ```
 
-| `i` 值 | 类型 | 核心字段 |
-|:-------|:-----|:---------|
-| （纯 string） | 纯文本 | — |
-| `"m"` | 带格式文本 | `text` + `b`/`l`/`u`/`h`/`code`/`cId`/`iUrl` |
-| `"q"` | Rem 引用 | `_id`（被引用 Rem ID） |
-| `"i"` | 图片 | `url`, `width`, `height` |
-| `"x"` | LaTeX | `text` |
-| `"a"` | 音频 | `url` |
+#### 元素类型
 
-**序列化确定性**：RichText 对象内部按 key 字母序排列（`sortRichTextKeys()`），确保同一内容的 JSON 始终一致。这对 edit-rem 的 str_replace 和并发检测至关重要。
+| `i` 值 | 类型 | 必填字段 | 可选字段 |
+|:-------|:-----|:---------|:---------|
+| （纯 string） | 纯文本 | — | — |
+| `"m"` | 带格式文本 | `text` | 格式标记（见下表） |
+| `"q"` | Rem 引用 | `_id` | `content`, `showFullName`, `aliasId` |
+| `"i"` | 图片 | `url` | `width`, `height`, `percent`(25/50/100) |
+| `"x"` | LaTeX | `text` | `block`(true=块级公式) |
+| `"a"` | 音频/视频 | `url`, `onlyAudio`（**必填**） | `width`, `height` |
+| `"s"` | 卡片分隔符 | — | `delimiterCharacterForSerialization` |
+
+**注意**：`i:"a"` 的 `onlyAudio` 是必填字段（`true`=音频，`false`=视频），缺少会导致 SDK 拒绝写入。
+
+#### 格式标记（主要用于 `i:"m"`，但 `i:"q"` 等也支持）
+
+| 字段 | 类型 | 含义 |
+|:-----|:-----|:-----|
+| `b` | `true` | 加粗 |
+| `l` | `true` | 斜体（小写字母 L） |
+| `u` | `true` | 下划线 |
+| `h` | `number` | 高亮颜色（RemColor 枚举：1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Purple, 6=Blue, 7=Gray, 8=Brown, 9=Pink） |
+| `tc` | `number` | 文字颜色（同 RemColor 枚举） |
+| `q` | `true` | 行内代码（红色等宽样式） |
+| `code` | `true` | 代码块（带语言标签和复制按钮） |
+| `language` | `string` | 代码块语言（如 `"javascript"`） |
+| `cId` | `string` | 完形填空 ID |
+| `hiddenCloze` | `true` | 完形填空隐藏状态 |
+| `iUrl` | `string` | 外部超链接 URL（`url` 字段已废弃，必须用 `iUrl`） |
+| `qId` | `string` | 行内引用链接的 Rem ID |
+
+#### 常用构造示例
+
+以下为 `JSON.stringify(null, 2)` 格式化后的 key 字母序排列：
+
+```jsonc
+{ "b": true, "i": "m", "text": "粗体" }        // 粗体
+{ "i": "m", "q": true, "text": "code" }        // 行内代码
+{ "i": "m", "iUrl": "https://...", "text": "链接" } // 超链接
+{ "b": true, "h": 1, "i": "m", "text": "重点" } // 粗体+红色高亮（h 是数字）
+{ "cId": "c1", "i": "m", "text": "答案" }       // 完形填空
+{ "_id": "remId", "b": true, "i": "q" }         // Rem 引用加粗（_id 排最前）
+{ "i": "x", "text": "E = mc^2" }                // LaTeX
+{ "i": "a", "onlyAudio": false, "url": "..." }  // 视频（onlyAudio 必填！）
+{ "i": "a", "onlyAudio": true, "url": "..." }   // 音频
+```
+
+> 在 RemObject 格式化 JSON 中，数组内对象展开为多行。构造 edit-rem 的 oldStr/newStr 必须用多行格式。
+
+**highlightColor vs h**：`highlightColor` 是 RemObject 顶层字段（字符串如 `"Red"`），`h` 是 RichText 行内格式标记（数字 0-9）。两者独立。
+
+**序列化确定性**：RichText 对象内部按 key 字母序排列（`sortRichTextKeys()`）。`_id` 的 `_`（U+005F）排在所有小写字母之前。这对 edit-rem 的 str_replace 和并发检测至关重要。
 
 ---
 

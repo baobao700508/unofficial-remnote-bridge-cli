@@ -35,6 +35,8 @@ npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
 }
 ```
 
+**建议：Skill 和 MCP 都安装，效果更好。** MCP 的文档是全量加载的，为控制长度写得较简洁；而 Skill 的文档是按需加载的，包含更详细的使用说明。两者结合，AI 既能获得工具能力，也能获得详细指引。当然，只安装其中一个也能独立运行。
+
 接入后，AI 会引导你完成连接 RemNote、加载插件等后续步骤。
 
 ---

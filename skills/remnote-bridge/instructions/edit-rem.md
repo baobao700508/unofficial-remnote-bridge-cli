@@ -461,12 +461,158 @@ str_replace 操作的对象是 `JSON.stringify(remObject, null, 2)` 的文本—
 
 2. **替换后必须是合法 JSON**：检查引号、逗号、括号的完整性
 
-3. **修改 RichText 字段**：直接操作 JSON 数组结构
+3. **修改 RichText 字段**：直接操作 JSON 数组结构（见下方完整示例）
 
-   ```
-   oldStr: "\"text\": [\n    \"Hello\"\n  ]"
-   newStr: "\"text\": [\n    \"World\"\n  ]"
-   ```
+---
+
+## RichText 编辑实战指南
+
+### 理解格式化 JSON 中的 RichText
+
+`edit-rem` 的 str_replace 操作对象是 `JSON.stringify(remObject, null, 2)` 的格式化文本。RichText 数组在格式化后是多行缩进结构，**不是**紧凑的单行 JSON。
+
+以下是一个包含 RichText 的 RemObject **实际输出片段**：
+
+```json
+{
+  "id": "kLrIOHJLyMd8Y2lyA",
+  "text": [
+    "这是",
+    {
+      "b": true,
+      "i": "m",
+      "text": "粗体"
+    },
+    "普通文本"
+  ],
+  "backText": null,
+  "type": "concept",
+  "highlightColor": null,
+  "isTodo": false
+}
+```
+
+**关键要点**：
+- RichText 对象内部的 key 按**字母序**排列（`b` < `i` < `text`），由 Plugin 端 `sortRichTextKeys()` 保证
+- `_id` 中的 `_` 在 Unicode 中排在小写字母之前，所以 `_id` 排在所有小写 key 的最前面
+- 每个 key-value 对占一行，缩进 4 空格（对象在数组中时嵌套 2+2）
+- 纯字符串元素直接是 `"字符串"`，对象元素展开为多行
+
+### 示例 1：将纯文本改为粗体
+
+**read-rem 返回**（部分）：
+
+```json
+  "text": [
+    "普通标题"
+  ],
+```
+
+**edit-rem 调用**：
+
+```
+oldStr:  "\"text\": [\n    \"普通标题\"\n  ]"
+
+newStr:  "\"text\": [\n    {\n      \"b\": true,\n      \"i\": \"m\",\n      \"text\": \"粗体标题\"\n    }\n  ]"
+```
+
+替换后 JSON 变为：
+
+```json
+  "text": [
+    {
+      "b": true,
+      "i": "m",
+      "text": "粗体标题"
+    }
+  ],
+```
+
+### 示例 2：修改 Rem 引用旁的文本
+
+**read-rem 返回**（部分）：
+
+```json
+  "text": [
+    "参考 ",
+    {
+      "_id": "abc123",
+      "i": "q"
+    },
+    " 的内容"
+  ],
+```
+
+将 " 的内容" 替换为 " 的详细说明"：
+
+```
+oldStr:  " 的内容"
+newStr:  " 的详细说明"
+```
+
+> 注意：纯字符串可以直接匹配，不需要包含数组结构。但如果 " 的内容" 在 JSON 中出现多次，需要加上下文：
+> `oldStr: "    \" 的内容\"\n  ]"`
+
+### 示例 3：给文本添加超链接
+
+**read-rem 返回**（部分）：
+
+```json
+  "text": [
+    "点击访问官网"
+  ],
+```
+
+**edit-rem 调用**：
+
+```
+oldStr:  "\"text\": [\n    \"点击访问官网\"\n  ]"
+
+newStr:  "\"text\": [\n    \"点击\",\n    {\n      \"i\": \"m\",\n      \"iUrl\": \"https://remnote.com\",\n      \"text\": \"访问官网\"\n    }\n  ]"
+```
+
+### 示例 4：修改高亮颜色（Rem 级别 vs RichText 级别）
+
+**Rem 级别的 `highlightColor`**（整行背景色，值为英文字符串）：
+
+```
+oldStr:  "\"highlightColor\": null"
+newStr:  "\"highlightColor\": \"Red\""
+```
+
+**RichText 级别的 `h`**（行内文字高亮，值为数字 0-9）：
+
+```
+oldStr:  "\"text\": [\n    \"普通文本\"\n  ]"
+newStr:  "\"text\": [\n    {\n      \"h\": 1,\n      \"i\": \"m\",\n      \"text\": \"红色高亮文本\"\n    }\n  ]"
+```
+
+> **区分**：`highlightColor` 是 RemObject 顶层字段，值为字符串（`"Red"`, `"Blue"` 等）；RichText 的 `h` 是行内格式标记，值为数字（1=Red, 2=Orange 等，见 RemColor 枚举）。
+
+### 示例 5：添加完形填空
+
+**read-rem 返回**（部分）：
+
+```json
+  "text": [
+    "光合作用需要阳光"
+  ],
+```
+
+将 "阳光" 变成完形填空：
+
+```
+oldStr:  "\"text\": [\n    \"光合作用需要阳光\"\n  ]"
+
+newStr:  "\"text\": [\n    \"光合作用需要\",\n    {\n      \"cId\": \"cloze1\",\n      \"i\": \"m\",\n      \"text\": \"阳光\"\n    }\n  ]"
+```
+
+### 常见错误
+
+1. **忘记 key 字母序**：写 `{"text":"xx","i":"m","b":true}` 不会被匹配——实际存储为 `{"b":true,"i":"m","text":"xx"}`
+2. **缩进不匹配**：格式化 JSON 使用 2 空格缩进，数组内对象的 key 缩进 6 空格（顶层 2 + 数组 2 + 对象 2），但在 `JSON.stringify(obj, null, 2)` 中数组元素的对象缩进 4 空格（数组 2 + 对象内 2）
+3. **混淆 highlightColor 和 h**：前者是字符串 `"Red"`，后者是数字 `1`
+4. **忘记 `i:"a"` 的 `onlyAudio` 必填**：缺少此字段 SDK 拒绝写入
 
 ---
 

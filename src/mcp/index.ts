@@ -12,6 +12,7 @@ import { registerEditTools } from './tools/edit-tools.js';
 import { registerInfraTools } from './tools/infra-tools.js';
 import { OUTLINE_FORMAT_CONTENT } from './resources/outline-format.js';
 import { REM_OBJECT_FIELDS_CONTENT } from './resources/rem-object-fields.js';
+import { EDIT_REM_GUIDE_CONTENT } from './resources/edit-rem-guide.js';
 import { EDIT_TREE_GUIDE_CONTENT } from './resources/edit-tree-guide.js';
 import { ERROR_REFERENCE_CONTENT } from './resources/error-reference.js';
 import { SEPARATOR_FLASHCARD_CONTENT } from './resources/separator-flashcard.js';
@@ -19,7 +20,7 @@ import { SEPARATOR_FLASHCARD_CONTENT } from './resources/separator-flashcard.js'
 export async function startMcpServer(): Promise<void> {
   const server = new FastMCP({
     name: 'remnote-bridge',
-    version: '0.1.2',
+    version: '0.1.3',
     instructions: SERVER_INSTRUCTIONS,
   });
 
@@ -43,6 +44,15 @@ export async function startMcpServer(): Promise<void> {
     mimeType: 'text/markdown',
     async load() {
       return { text: REM_OBJECT_FIELDS_CONTENT };
+    },
+  });
+
+  server.addResource({
+    uri: 'remnote://edit-rem-guide',
+    name: 'edit_rem 操作指南',
+    mimeType: 'text/markdown',
+    async load() {
+      return { text: EDIT_REM_GUIDE_CONTENT };
     },
   });
 

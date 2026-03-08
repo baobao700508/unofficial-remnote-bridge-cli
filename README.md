@@ -35,6 +35,8 @@ Add the following to your AI client's MCP settings:
 }
 ```
 
+**Tip: Install both for best results.** MCP documentation is kept concise (loaded all at once), while Skill documentation is detailed (loaded on demand). Together they complement each other. That said, either one works independently — you don't need both.
+
 Once connected, the AI will guide you through connecting to RemNote, loading the plugin, and everything else.
 
 ---
