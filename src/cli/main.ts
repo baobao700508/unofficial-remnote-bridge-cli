@@ -17,6 +17,7 @@ import { readGlobeCommand } from './commands/read-globe.js';
 import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
+import { cleanCommand } from './commands/clean.js';
 
 const program = new Command();
 
@@ -56,7 +57,7 @@ function parseJsonInput(command: string, jsonStr: string | undefined, requiredFi
 program
   .name('remnote-bridge')
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
-  .version('0.1.3')
+  .version('0.1.4')
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 
 program
@@ -270,6 +271,14 @@ installCmd.command('skill')
     } else {
       await installSkillCommand();
     }
+  });
+
+program
+  .command('clean')
+  .description('清理所有残留文件（.pid / .log / .json / skill 目录）')
+  .action(async () => {
+    const { json } = program.opts();
+    await cleanCommand({ json });
   });
 
 program.parse();

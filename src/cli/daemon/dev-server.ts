@@ -34,18 +34,25 @@ export class DevServerManager {
       throw new Error(`Plugin 目录不存在或缺少 package.json: ${pluginDir}`);
     }
 
-    // 首次使用时自动安装 plugin 依赖
-    if (!fs.existsSync(path.join(pluginDir, 'node_modules'))) {
-      onLog?.('[dev-server] remnote-plugin/node_modules 不存在，正在安装依赖...', 'info');
+    // 首次使用或依赖不完整时自动安装 plugin 依赖
+    // 仅检查 node_modules 目录是否存在不够健壮——目录可能存在但关键依赖缺失
+    const nodeModulesDir = path.join(pluginDir, 'node_modules');
+    const hasCompleteDeps =
+      fs.existsSync(nodeModulesDir) &&
+      fs.existsSync(path.join(nodeModulesDir, '.package-lock.json'));
+    if (!hasCompleteDeps) {
+      onLog?.('[dev-server] remnote-plugin 依赖缺失或不完整，正在安装...', 'info');
       execSync('npm install', { cwd: pluginDir, stdio: 'pipe' });
       onLog?.('[dev-server] 依赖安装完成', 'info');
     }
 
     // 通过环境变量传递端口
+    // shell: true 确保 Windows 上能找到 npm.cmd
     this.child = spawn('npm', ['run', 'dev'], {
       cwd: pluginDir,
       env: { ...process.env, PORT: String(port) },
       stdio: 'pipe',
+      shell: true,
     });
 
     this.child.stdout?.on('data', (data) => {
