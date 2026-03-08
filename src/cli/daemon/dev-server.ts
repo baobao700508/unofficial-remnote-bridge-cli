@@ -2,6 +2,7 @@
  * webpack-dev-server 子进程管理
  *
  * 在 remnote-plugin 目录下启动 npm run dev。
+ * 具备崩溃重试和依赖自动修复能力。
  */
 
 import { spawn, execSync, ChildProcess } from 'child_process';
@@ -13,14 +14,19 @@ export interface DevServerOptions {
   port: number;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
   onExit?: (code: number | null) => void;
+  maxRetries?: number;
 }
 
 export class DevServerManager {
   private child: ChildProcess | null = null;
   private options: DevServerOptions;
+  private retryCount = 0;
+  private maxRetries: number;
+  private stopping = false;
 
   constructor(options: DevServerOptions) {
     this.options = options;
+    this.maxRetries = options.maxRetries ?? 2;
   }
 
   /**
@@ -28,25 +34,50 @@ export class DevServerManager {
    * 如果 remnote-plugin 目录不存在，抛出错误。
    */
   start(): void {
-    const { pluginDir, port, onLog, onExit } = this.options;
+    const { pluginDir, port, onLog } = this.options;
 
     if (!fs.existsSync(path.join(pluginDir, 'package.json'))) {
       throw new Error(`Plugin 目录不存在或缺少 package.json: ${pluginDir}`);
     }
 
-    // 首次使用或依赖不完整时自动安装 plugin 依赖
-    // 仅检查 node_modules 目录是否存在不够健壮——目录可能存在但关键依赖缺失
+    this.ensureDependencies(false);
+    this.spawnDevServer();
+  }
+
+  /**
+   * 确保依赖完整。
+   * @param cleanInstall true = 删除 node_modules 后重装（修复损坏）
+   */
+  private ensureDependencies(cleanInstall: boolean): void {
+    const { pluginDir, onLog } = this.options;
     const nodeModulesDir = path.join(pluginDir, 'node_modules');
     const hasCompleteDeps =
       fs.existsSync(nodeModulesDir) &&
       fs.existsSync(path.join(nodeModulesDir, '.package-lock.json'));
-    if (!hasCompleteDeps) {
+
+    if (cleanInstall && fs.existsSync(nodeModulesDir)) {
+      onLog?.('[dev-server] 检测到依赖损坏，正在清洁重装...', 'warn');
+      // 删除 node_modules 和 package-lock.json 以彻底修复
+      fs.rmSync(nodeModulesDir, { recursive: true, force: true });
+      const lockFile = path.join(pluginDir, 'package-lock.json');
+      if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+      }
+    }
+
+    if (cleanInstall || !hasCompleteDeps) {
       onLog?.('[dev-server] remnote-plugin 依赖缺失或不完整，正在安装...', 'info');
       execSync('npm install', { cwd: pluginDir, stdio: 'pipe' });
       onLog?.('[dev-server] 依赖安装完成', 'info');
     }
+  }
 
-    // 通过环境变量传递端口
+  /**
+   * 启动 dev-server 子进程并挂载事件监听。
+   */
+  private spawnDevServer(): void {
+    const { pluginDir, port, onLog, onExit } = this.options;
+
     // shell: true 确保 Windows 上能找到 npm.cmd
     this.child = spawn('npm', ['run', 'dev'], {
       cwd: pluginDir,
@@ -64,9 +95,40 @@ export class DevServerManager {
     });
 
     this.child.on('exit', (code) => {
-      onLog?.(`webpack-dev-server 退出 (code: ${code})`, code === 0 ? 'info' : 'error');
       this.child = null;
-      onExit?.(code);
+
+      // 正常退出或正在停止中，不重试
+      if (code === 0 || this.stopping) {
+        onLog?.(`webpack-dev-server 退出 (code: ${code})`, 'info');
+        onExit?.(code);
+        return;
+      }
+
+      onLog?.(`webpack-dev-server 异常退出 (code: ${code})`, 'error');
+
+      // 尝试重试
+      if (this.retryCount < this.maxRetries) {
+        this.retryCount++;
+        const isCleanRetry = this.retryCount === 1;
+        onLog?.(
+          `[dev-server] 第 ${this.retryCount}/${this.maxRetries} 次重试` +
+          (isCleanRetry ? '（清洁重装依赖）' : '') + '...',
+          'warn',
+        );
+
+        try {
+          // 第一次重试：清洁重装依赖（修复损坏的 node_modules）
+          // 后续重试：直接重启
+          this.ensureDependencies(isCleanRetry);
+          this.spawnDevServer();
+        } catch (err) {
+          onLog?.(`[dev-server] 重试失败: ${(err as Error).message}`, 'error');
+          onExit?.(code);
+        }
+      } else {
+        onLog?.(`[dev-server] 已达最大重试次数 (${this.maxRetries})，放弃`, 'error');
+        onExit?.(code);
+      }
     });
 
     this.child.on('error', (err) => {
@@ -80,6 +142,7 @@ export class DevServerManager {
    * 停止 webpack-dev-server。
    */
   stop(): Promise<void> {
+    this.stopping = true;
     return new Promise((resolve) => {
       if (!this.child) {
         resolve();

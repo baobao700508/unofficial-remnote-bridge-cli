@@ -57,7 +57,7 @@ function parseJsonInput(command: string, jsonStr: string | undefined, requiredFi
 program
   .name('remnote-bridge')
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
-  .version('0.1.4')
+  .version('0.1.5')
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 
 program
