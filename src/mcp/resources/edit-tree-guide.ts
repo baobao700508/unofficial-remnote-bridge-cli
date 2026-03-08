@@ -45,9 +45,35 @@ newStr:
 | \\\` → \\\` | \\\`问题 → 答案\\\` | 创建 forward 闪卡（单行） |
 | \\\` ← \\\` | \\\`问题 ← 答案\\\` | 创建 backward 闪卡（单行） |
 | \\\` ↔ \\\` | \\\`问题 ↔ 答案\\\` | 创建 both 闪卡（单行） |
+| \\\` ↓ \\\` | \\\`问题 ↓ 答案\\\` | 创建 forward 多行闪卡（有 backText） |
+| \\\` ↑ \\\` | \\\`问题 ↑ 答案\\\` | 创建 backward 多行闪卡（有 backText） |
+| \\\` ↕ \\\` | \\\`问题 ↕ 答案\\\` | 创建 both 多行闪卡（有 backText） |
 | \\\` ↓\\\` | \\\`问题 ↓\\\` | 创建 forward 多行闪卡（子节点为答案） |
 | \\\` ↑\\\` | \\\`问题 ↑\\\` | 创建 backward 多行闪卡 |
 | \\\` ↕\\\` | \\\`问题 ↕\\\` | 创建 both 多行闪卡 |
+
+#### 新增行的元数据注释
+
+新增行可以在行尾添加 HTML 注释来指定元数据属性（注意：没有 remId，以 \\\`type:\\\`/\\\`doc\\\`/\\\`tag:\\\` 开头）：
+
+\\\`\\\`\\\`
+新概念 <!--type:concept-->
+新描述 <!--type:descriptor-->
+新文档 <!--doc-->
+带标签 <!--tag:TagName(tagRemId)-->
+组合使用 <!--type:concept doc tag:Physics(abc123)-->
+\\\`\\\`\\\`
+
+| 标记 | 效果 |
+|------|------|
+| \\\`type:concept\\\` | 设置 Rem 类型为 Concept |
+| \\\`type:descriptor\\\` | 设置 Rem 类型为 Descriptor |
+| \\\`doc\\\` | 将 Rem 标记为 Document |
+| \\\`tag:Name(remId)\\\` | 添加指定 remId 的 Tag（可多个） |
+
+与已有行行尾标记的区别：
+- 已有行：\\\`文本 <!--remId type:concept doc-->\\\`（以 remId 开头）
+- 新增行：\\\`文本 <!--type:concept doc-->\\\`（无 remId，直接以属性开头）
 
 #### 嵌套新增
 
@@ -62,6 +88,10 @@ newStr:
 \\\`\\\`\\\`
 
 嵌套新增行的父 ID 通过内部占位标记管理，创建顺序保证从浅到深。
+
+#### ⚠️ 插入位置
+
+新行**不能**插在一个有子节点的 Rem 和它的 children 之间，否则 children 会被新行"劫持"，触发 \\\`children_captured\\\` 错误。新行必须插在目标层级所有兄弟的**末尾**。
 
 ### 2. 删除行
 
@@ -123,6 +153,7 @@ newStr:
 | 删除行但保留子节点 | \\\`orphan_detected\\\` | Cannot delete {id} because it has children that were not removed. | 同时删除所有子行 |
 | 删除/修改省略占位符 | \\\`elided_modified\\\` | Cannot delete or modify elided region directly. | 用更大的 depth/maxSiblings 重新 read_tree 展开 |
 | 缩进跳级 | \\\`indent_skip\\\` | 缩进跳级：行 ... 的缩进级别为 N，但找不到上一级的父节点。 | 检查缩进是否正确（每级 2 空格） |
+| 新行劫持已有子节点 | \\\`children_captured\\\` | New line "..." accidentally captured existing children (...). | 把新行插到兄弟末尾，不要插在父 Rem 和 children 之间 |
 
 ---
 
@@ -194,4 +225,33 @@ newStr:
 \\\`\\\`\\\`
 
 结果：创建一个多行 forward 闪卡，问题为"什么是线性回归？"，两个子行自动成为答案（isCardItem=true）。
+
+## 示例 4：创建 Portal
+
+Portal 新增行使用 \\\`<!--portal refs:id1,id2-->\\\` 语法（无文本内容，纯参数行）：
+
+\\\`\\\`\\\`
+oldStr:
+  子节点 A <!--idA-->
+
+newStr:
+  <!--portal refs:refId1,refId2-->
+  子节点 A <!--idA-->
+\\\`\\\`\\\`
+
+结果：创建一个 Portal，引用 refId1 和 refId2 两个 Rem。
+
+空 Portal（无引用）：
+
+\\\`\\\`\\\`
+  <!--portal-->
+\\\`\\\`\\\`
+
+Portal 新增行与已有 Portal 行的区别：
+- 已有 Portal：\\\`<!--remId type:portal refs:id1,id2-->\\\`（有 remId）
+- 新增 Portal：\\\`<!--portal refs:id1,id2-->\\\`（无 remId，以 \\\`portal\\\` 关键字开头）
+
+删除 Portal 与删除普通行相同——从 newStr 中移除该 Portal 行即可。
+
+**注意**：修改已有 Portal 的引用列表（增删引用的 Rem）请使用 \\\`edit_rem\\\`，通过 str_replace 修改简化 JSON 中的 \\\`portalDirectlyIncludedRem\\\` 数组。
 `;

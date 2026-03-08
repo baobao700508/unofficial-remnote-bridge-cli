@@ -21,13 +21,16 @@
  * 以下每个 [RW] 字段的注释标注了其底层是 Powerup 机制还是纯字段修改
  *
  * 读写标注：
- * - [RW]   = 可读可写（SDK 有对应的 setter/add/remove 方法）
- * - [R]    = 只读，默认输出（SDK 仅有 getter）
- * - [R-F]  = 只读，仅 --full 模式输出（低频 / 细粒度 / 可由其他字段推导）
+ * - [RW]       = 可读可写（SDK 有对应的 setter/add/remove 方法）
+ * - [Portal-W] = Portal 专用可写（仅 Portal Rem 可通过 addToPortal/removeFromPortal 修改）
+ * - [R]        = 只读，默认输出（SDK 仅有 getter）
+ * - [R-F]      = 只读，仅 --full 模式输出（低频 / 细粒度 / 可由其他字段推导）
  *
  * 输出模式（CLI --full 选项）：
  * - 默认模式：输出 [RW] + [R] 字段（34 个），覆盖 Agent 常用场景
  * - --full 模式：额外输出 [R-F] 字段（+17 个），用于调试或深度分析
+ * - Portal 模式：type === 'portal' 时自动输出 9 个关键字段（id、type、portalType、
+ *   portalDirectlyIncludedRem、parent、positionAmongstSiblings、children、createdAt、updatedAt）
  *
  * 实测标注（2026-03-03 在 RemNote UI 中逐字段截图观察）：
  * - ✅ 已实测 = 在真实 RemNote 环境中创建独立 Rem 并截图观察视觉行为
@@ -254,7 +257,7 @@ export interface RemObject {
 
   /** [R] Portal 子类型。仅 type === 'portal' 时有值。SDK: getPortalType() */
   portalType: PortalType | null;
-  /** [R] Portal 直接包含的 Rem ID 数组。SDK: getPortalDirectlyIncludedRem() */
+  /** [Portal-W] Portal 直接包含的 Rem ID 数组。SDK: getPortalDirectlyIncludedRem() / addToPortal() / removeFromPortal()。写入时使用 diff 机制。仅 type === 'portal' 时可修改 */
   portalDirectlyIncludedRem: string[];
 
   // ══════════════════════════════════════════════════════════

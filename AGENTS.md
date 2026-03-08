@@ -201,6 +201,14 @@ edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"xxx","newStr":"yyy"}'
 - **禁止**：要求用户代为手动测试（Agent 应自主完成）
 - 测试时灵活使用 Claude in Chrome MCP 操作 RemNote 界面，确认数据读写、渲染、序列化等行为符合预期
 
+### 2.5 接入层文档同步（红线）
+
+Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（`src/mcp/resources/*.ts`、`src/mcp/instructions.ts`）**必须保持同步**，不可遗漏。
+
+- **新增功能时**：必须同时更新 Skill 和 MCP 两侧的文档，缺一不可
+- **对齐检查时**：必须逐一比对两侧文档，确认描述、参数、示例一致
+- **禁止**：只更新一侧文档就认为完成
+
 ---
 
 ## 3. 经验

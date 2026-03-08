@@ -194,6 +194,11 @@ async function applyField(
       await applySourcesDiff(rem, value as string[]);
       break;
 
+    // Portal 引用（diff based）
+    case 'portalDirectlyIncludedRem':
+      await applyPortalRefsDiff(rem, plugin, value as string[]);
+      break;
+
     // Powerup 操作
     case 'addPowerup':
       await rem.addPowerup(value as string);
@@ -238,6 +243,40 @@ async function applySourcesDiff(rem: Rem, targetIds: string[]): Promise<void> {
   for (const id of currentIds) {
     if (!targetSet.has(id as string)) {
       await rem.removeSource(id as string);
+    }
+  }
+}
+
+/**
+ * portalDirectlyIncludedRem diff: 对比当前和目标，通过 addToPortal/removeFromPortal 增删。
+ * 注意调用方向：addToPortal/removeFromPortal 是在被引用 Rem 上调用，参数是 Portal Rem。
+ */
+async function applyPortalRefsDiff(portalRem: Rem, plugin: ReactRNPlugin, targetIds: string[]): Promise<void> {
+  // 防御：非 Portal Rem 不可修改此字段
+  // 使用 rem.type === 6（portal 类型的枚举值），而非 getPortalType()
+  // 因为 getPortalType() 可能对新创建的 Portal 返回 undefined
+  if ((portalRem as unknown as { type: number }).type !== 6) {
+    throw new Error('portalDirectlyIncludedRem can only be modified on Portal Rem');
+  }
+
+  const currentRefs = await portalRem.getPortalDirectlyIncludedRem();
+  const currentIds = new Set(currentRefs.map((r: Rem) => r._id));
+  const targetSet = new Set(targetIds);
+
+  // 添加缺少的
+  for (const id of targetIds) {
+    if (!currentIds.has(id)) {
+      const remToAdd = await plugin.rem.findOne(id);
+      if (!remToAdd) throw new Error(`Rem not found: ${id}`);
+      await remToAdd.addToPortal(portalRem);
+    }
+  }
+  // 删除多余的
+  for (const id of currentIds) {
+    if (!targetSet.has(id as string)) {
+      const remToRemove = await plugin.rem.findOne(id as string);
+      if (!remToRemove) throw new Error(`Rem not found: ${id}`);
+      await remToRemove.removeFromPortal(portalRem);
     }
   }
 }

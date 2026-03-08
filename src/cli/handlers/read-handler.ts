@@ -21,6 +21,13 @@ const RF_FIELDS = new Set([
   'localUpdatedAt', 'lastPracticed',
 ]);
 
+/** Portal 简化输出字段（type === 'portal' 时默认输出这 9 个字段） */
+export const PORTAL_FIELDS = [
+  'id', 'type', 'portalType', 'portalDirectlyIncludedRem',
+  'parent', 'positionAmongstSiblings', 'children',
+  'createdAt', 'updatedAt',
+] as const;
+
 export class ReadHandler {
   constructor(
     private cache: RemCache,
@@ -62,6 +69,15 @@ export class ReadHandler {
       const obj = remObject as Record<string, unknown>;
       result = { id: obj.id };
       for (const field of fields) {
+        if (field in obj) {
+          result[field] = obj[field];
+        }
+      }
+    } else if ((remObject as Record<string, unknown>).type === 'portal') {
+      // Portal 简化模式：只输出 9 个关键字段
+      const obj = remObject as Record<string, unknown>;
+      result = {};
+      for (const field of PORTAL_FIELDS) {
         if (field in obj) {
           result[field] = obj[field];
         }

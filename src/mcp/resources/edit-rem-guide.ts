@@ -176,6 +176,59 @@ newStr:  "practiceDirection": "both"
 | 混淆 highlightColor 和 h | 前者字符串 \\\`"Red"\\\`，后者数字 \\\`1\\\` | 参考上方对比表 |
 | 漏 onlyAudio | \\\`i:"a"\\\` 的 \\\`onlyAudio\\\` 是必填 | true=音频，false=视频 |
 | JSON 语法错 | 引号、逗号、括号不完整 | 检查替换边界 |
+| Portal oldStr 不匹配 | Portal 编辑在简化 JSON 上匹配，不是完整 JSON | 检查 oldStr 是否匹配 9 字段简化 JSON |
+
+---
+
+## Portal 编辑
+
+当被编辑的 Rem 是 Portal（type === 'portal'）时，edit_rem 自动切换到 Portal 专用路径。
+
+**edit_rem 只能修改 Portal 的引用列表和位置属性。创建 Portal 和删除 Portal 请使用 \\\`edit_tree\\\`。**
+
+### 操作目标：简化 JSON
+
+Portal 的 str_replace 在 **9 字段简化 JSON** 上执行（而非完整 51 字段）：
+
+\\\`\\\`\\\`json
+{
+  "id": "abc123",
+  "type": "portal",
+  "portalType": "portal",
+  "portalDirectlyIncludedRem": ["remId1", "remId2"],
+  "parent": "parentId",
+  "positionAmongstSiblings": 3,
+  "children": ["remId1", "remId2"],
+  "createdAt": 1709000000000,
+  "updatedAt": 1709000000000
+}
+\\\`\\\`\\\`
+
+### 可写字段
+
+| 字段 | 写入方式 |
+|:-----|:---------|
+| \\\`portalDirectlyIncludedRem\\\` | diff 数组 → addToPortal / removeFromPortal |
+| \\\`parent\\\` | setParent() |
+| \\\`positionAmongstSiblings\\\` | setParent(parent, position) |
+
+其余字段（id、type、portalType、children、createdAt、updatedAt）为只读，修改只产生警告。
+
+### 示例
+
+添加引用：
+
+\\\`\\\`\\\`
+oldStr:  "portalDirectlyIncludedRem": ["remId1", "remId2"]
+newStr:  "portalDirectlyIncludedRem": ["remId1", "remId2", "remId3"]
+\\\`\\\`\\\`
+
+移除引用：
+
+\\\`\\\`\\\`
+oldStr:  "portalDirectlyIncludedRem": ["remId1", "remId2"]
+newStr:  "portalDirectlyIncludedRem": ["remId1"]
+\\\`\\\`\\\`
 
 ---
 

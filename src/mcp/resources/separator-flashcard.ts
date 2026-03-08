@@ -1,11 +1,11 @@
 export const SEPARATOR_FLASHCARD_CONTENT = `
 # Separator & Flashcard Reference
 
-**重要**：分隔符（\\\`::\\\`、\\\`;;\\\`、\\\`>>\\\` 等）是 RemNote 编辑器的输入语法，**CLI 不使用分隔符**。通过 CLI 创建/修改闪卡，操作的是 \\\`type\\\`、\\\`backText\\\`、\\\`practiceDirection\\\` 字段和大纲箭头（\\\`→←↔↓↑↕\\\`）。本参考表用于理解用户意图——当用户提到分隔符时，映射到对应的 CLI 操作。
+**重要**：分隔符（\\\`::\\\`、\\\`;;\\\`、\\\`>>\\\` 等）是 RemNote 编辑器的输入语法，**工具端不使用分隔符**。创建/修改闪卡，操作的是 \\\`type\\\`、\\\`backText\\\`、\\\`practiceDirection\\\` 字段和大纲箭头（\\\`→←↔↓↑↕\\\`）。本参考表用于理解用户意图——当用户提到分隔符时，映射到对应的工具操作。
 
 ---
 
-## 1. 用户意图映射：编辑器分隔符 → CLI 操作
+## 1. 用户意图映射：编辑器分隔符 → 工具操作
 
 当用户提到以下分隔符时，对应的 Rem 属性为：
 
@@ -24,7 +24,7 @@ export const SEPARATOR_FLASHCARD_CONTENT = `
 
 ---
 
-## 2. CLI 操作方式：大纲箭头
+## 2. 操作方式：大纲箭头
 
 在 Markdown 大纲（read_tree / edit_tree）中，practiceDirection 编码为 Unicode 箭头：
 
@@ -66,7 +66,7 @@ RemNote 推荐的知识结构化方法：
 - **Concept**（type:concept）：需要理解的核心概念——"X 是什么？"
 - **Descriptor**（type:descriptor）：概念的属性/描述——"X 的 Y 是什么？"
 
-在 CLI 大纲中的表现（注意：用箭头和元数据标记，不用分隔符）：
+在大纲中的表现（注意：用箭头和元数据标记，不用分隔符）：
 
 \\\`\\\`\\\`
 线性回归 ↔ 最基本的回归模型 <!--id1 type:concept-->
@@ -76,7 +76,7 @@ RemNote 推荐的知识结构化方法：
 
 ---
 
-## 5. 通过 CLI 创建闪卡
+## 5. 创建闪卡
 
 ### 使用 edit_tree 新增行
 

@@ -106,7 +106,7 @@ remnote-bridge --json connect
 {
   "ok": false,
   "command": "connect",
-  "error": "守护进程启动超时（10 秒）",
+  "error": "守护进程启动超时（60 秒）",
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
 ```
@@ -125,16 +125,24 @@ remnote-bridge --json connect
 3. daemon 内部按顺序启动：
    ├─ WS Server（必须成功，否则 daemon 退出）
    ├─ ConfigServer（非关键，失败不阻塞）
-   └─ webpack-dev-server（必须成功，否则 daemon 退出）
+   └─ webpack-dev-server（含依赖自动安装 + 崩溃重试）
 
 4. daemon 写入 PID 文件
 
 5. daemon 通过 IPC 发送 ready 信号给父进程
 
 6. 父进程（CLI）收到 ready → 输出结果 → 退出
-   ├─ 10 秒内未收到 → 超时失败
+   ├─ 60 秒内未收到 → 超时失败
    └─ 收到 error → 启动失败
 ```
+
+---
+
+## Windows 注意事项
+
+- **首次 connect 较慢**：daemon 启动时会自动安装 remnote-plugin 的依赖（约 600+ 个包），在 Windows 上可能需要 30-60 秒。connect 命令的超时为 60 秒
+- **依赖自动修复**：如果 webpack-dev-server 因依赖损坏而崩溃，daemon 会自动执行清洁重装（删除 node_modules + package-lock.json 后重新安装）并重试，最多重试 2 次，无需手动干预
+- **端口残留**：多次 connect 失败后可能出现端口被占用（`EADDRINUSE`），先执行 `remnote-bridge disconnect`，如仍有残留可通过 `netstat -ano | findstr 3002` 定位 PID 后 `taskkill /F /PID <pid>` 强制终止
 
 ---
 

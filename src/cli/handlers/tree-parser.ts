@@ -23,11 +23,24 @@ export interface OutlineNode {
   children: OutlineNode[];
   /** 是否为省略占位符行 */
   isElided?: boolean;
+  /** HTML 注释中的元数据字符串（新增行可用） */
+  metadata?: string;
+  /** 是否为 Portal 新增行 */
+  isPortal?: boolean;
+  /** Portal 引用的 Rem ID 列表（仅 isPortal 时有值） */
+  portalRefs?: string[];
+}
+
+/** 从 HTML 注释元数据解析出的结构化属性 */
+export interface ParsedMetadata {
+  type?: string;
+  isDocument?: boolean;
+  tags?: string[];
 }
 
 /** diff 操作类型 */
 export type TreeOp =
-  | { type: 'create'; content: string; parentId: string; position: number; parentIsMultiline?: boolean }
+  | { type: 'create'; content: string; parentId: string; position: number; parentIsMultiline?: boolean; metadata?: ParsedMetadata; isPortal?: boolean; portalRefs?: string[] }
   | { type: 'delete'; remId: string }
   | { type: 'move'; remId: string; fromParentId: string; toParentId: string; position: number; fromParentIsMultiline?: boolean; toParentIsMultiline?: boolean; selfHasPracticeDirection?: boolean }
   | { type: 'reorder'; parentId: string; order: string[] };
@@ -37,7 +50,7 @@ export interface TreeDiffResult {
 }
 
 export interface TreeDiffError {
-  type: 'content_modified' | 'orphan_detected' | 'folded_delete' | 'root_modified' | 'indent_skip' | 'elided_modified';
+  type: 'content_modified' | 'orphan_detected' | 'folded_delete' | 'root_modified' | 'indent_skip' | 'elided_modified' | 'children_captured';
   message: string;
   details: Record<string, unknown>;
 }
@@ -53,8 +66,14 @@ const LINE_MARKER_RE = /<!--(\S+)((?:\s+\S+)*)-->$/;
 /** 省略占位符正则 */
 const ELIDED_LINE_RE = /^<!--\.\.\.elided\s/;
 
-/** 解析单行，提取缩进、内容、remId */
-function parseLine(line: string): { depth: number; rawContent: string; remId: string | null; metadata: string; isElided: boolean } {
+/** 纯元数据注释正则（不含 remId，仅匹配 type:xxx、doc、tag:xxx） */
+const METADATA_ONLY_RE = /<!--((?:type:\S+|doc|tag:\S+)(?:\s+(?:type:\S+|doc|tag:\S+))*)-->$/;
+
+/** Portal 新增行正则：<!--portal refs:id1,id2--> 或 <!--portal--> */
+const NEW_PORTAL_RE = /^<!--portal(?:\s+refs:(\S+))?-->$/;
+
+/** 解析单行，提取缩进、内容、remId，以及 Portal 新增行标记 */
+function parseLine(line: string): { depth: number; rawContent: string; remId: string | null; metadata: string; isElided: boolean; isPortal?: boolean; portalRefs?: string[] } {
   // 计算缩进（每 2 空格一级）
   const stripped = line.replace(/^ */, '');
   const indentChars = line.length - stripped.length;
@@ -65,7 +84,23 @@ function parseLine(line: string): { depth: number; rawContent: string; remId: st
     return { depth, rawContent: stripped, remId: null, metadata: '', isElided: true };
   }
 
-  // 匹配行尾标记
+  // 检测 Portal 新增行：<!--portal refs:id1,id2--> 或 <!--portal-->
+  const portalMatch = stripped.match(NEW_PORTAL_RE);
+  if (portalMatch) {
+    const refs = portalMatch[1] ? portalMatch[1].split(',') : [];
+    return { depth, rawContent: '', remId: null, metadata: '', isElided: false, isPortal: true, portalRefs: refs };
+  }
+
+  // 先检测纯元数据注释（不含 remId，新增行专用）
+  // 必须在 LINE_MARKER_RE 之前，否则 type:concept 等会被误认为 remId
+  const metaOnlyMatch = stripped.match(METADATA_ONLY_RE);
+  if (metaOnlyMatch) {
+    const metadata = metaOnlyMatch[1].trim();
+    const contentPart = stripped.slice(0, metaOnlyMatch.index!).trimEnd();
+    return { depth, rawContent: contentPart, remId: null, metadata, isElided: false };
+  }
+
+  // 匹配行尾标记（含 remId）
   const match = stripped.match(LINE_MARKER_RE);
   if (match) {
     const remId = match[1];
@@ -95,7 +130,7 @@ export function parseOutline(text: string): OutlineNode[] {
   const stack: OutlineNode[] = [];
 
   for (const line of lines) {
-    const { depth, rawContent, remId, isElided } = parseLine(line);
+    const { depth, rawContent, remId, metadata, isElided, isPortal, portalRefs } = parseLine(line);
 
     const node: OutlineNode = {
       remId,
@@ -104,6 +139,9 @@ export function parseOutline(text: string): OutlineNode[] {
       rawLine: line,
       children: [],
       isElided,
+      metadata: metadata || undefined,
+      isPortal: isPortal || undefined,
+      portalRefs: portalRefs?.length ? portalRefs : undefined,
     };
 
     if (depth === 0) {
@@ -126,6 +164,31 @@ export function parseOutline(text: string): OutlineNode[] {
   }
 
   return roots;
+}
+
+// ────────────────────────── 元数据解析 ──────────────────────────
+
+/**
+ * 解析 HTML 注释中的元数据字符串为结构化属性。
+ *
+ * 支持的标记：type:concept、type:descriptor、doc、tag:Name(id)
+ */
+export function parseMetadata(metadataStr: string): ParsedMetadata {
+  const result: ParsedMetadata = {};
+  const tokens = metadataStr.split(/\s+/);
+  for (const token of tokens) {
+    if (token === 'type:concept') result.type = 'concept';
+    else if (token === 'type:descriptor') result.type = 'descriptor';
+    else if (token === 'doc') result.isDocument = true;
+    else if (token.startsWith('tag:')) {
+      const idMatch = token.match(/\(([^)]+)\)$/);
+      if (idMatch) {
+        if (!result.tags) result.tags = [];
+        result.tags.push(idMatch[1]);
+      }
+    }
+  }
+  return result;
 }
 
 // ────────────────────────── Powerup 前缀解析 ──────────────────────────
@@ -324,6 +387,9 @@ interface NewLineInfo {
   parentId: string;
   position: number;
   parentIsMultiline: boolean;
+  metadata?: ParsedMetadata;
+  isPortal?: boolean;
+  portalRefs?: string[];
 }
 
 function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
@@ -343,6 +409,9 @@ function collectNewLines(roots: OutlineNode[]): NewLineInfo[] {
           parentId,
           position: childPos,
           parentIsMultiline: isContentMultiline(node.rawContent),
+          metadata: child.metadata ? parseMetadata(child.metadata) : undefined,
+          isPortal: child.isPortal,
+          portalRefs: child.portalRefs,
         });
         // 新增行也可能有子节点（嵌套新增）
         collectNewLinesUnderNew(child, result, myIndex);
@@ -373,12 +442,50 @@ function collectNewLinesUnderNew(parent: OutlineNode, result: NewLineInfo[], par
       parentId: `__new_${parentIndex}__`,
       position: childPos,
       parentIsMultiline: isContentMultiline(parent.rawContent),
+      metadata: child.metadata ? parseMetadata(child.metadata) : undefined,
+      isPortal: child.isPortal,
+      portalRefs: child.portalRefs,
     });
     if (child.children.length > 0) {
       collectNewLinesUnderNew(child, result, myIndex);
     }
     childPos++;
   }
+}
+
+/**
+ * 检测新增行（无 remId）是否劫持了已有节点的 children。
+ * 遍历新树，找到无 remId 的节点，检查其 children 中是否包含旧树中已存在的 remId。
+ */
+function findCapturedChildren(
+  roots: OutlineNode[],
+  oldMap: Map<string, OldNodeInfo>,
+): { newNodeContent: string; capturedIds: string[] } | null {
+  function walk(node: OutlineNode): { newNodeContent: string; capturedIds: string[] } | null {
+    if (node.remId === null && !node.isElided && !node.isPortal) {
+      // 新增行：检查它的 children 中是否有已存在的 remId
+      const captured: string[] = [];
+      for (const child of node.children) {
+        if (child.remId && oldMap.has(child.remId)) {
+          captured.push(child.remId);
+        }
+      }
+      if (captured.length > 0) {
+        return { newNodeContent: node.rawContent || '(empty)', capturedIds: captured };
+      }
+    }
+    for (const child of node.children) {
+      const result = walk(child);
+      if (result) return result;
+    }
+    return null;
+  }
+
+  for (const root of roots) {
+    const result = walk(root);
+    if (result) return result;
+  }
+  return null;
 }
 
 /** 递归收集所有省略占位符行的 rawContent */
@@ -433,6 +540,25 @@ export function diffTrees(
         type: 'elided_modified',
         message: 'Cannot delete or modify elided region directly. Use read-tree with the parent remId to expand first.',
         details: { elidedLine },
+      };
+    }
+  }
+
+  // ── 子节点劫持检测：新增行不应"抢走"已有节点的 children ──
+  // 典型场景：在有子节点的 Rem 和它的 children 之间插入同级新行，
+  // 导致 children 被解析为新行的子节点而非原父节点的子节点。
+  {
+    const captured = findCapturedChildren(newRoots, oldMap);
+    if (captured) {
+      return {
+        type: 'children_captured',
+        message: `New line "${captured.newNodeContent}" accidentally captured existing children (${captured.capturedIds.join(', ')}). ` +
+          `Insert the new line after the last child, not between a parent Rem and its children.`,
+        details: {
+          newNodeContent: captured.newNodeContent,
+          capturedIds: captured.capturedIds,
+          hint: 'Place the new line after all siblings of the target level, not right after a Rem that has children below it.',
+        },
       };
     }
   }
@@ -507,6 +633,9 @@ export function diffTrees(
       parentId: nl.parentId,
       position: nl.position,
       parentIsMultiline: nl.parentIsMultiline,
+      metadata: nl.metadata,
+      isPortal: nl.isPortal,
+      portalRefs: nl.portalRefs,
     });
   }
 

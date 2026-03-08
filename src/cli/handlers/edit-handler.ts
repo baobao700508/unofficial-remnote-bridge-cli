@@ -7,16 +7,20 @@
  * 防线 1：缓存存在性检查（必须先 read 再 edit）
  * 防线 2：乐观并发检测（当前 JSON 与缓存 JSON 比较）
  * 防线 3：str_replace 精确匹配（old_str 必须唯一匹配）
+ *
+ * Portal 专用路径：type === 'portal' 时，在简化 JSON（9 字段）上执行 str_replace，
+ * 推导变更后调用专用写入逻辑。
  */
 
 import { RemCache } from './rem-cache.js';
+import { PORTAL_FIELDS } from './read-handler.js';
 
 /** 只读字段集合 — 变更这些字段只产生警告，不执行写入 */
 const READ_ONLY_FIELDS = new Set([
   'id',
   'children',
   'isTable',
-  'portalType', 'portalDirectlyIncludedRem',
+  'portalType',
   'propertyType',
   'aliases',
   'remsBeingReferenced', 'deepRemsBeingReferenced', 'remsReferencingThis',
@@ -28,6 +32,11 @@ const READ_ONLY_FIELDS = new Set([
   'createdAt', 'updatedAt', 'localUpdatedAt', 'lastPracticed',
   'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
   'isPowerupPropertyListItem', 'isPowerupSlot',
+]);
+
+/** Portal 简化 JSON 中的只读字段 */
+const PORTAL_READONLY_FIELDS = new Set([
+  'id', 'type', 'portalType', 'children', 'createdAt', 'updatedAt',
 ]);
 
 export interface EditRemPayload {
@@ -72,6 +81,115 @@ export class EditHandler {
       );
     }
 
+    // ── 检测 Portal 类型，分流到专用路径 ──
+    const cachedObj = JSON.parse(cachedJson) as Record<string, unknown>;
+    if (cachedObj.type === 'portal') {
+      return this.handlePortalEdit(remId, cachedJson, cachedObj, oldStr, newStr);
+    }
+
+    // ── 普通 Rem 路径 ──
+    return this.handleNormalEdit(remId, cachedJson, cachedObj, oldStr, newStr);
+  }
+
+  /** Portal 专用编辑路径：在简化 JSON 上执行 str_replace */
+  private async handlePortalEdit(
+    remId: string,
+    cachedJson: string,
+    fullObj: Record<string, unknown>,
+    oldStr: string,
+    newStr: string,
+  ): Promise<EditRemResult> {
+    // 从完整对象提取简化 JSON
+    const simplified: Record<string, unknown> = {};
+    for (const field of PORTAL_FIELDS) {
+      if (field in fullObj) {
+        simplified[field] = fullObj[field];
+      }
+    }
+    const simplifiedJson = JSON.stringify(simplified, null, 2);
+
+    // ── 防线 3: str_replace 在简化 JSON 上精确匹配 ──
+    const matchCount = countOccurrences(simplifiedJson, oldStr);
+    if (matchCount === 0) {
+      throw new Error(
+        `old_str not found in the simplified Portal JSON of rem ${remId}`,
+      );
+    }
+    if (matchCount > 1) {
+      throw new Error(
+        `old_str matches ${matchCount} locations in Portal rem ${remId}. ` +
+        `Make old_str more specific to match exactly once.`,
+      );
+    }
+
+    const modifiedSimplifiedJson = simplifiedJson.replace(oldStr, newStr);
+
+    // JSON 解析
+    let modified: Record<string, unknown>;
+    try {
+      modified = JSON.parse(modifiedSimplifiedJson);
+    } catch {
+      throw new Error(
+        'The replacement produced invalid JSON. Check your new_str for syntax errors.',
+      );
+    }
+
+    // 推导变更字段
+    const changes: Record<string, unknown> = {};
+    const warnings: string[] = [];
+
+    for (const key of Object.keys(modified)) {
+      if (JSON.stringify(modified[key]) !== JSON.stringify(simplified[key])) {
+        if (PORTAL_READONLY_FIELDS.has(key)) {
+          warnings.push(`Field '${key}' is read-only and was ignored`);
+        } else {
+          changes[key] = modified[key];
+        }
+      }
+    }
+
+    // 空变更检查
+    if (Object.keys(changes).length === 0) {
+      return { ok: true, changes: [], warnings };
+    }
+
+    // ── 发送变更到 Plugin ──
+    const writeResult = (await this.forwardToPlugin('write_rem_fields', {
+      remId,
+      changes,
+    })) as { applied: string[]; failed?: { field: string; error: string } };
+
+    if (writeResult.failed) {
+      return {
+        ok: false,
+        changes: [],
+        warnings,
+        error: `Failed to update field '${writeResult.failed.field}': ${writeResult.failed.error}`,
+        appliedChanges: writeResult.applied,
+        failedField: writeResult.failed.field,
+      };
+    }
+
+    // ── 写入成功 → 从 Plugin 重新获取完整 Rem 并更新缓存（D5）──
+    const freshRemObject = await this.forwardToPlugin('read_rem', { remId });
+    const freshJson = JSON.stringify(freshRemObject, null, 2);
+    this.cache.set('rem:' + remId, freshJson);
+
+    return {
+      ok: true,
+      changes: Object.keys(changes),
+      warnings,
+    };
+  }
+
+  /** 普通 Rem 编辑路径：在完整 JSON 上执行 str_replace */
+  private async handleNormalEdit(
+    remId: string,
+    cachedJson: string,
+    original: Record<string, unknown>,
+    oldStr: string,
+    newStr: string,
+  ): Promise<EditRemResult> {
     // ── 防线 3: str_replace 精确匹配 ──
     const matchCount = countOccurrences(cachedJson, oldStr);
     if (matchCount === 0) {
@@ -88,8 +206,6 @@ export class EditHandler {
 
     const modifiedJson = cachedJson.replace(oldStr, newStr);
 
-    // ── 后处理校验 ──
-
     // 1. JSON 解析
     let modified: Record<string, unknown>;
     try {
@@ -99,8 +215,6 @@ export class EditHandler {
         'The replacement produced invalid JSON. Check your new_str for syntax errors.',
       );
     }
-
-    const original = JSON.parse(cachedJson) as Record<string, unknown>;
 
     // 2. 推导变更字段
     const changes: Record<string, unknown> = {};

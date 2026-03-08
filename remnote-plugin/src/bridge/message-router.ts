@@ -19,6 +19,9 @@ import { deleteRem } from '../services/delete-rem';
 import { moveRem } from '../services/move-rem';
 import { reorderChildren } from '../services/reorder-children';
 import { search } from '../services/search';
+import { createPortal } from '../services/create-portal';
+import { addToPortal } from '../services/add-to-portal';
+import { removeFromPortal } from '../services/remove-from-portal';
 
 /**
  * 创建消息路由处理器
@@ -49,6 +52,14 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
         return readContext(plugin, request.payload as { mode?: 'focus' | 'page'; ancestorLevels?: number; maxNodes?: number; maxSiblings?: number; depth?: number });
       case 'search':
         return search(plugin, request.payload as { query: string; numResults?: number });
+
+      // Portal 操作
+      case 'create_portal':
+        return createPortal(plugin, request.payload as { parentId: string; position?: number });
+      case 'add_to_portal':
+        return addToPortal(plugin, request.payload as { portalId: string; remId: string });
+      case 'remove_from_portal':
+        return removeFromPortal(plugin, request.payload as { portalId: string; remId: string });
 
       default:
         throw new Error(`未实现的 action: ${request.action}`);

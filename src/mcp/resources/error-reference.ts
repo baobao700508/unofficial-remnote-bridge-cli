@@ -1,7 +1,7 @@
 export const ERROR_REFERENCE_CONTENT = `
 # Error Reference
 
-所有 CLI 命令错误的完整参考，按类别分组。
+所有工具错误的完整参考，按类别分组。
 
 ---
 
@@ -54,6 +54,8 @@ export const ERROR_REFERENCE_CONTENT = `
 | Failed to update field '{field}': ... | SDK setter 调用失败 | 检查字段值是否在允许范围内 |
 | Field '{fieldName}' is read-only and was ignored | 修改了只读字段 | **警告**（非阻断），该字段不可修改 |
 | Setting 'todoStatus' without 'isTodo: true' may have no effect | todoStatus 非 null 但 isTodo=false | 先将 isTodo 设为 true |
+| old_str not found in the simplified Portal JSON of rem {remId} | Portal 编辑时 oldStr 在 9 字段简化 JSON 中不匹配 | 检查 oldStr 是否匹配 Portal 简化 JSON 格式（9 字段：id、type、portalType、portalDirectlyIncludedRem、parent、positionAmongstSiblings、children、createdAt、updatedAt） |
+| old_str matches {N} locations in Portal rem {remId}. Make old_str more specific to match exactly once. | Portal 编辑时 oldStr 在简化 JSON 中匹配多处 | 扩大 oldStr 范围以唯一定位 |
 
 ---
 
@@ -67,6 +69,7 @@ export const ERROR_REFERENCE_CONTENT = `
 | Cannot delete {id} because it has children that were not removed. | \\\`orphan_detected\\\` | 删除了父行但保留了子行 | 必须同时删除所有子行 |
 | Cannot delete or modify elided region directly. | \\\`elided_modified\\\` | 删除或修改了省略占位符 | 用更大的 depth/maxSiblings 重新 \\\`read_tree\\\` 展开 |
 | 缩进跳级：行 ... 的缩进级别为 N，但找不到上一级的父节点。 | \\\`indent_skip\\\` | 新增行的缩进不正确 | 检查缩进（每级 2 空格） |
+| New line "..." accidentally captured existing children (...). Insert the new line after the last child, not between a parent Rem and its children. | \\\`children_captured\\\` | 新增行插在了一个有子节点的 Rem 和它的 children 之间，劫持了已有子节点 | 把新行插到目标层级所有兄弟的**末尾**，不要插在父 Rem 紧后面 |
 
 ---
 
@@ -106,6 +109,7 @@ export const ERROR_REFERENCE_CONTENT = `
 │
 ├─ "old_str not found"
 │   ├─ 检查空格、换行、引号是否精确匹配
+│   ├─ Portal Rem？检查是否匹配 9 字段简化 JSON（非完整 JSON）
 │   └─ 重新 read 确认当前内容
 │
 ├─ "old_str matches N locations"
@@ -116,6 +120,9 @@ export const ERROR_REFERENCE_CONTENT = `
 │
 ├─ "Content modification not allowed"
 │   └─ 改用 edit_rem 修改内容
+│
+├─ "children_captured"
+│   └─ 把新行插到所有兄弟末尾，不要插在父 Rem 和 children 之间
 │
 ├─ "orphan_detected"
 │   └─ 同时删除父行的所有子行

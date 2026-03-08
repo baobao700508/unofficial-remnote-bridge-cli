@@ -11,7 +11,7 @@
 import type { DefaultsConfig } from '../config.js';
 import { DEFAULT_DEFAULTS } from '../config.js';
 import { RemCache } from './rem-cache.js';
-import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiffError } from './tree-parser.js';
+import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiffError, type ParsedMetadata } from './tree-parser.js';
 
 export interface TreeEditPayload {
   remId: string;
@@ -134,38 +134,67 @@ export class TreeEditHandler {
             parentId = actualId;
           }
 
-          // 解析 Markdown 前缀 + 箭头分隔符 → 属性
-          const { cleanContent, powerups, backText, practiceDirection } = parsePowerupPrefix(op.content);
+          if (op.isPortal) {
+            // ── Portal 创建路径 ──
+            // 1. 创建空 Portal 并设置父节点
+            const portalResult = await this.forwardToPlugin('create_portal', {
+              parentId,
+              position: op.position,
+            }) as { remId: string };
 
-          const createResult = await this.forwardToPlugin('create_rem', {
-            content: cleanContent,
-            parentId,
-            position: op.position,
-          }) as { remId: string };
+            // 2. 逐个添加引用
+            if (op.portalRefs?.length) {
+              for (const refId of op.portalRefs) {
+                await this.forwardToPlugin('add_to_portal', {
+                  portalId: portalResult.remId,
+                  remId: refId,
+                });
+              }
+            }
 
-          // 合并所有需要写入的属性（Powerup + 箭头分隔符推导的字段）
-          const changes: Record<string, unknown> = { ...powerups };
-          if (backText !== undefined) changes.backText = backText;
-          if (practiceDirection !== undefined) changes.practiceDirection = practiceDirection;
-          // 父节点为 multiline 时，子行标记 isCardItem
-          // ⚠ SDK bug: setIsCardItem(true) 会偷偷设 practiceDirection: "forward"
-          // 但 practiceDirection 应该只存在于父行（问题行），card-item（答案行）上不应该有。
-          // 如果 card-item 带着 practiceDirection: "forward" 且有子行，会被 RemNote 错误渲染成 multiline 卡片。
-          // 对策：setIsCardItem(true) 后立即用 practiceDirection: 'none' 覆盖掉副作用。
-          if (op.parentIsMultiline) {
-            changes.isCardItem = true;
-            if (!changes.practiceDirection) changes.practiceDirection = 'none';
+            // 记录新创建的 remId，供后续嵌套引用
+            newRemIdMap.set(i, portalResult.remId);
+          } else {
+            // ── 普通 Rem 创建路径 ──
+            // 解析 Markdown 前缀 + 箭头分隔符 → 属性
+            const { cleanContent, powerups, backText, practiceDirection } = parsePowerupPrefix(op.content);
+
+            const createResult = await this.forwardToPlugin('create_rem', {
+              content: cleanContent,
+              parentId,
+              position: op.position,
+            }) as { remId: string };
+
+            // 合并所有需要写入的属性（Powerup + 箭头分隔符推导的字段）
+            const changes: Record<string, unknown> = { ...powerups };
+            if (backText !== undefined) changes.backText = backText;
+            if (practiceDirection !== undefined) changes.practiceDirection = practiceDirection;
+            // 父节点为 multiline 时，子行标记 isCardItem
+            // ⚠ SDK bug: setIsCardItem(true) 会偷偷设 practiceDirection: "forward"
+            // 但 practiceDirection 应该只存在于父行（问题行），card-item（答案行）上不应该有。
+            // 如果 card-item 带着 practiceDirection: "forward" 且有子行，会被 RemNote 错误渲染成 multiline 卡片。
+            // 对策：setIsCardItem(true) 后立即用 practiceDirection: 'none' 覆盖掉副作用。
+            // 合并 HTML 注释中的元数据（type、doc、tag）
+            if (op.metadata) {
+              if (op.metadata.type) changes.type = op.metadata.type;
+              if (op.metadata.isDocument) changes.isDocument = op.metadata.isDocument;
+              if (op.metadata.tags) changes.tags = op.metadata.tags;
+            }
+            if (op.parentIsMultiline) {
+              changes.isCardItem = true;
+              if (!changes.practiceDirection) changes.practiceDirection = 'none';
+            }
+
+            if (Object.keys(changes).length > 0) {
+              await this.forwardToPlugin('write_rem_fields', {
+                remId: createResult.remId,
+                changes,
+              });
+            }
+
+            // 记录新创建的 remId，供后续嵌套引用
+            newRemIdMap.set(i, createResult.remId);
           }
-
-          if (Object.keys(changes).length > 0) {
-            await this.forwardToPlugin('write_rem_fields', {
-              remId: createResult.remId,
-              changes,
-            });
-          }
-
-          // 记录新创建的 remId，供后续嵌套引用
-          newRemIdMap.set(i, createResult.remId);
           break;
         }
         case 'delete': {
