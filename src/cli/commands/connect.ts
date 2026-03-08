@@ -91,11 +91,12 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     execArgv,
   });
 
-  // 等待就绪信号，超时 10 秒
+  // 等待就绪信号，超时 60 秒
+  // 首次启动可能需要安装 remnote-plugin 依赖（npm install），在 Windows 上可能需要较长时间
   const ready = await new Promise<DaemonMessage | null>((resolve) => {
     const timeout = setTimeout(() => {
       resolve(null);
-    }, 10_000);
+    }, 60_000);
 
     child.on('message', (msg: unknown) => {
       if (isDaemonMessage(msg)) {
@@ -123,9 +124,9 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
 
   if (!ready) {
     if (json) {
-      jsonOutput({ ok: false, command: 'connect', error: '守护进程启动超时（10 秒）' });
+      jsonOutput({ ok: false, command: 'connect', error: '守护进程启动超时（60 秒）' });
     } else {
-      console.error('守护进程启动超时（10 秒）');
+      console.error('守护进程启动超时（60 秒）');
     }
     process.exitCode = 1;
     return;
