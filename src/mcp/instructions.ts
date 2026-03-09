@@ -103,6 +103,8 @@ disconnect → 关闭 daemon，清空所有缓存
 
 标准模式每次 connect 后都需要用户手动操作 RemNote。Headless 模式通过 setup（一次性）+ headless Chrome 实现自动连接，后续 connect 无需用户介入。
 
+**⚠️ 模式选择建议**：日常使用推荐**标准模式**。Headless 模式下 Chrome 在后台运行，**无法感知用户正在 RemNote 中浏览和操作的界面**（\\\`read_context\\\` 返回的是 headless Chrome 的上下文，而非用户的浏览器）。只有在全自动化场景（CI/CD、定时任务、批量操作等无需与用户界面交互的场景）才建议使用 Headless 模式。
+
 #### 首次使用（setup）
 
 \\\`setup\\\` 会弹出 Chrome 窗口，用户需要完成两件事：
