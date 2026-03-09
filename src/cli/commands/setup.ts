@@ -26,8 +26,31 @@ export function isSetupDone(userDataDir?: string): boolean {
   return fs.existsSync(path.join(dir, SETUP_DONE_FILE));
 }
 
+/**
+ * 检测是否在无桌面环境（沙箱、SSH、Docker 等）中运行。
+ * setup 需要弹出有界面的 Chrome 窗口，无桌面环境下无法使用。
+ */
+function hasDisplay(): boolean {
+  if (process.platform === 'win32' || process.platform === 'darwin') return true;
+  // Linux：检查 DISPLAY 或 WAYLAND_DISPLAY 环境变量
+  return !!(process.env['DISPLAY'] || process.env['WAYLAND_DISPLAY']);
+}
+
 export async function setupCommand(options: SetupOptions = {}): Promise<void> {
   const { json } = options;
+
+  // 检查桌面环境
+  if (!hasDisplay()) {
+    const msg = 'setup 需要桌面环境来打开 Chrome 窗口，当前环境无法使用（沙箱 / SSH / Docker）。请在有桌面的机器上运行此命令';
+    if (json) {
+      jsonOutput({ ok: false, command: 'setup', error: msg });
+    } else {
+      console.error(msg);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
   const projectRoot = findProjectRoot();
   const config = loadConfig(projectRoot);
 
