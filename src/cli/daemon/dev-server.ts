@@ -8,6 +8,7 @@
 import { spawn, execSync, ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import type { PluginServer } from './static-server.js';
 
 export interface DevServerOptions {
   pluginDir: string;
@@ -17,7 +18,7 @@ export interface DevServerOptions {
   maxRetries?: number;
 }
 
-export class DevServerManager {
+export class DevServerManager implements PluginServer {
   private child: ChildProcess | null = null;
   private options: DevServerOptions;
   private retryCount = 0;

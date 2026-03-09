@@ -19,13 +19,20 @@ const MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+/** StaticServer 和 DevServerManager 的共享接口 */
+export interface PluginServer {
+  start(): void | Promise<void>;
+  stop(): Promise<void>;
+  isRunning(): boolean;
+}
+
 export interface StaticServerOptions {
   distDir: string;
   port: number;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
 }
 
-export class StaticServer {
+export class StaticServer implements PluginServer {
   private server: http.Server | null = null;
   private options: StaticServerOptions;
 

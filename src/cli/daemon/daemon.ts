@@ -15,6 +15,7 @@ import { BridgeServer } from '../server/ws-server.js';
 import { ConfigServer } from '../server/config-server.js';
 import { DevServerManager } from './dev-server.js';
 import { StaticServer } from './static-server.js';
+import type { PluginServer } from './static-server.js';
 import { writePid, removePid } from './pid.js';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
 import type { BridgeConfig } from '../config.js';
@@ -116,7 +117,7 @@ async function main() {
   }
 
   const pluginServerLabel = devMode ? 'webpack-dev-server' : '静态文件服务器';
-  const pluginServer: { start(): void | Promise<void>; stop(): Promise<void>; isRunning(): boolean } = devMode
+  const pluginServer: PluginServer = devMode
     ? new DevServerManager({
         pluginDir,
         port: config.devServerPort,

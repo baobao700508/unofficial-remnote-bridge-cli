@@ -7,9 +7,6 @@
 
 import { createRequire } from 'module';
 import { Command } from 'commander';
-
-const require = createRequire(import.meta.url);
-const { version } = require('../../package.json');
 import { connectCommand } from './commands/connect.js';
 import { healthCommand } from './commands/health.js';
 import { disconnectCommand } from './commands/disconnect.js';
@@ -22,6 +19,9 @@ import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 import { cleanCommand } from './commands/clean.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../../package.json');
 
 const program = new Command();
 
