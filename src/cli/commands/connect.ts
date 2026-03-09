@@ -16,6 +16,8 @@ import { jsonOutput } from '../utils/output.js';
 
 export interface ConnectOptions {
   json?: boolean;
+  headless?: boolean;
+  remoteDebuggingPort?: number;
 }
 
 interface ReadyMessage {
@@ -24,6 +26,8 @@ interface ReadyMessage {
   devServerPort: number;
   configPort: number;
   pid: number;
+  headless?: boolean;
+  remoteDebuggingPort?: number;
 }
 
 interface ErrorMessage {
@@ -42,7 +46,7 @@ function isDaemonMessage(msg: unknown): msg is DaemonMessage {
 }
 
 export async function connectCommand(options: ConnectOptions = {}): Promise<void> {
-  const { json } = options;
+  const { json, headless, remoteDebuggingPort } = options;
   const projectRoot = findProjectRoot();
   const config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
@@ -84,11 +88,22 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     console.log('正在启动守护进程...');
   }
 
+  // 通过环境变量向 daemon 传递 headless 配置
+  const env: Record<string, string> = { ...process.env as Record<string, string> };
+  if (headless) {
+    env['REMNOTE_HEADLESS'] = '1';
+  }
+  if (remoteDebuggingPort) {
+    env['REMNOTE_HEADLESS'] = '1'; // 远程调试隐含 headless
+    env['REMNOTE_HEADLESS_REMOTE_PORT'] = String(remoteDebuggingPort);
+  }
+
   const child = fork(scriptPath, [], {
     detached: true,
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     cwd: projectRoot,
     execArgv,
+    env,
   });
 
   // 等待就绪信号，超时 60 秒
@@ -148,6 +163,8 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
       pid: ready.pid, wsPort: ready.wsPort, devServerPort: ready.devServerPort,
       configPort: ready.configPort,
       timeoutMinutes: config.daemonTimeoutMinutes,
+      headless: ready.headless || false,
+      remoteDebuggingPort: ready.remoteDebuggingPort,
     });
   } else {
     console.log(`守护进程已启动（PID: ${ready.pid}）`);
@@ -155,6 +172,13 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     console.log(`  webpack-dev-server: http://localhost:${ready.devServerPort}`);
     console.log(`  配置页面:          http://127.0.0.1:${ready.configPort}`);
     console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
+    if (ready.headless) {
+      console.log(`  Headless Chrome:   已启动`);
+      if (ready.remoteDebuggingPort) {
+        console.log(`  远程调试:          http://0.0.0.0:${ready.remoteDebuggingPort}`);
+        console.log(`  提示: 建议通过 SSH 隧道访问: ssh -L ${ready.remoteDebuggingPort}:127.0.0.1:${ready.remoteDebuggingPort} user@server`);
+      }
+    }
   }
   process.exitCode = 0;
 }

@@ -63,9 +63,11 @@ program
 program
   .command('connect')
   .description('启动守护进程（WS Server + webpack-dev-server），等待 Plugin 连接')
-  .action(async () => {
+  .option('--headless', '自动启动无头 Chrome 并加载 RemNote 插件')
+  .option('--remote-debugging-port <port>', '启用远程调试端口（隐含 --headless）', parseInt)
+  .action(async (cmdOpts: { headless?: boolean; remoteDebuggingPort?: number }) => {
     const { json } = program.opts();
-    await connectCommand({ json });
+    await connectCommand({ json, headless: cmdOpts.headless, remoteDebuggingPort: cmdOpts.remoteDebuggingPort });
   });
 
 program

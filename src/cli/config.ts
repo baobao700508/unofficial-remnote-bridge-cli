@@ -41,12 +41,22 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   searchNumResults: 20,
 };
 
+export interface HeadlessConfig {
+  /** Chrome/Chromium 可执行文件路径（不指定则自动查找） */
+  chromePath?: string;
+  /** 用户数据目录（持久化登录态，默认 ~/.remnote-bridge/chrome-profile） */
+  userDataDir?: string;
+  /** 远程调试端口（不设则不暴露） */
+  remoteDebuggingPort?: number;
+}
+
 export interface BridgeConfig {
   wsPort: number;
   devServerPort: number;
   configPort: number;
   daemonTimeoutMinutes: number;
   defaults: DefaultsConfig;
+  headless?: HeadlessConfig;
 }
 
 export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
@@ -110,6 +120,15 @@ function mergeDefaults(parsed: Partial<DefaultsConfig> | undefined): DefaultsCon
   };
 }
 
+function mergeHeadlessConfig(parsed: Partial<HeadlessConfig> | undefined): HeadlessConfig | undefined {
+  if (!parsed) return undefined;
+  const result: HeadlessConfig = {};
+  if (typeof parsed.chromePath === 'string' && parsed.chromePath) result.chromePath = parsed.chromePath;
+  if (typeof parsed.userDataDir === 'string' && parsed.userDataDir) result.userDataDir = parsed.userDataDir;
+  if (isValidPort(parsed.remoteDebuggingPort)) result.remoteDebuggingPort = parsed.remoteDebuggingPort;
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 /**
  * 加载配置。不存在时返回默认值。
  */
@@ -134,6 +153,7 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
           ? parsed.daemonTimeoutMinutes
           : DEFAULT_CONFIG.daemonTimeoutMinutes,
       defaults: mergeDefaults(parsed.defaults),
+      headless: mergeHeadlessConfig(parsed.headless as Partial<HeadlessConfig> | undefined),
     };
 
     // 端口冲突校验

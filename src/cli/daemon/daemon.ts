@@ -14,6 +14,7 @@ import fs from 'fs';
 import { BridgeServer } from '../server/ws-server.js';
 import { ConfigServer } from '../server/config-server.js';
 import { DevServerManager } from './dev-server.js';
+import { HeadlessBrowserManager } from './headless-browser.js';
 import { writePid, removePid } from './pid.js';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
 import type { BridgeConfig } from '../config.js';
@@ -115,12 +116,41 @@ async function main() {
     },
   });
 
+  // 无头浏览器（通过环境变量 REMNOTE_HEADLESS=1 启用）
+  const headlessEnabled = process.env['REMNOTE_HEADLESS'] === '1';
+  const headlessRemotePort = process.env['REMNOTE_HEADLESS_REMOTE_PORT']
+    ? parseInt(process.env['REMNOTE_HEADLESS_REMOTE_PORT'], 10)
+    : undefined;
+
+  let headlessBrowser: HeadlessBrowserManager | null = null;
+  if (headlessEnabled) {
+    // 远程调试端口优先级：环境变量 > 配置文件
+    const remotePort = headlessRemotePort || config.headless?.remoteDebuggingPort;
+    headlessBrowser = new HeadlessBrowserManager({
+      remNoteUrl: `http://localhost:${config.devServerPort}`,
+      chromePath: config.headless?.chromePath,
+      userDataDir: config.headless?.userDataDir,
+      remoteDebuggingPort: remotePort,
+      onLog: log,
+    });
+  }
+
   async function shutdown() {
     if (shutdownInProgress) return;
     shutdownInProgress = true;
 
     log('开始优雅关闭...');
     clearTimeout(timeoutTimer);
+
+    // 先关浏览器（它依赖 dev-server 提供的页面）
+    if (headlessBrowser) {
+      try {
+        await headlessBrowser.stop();
+        log('Headless Chrome 已关闭');
+      } catch (err) {
+        log(`Headless Chrome 关闭失败: ${err}`, 'error');
+      }
+    }
 
     try {
       await server.stop();
@@ -182,6 +212,18 @@ async function main() {
     process.exit(1);
   }
 
+  // 启动无头浏览器（在 dev-server 之后，因为它需要导航到 dev-server 页面）
+  if (headlessBrowser) {
+    try {
+      await headlessBrowser.start();
+      log('[headless] Chrome 已启动并导航到 RemNote 页面');
+    } catch (err) {
+      log(`[headless] Chrome 启动失败: ${err}`, 'error');
+      // 非致命：headless 启动失败不阻塞守护进程
+      // 用户可能需要先通过远程调试登录 RemNote
+    }
+  }
+
   // 写入 PID 文件
   writePid(pidPath, process.pid);
   log(`PID 文件已写入: ${pidPath} (PID: ${process.pid})`);
@@ -196,6 +238,8 @@ async function main() {
     devServerPort: config.devServerPort,
     configPort: config.configPort,
     pid: process.pid,
+    headless: headlessEnabled,
+    remoteDebuggingPort: headlessBrowser ? (headlessRemotePort || config.headless?.remoteDebuggingPort) : undefined,
   });
 
   // 断开 IPC 通道（让父进程可以退出）
