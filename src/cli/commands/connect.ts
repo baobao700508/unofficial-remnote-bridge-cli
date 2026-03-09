@@ -1,10 +1,13 @@
 /**
  * connect 命令
  *
- * 启动后台守护进程（WS Server + webpack-dev-server），等待 Plugin 连接。
+ * 启动后台守护进程（WS Server + Plugin 服务），等待 Plugin 连接。
  * - 已在运行 → 打印提示，退出码 0
  * - stale PID → 清理后正常启动
  * - 启动失败 → 退出码 1
+ *
+ * 默认使用静态文件服务器 serve 预构建 plugin。
+ * --dev 模式使用 webpack-dev-server（支持 HMR）。
  */
 
 import path from 'path';
@@ -16,6 +19,7 @@ import { jsonOutput } from '../utils/output.js';
 
 export interface ConnectOptions {
   json?: boolean;
+  dev?: boolean;
 }
 
 interface ReadyMessage {
@@ -89,6 +93,7 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     cwd: projectRoot,
     execArgv,
+    env: { ...process.env, REMNOTE_BRIDGE_DEV: options.dev ? '1' : '0' },
   });
 
   // 等待就绪信号，超时 60 秒
@@ -152,7 +157,7 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
   } else {
     console.log(`守护进程已启动（PID: ${ready.pid}）`);
     console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);
-    console.log(`  webpack-dev-server: http://localhost:${ready.devServerPort}`);
+    console.log(`  Plugin 服务:       http://localhost:${ready.devServerPort}`);
     console.log(`  配置页面:          http://127.0.0.1:${ready.configPort}`);
     console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
   }
