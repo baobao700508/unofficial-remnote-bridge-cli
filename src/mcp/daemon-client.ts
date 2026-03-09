@@ -57,12 +57,15 @@ export class CliError extends Error {
 export async function callCli(
   command: string,
   payload?: Record<string, unknown>,
-  options?: { timeoutMs?: number },
+  options?: { timeoutMs?: number; flags?: string[] },
 ): Promise<CliResponse> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  // 构造参数列表：--json <command> [jsonStr]
+  // 构造参数列表：--json <command> [flags...] [jsonStr]
   const args: string[] = ['--json', command];
+  if (options?.flags) {
+    args.push(...options.flags);
+  }
   if (payload !== undefined) {
     args.push(JSON.stringify(payload));
   }

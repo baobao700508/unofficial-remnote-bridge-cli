@@ -43,12 +43,34 @@ npx skills add baobao700508/unofficial-remnote-bridge-cli -s remnote-bridge
 
 ## 快速开始
 
+### Headless 模式（推荐 AI Agent 使用）
+
+首次 setup 后即可全自动连接，无需人工干预。
+
 ```bash
-# 1. 启动守护进程（WS Server + Plugin 开发服务器）
+# 1. 一次性操作：在 Chrome 中登录 RemNote（保存登录凭证）
+remnote-bridge setup
+
+# 2. 自动启动 headless Chrome 连接（无需打开浏览器窗口）
+remnote-bridge connect --headless
+
+# 3. 确认三层就绪
+remnote-bridge health
+
+# 4. 直接使用任何命令
+remnote-bridge search "机器学习"
+```
+
+### 标准模式
+
+需要用户手动在 RemNote 中加载插件。
+
+```bash
+# 1. 启动守护进程（WS Server + Plugin 服务）
 remnote-bridge connect
 
 # 2. 在 RemNote 中加载插件
-#    打开 RemNote → 设置 → 插件 → 添加本地插件
+#    打开 RemNote → 插件 → 开发你的插件
 #    输入地址：http://localhost:8080
 
 # 3. 检查系统状态
@@ -75,8 +97,9 @@ remnote-bridge disconnect
 
 | 命令 | 说明 |
 |:-----|:-----|
-| `connect` | 启动守护进程（WS Server + Plugin 开发服务器） |
-| `health` | 检查 daemon、Plugin、SDK 三层状态 |
+| `setup` | 启动 Chrome 登录 RemNote，保存凭证供 headless 模式使用 |
+| `connect` | 启动守护进程（`--headless` 自动启动 Chrome，默认需手动加载插件） |
+| `health` | 检查 daemon/Plugin/SDK 三层状态（`--diagnose` 截图诊断，`--reload` 重载 Chrome） |
 | `disconnect` | 停止守护进程，释放端口和资源 |
 
 ### 读取
@@ -184,14 +207,15 @@ remnote-bridge CLI
     ↕  WebSocket IPC
 Daemon（守护进程：WS Server + Handlers + 缓存）
     ↕  WebSocket
-remnote-plugin（运行在 RemNote 浏览器中）
+remnote-plugin（运行在 RemNote 浏览器或 headless Chrome 中）
     ↕
 RemNote SDK → 知识库
 ```
 
 - **CLI 命令无状态**——每次调用都是独立的 OS 进程
 - **守护进程持有状态**：缓存、WS 连接、超时计时器
-- **Plugin 运行在浏览器中**，代表 daemon 调用 RemNote SDK
+- **Plugin 运行在浏览器中**（或 headless Chrome），代表 daemon 调用 RemNote SDK
+- **Headless 模式**：使用已保存的登录凭证自动启动 Chrome，无需打开浏览器窗口
 - **三道防线**保护编辑操作：缓存存在性检查、乐观并发检测、str_replace 精确匹配
 
 ## 配置

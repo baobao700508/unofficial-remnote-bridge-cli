@@ -41,6 +41,31 @@ export interface BridgeResponse {
   error?: string;
 }
 
+// ── Headless Chrome 状态 ──
+
+export type HeadlessStatus = 'stopped' | 'starting' | 'running' | 'crashed' | 'reloading';
+
+export interface HeadlessDiagnostics {
+  status: HeadlessStatus;
+  chromeConnected: boolean;
+  pageUrl: string | null;
+  reloadCount: number;
+  lastError: string | null;
+  recentConsoleErrors: string[];
+}
+
+export interface DiagnoseResult {
+  headless: HeadlessDiagnostics;
+  screenshotPath: string | null;
+  pluginConnected: boolean;
+  sdkReady: boolean;
+}
+
+export interface ReloadResult {
+  ok: boolean;
+  error?: string;
+}
+
 // ── get_status 响应 ──
 
 export interface StatusResult {
@@ -48,6 +73,7 @@ export interface StatusResult {
   sdkReady: boolean;
   uptime: number;
   timeoutRemaining: number;
+  headless?: HeadlessDiagnostics;
 }
 
 // ── 消息类型判断辅助 ──

@@ -15,11 +15,14 @@ import fs from 'fs';
 import { fork } from 'child_process';
 import { loadConfig, pidFilePath, findProjectRoot } from '../config.js';
 import { checkDaemon } from '../daemon/pid.js';
+import { getSetupDonePath } from '../daemon/headless-browser.js';
 import { jsonOutput } from '../utils/output.js';
 
 export interface ConnectOptions {
   json?: boolean;
   dev?: boolean;
+  headless?: boolean;
+  remoteDebuggingPort?: number;
 }
 
 interface ReadyMessage {
@@ -28,6 +31,7 @@ interface ReadyMessage {
   devServerPort: number;
   configPort: number;
   pid: number;
+  headless?: boolean;
 }
 
 interface ErrorMessage {
@@ -50,6 +54,21 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
   const projectRoot = findProjectRoot();
   const config = loadConfig(projectRoot);
   const pidPath = pidFilePath(projectRoot);
+
+  // headless 前置检查
+  if (options.headless) {
+    const setupDonePath = getSetupDonePath();
+    if (!fs.existsSync(setupDonePath)) {
+      const error = '尚未完成 setup。请先执行 `remnote-bridge setup` 登录 RemNote，然后再使用 --headless';
+      if (json) {
+        jsonOutput({ ok: false, command: 'connect', error });
+      } else {
+        console.error(error);
+      }
+      process.exitCode = 1;
+      return;
+    }
+  }
 
   // 检查是否已在运行
   const status = checkDaemon(pidPath);
@@ -93,7 +112,12 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     cwd: projectRoot,
     execArgv,
-    env: { ...process.env, REMNOTE_BRIDGE_DEV: options.dev ? '1' : '0' },
+    env: {
+      ...process.env,
+      REMNOTE_BRIDGE_DEV: options.dev ? '1' : '0',
+      ...(options.headless ? { REMNOTE_HEADLESS: '1' } : {}),
+      ...(options.remoteDebuggingPort ? { REMNOTE_HEADLESS_REMOTE_PORT: String(options.remoteDebuggingPort) } : {}),
+    },
   });
 
   // 等待就绪信号，超时 60 秒
@@ -153,12 +177,16 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
       pid: ready.pid, wsPort: ready.wsPort, devServerPort: ready.devServerPort,
       configPort: ready.configPort,
       timeoutMinutes: config.daemonTimeoutMinutes,
+      headless: ready.headless ?? false,
     });
   } else {
     console.log(`守护进程已启动（PID: ${ready.pid}）`);
     console.log(`  WS Server:         ws://127.0.0.1:${ready.wsPort}`);
     console.log(`  Plugin 服务:       http://localhost:${ready.devServerPort}`);
     console.log(`  配置页面:          http://127.0.0.1:${ready.configPort}`);
+    if (ready.headless) {
+      console.log(`  Headless Chrome:   已启动（自动加载 Plugin）`);
+    }
     console.log(`  超时: ${config.daemonTimeoutMinutes} 分钟无 CLI 交互后自动关闭`);
   }
   process.exitCode = 0;

@@ -85,6 +85,8 @@ RemNote 的格式设置（标题、高亮、代码等）会注入隐藏的系统
 
 所有操作都依赖一个活跃的会话。会话 = 守护进程的生命周期。
 
+### 标准模式（需要用户配合）
+
 \\\`\\\`\\\`
 connect → 启动 daemon（幂等，重复调用安全）
   ↓
@@ -96,6 +98,50 @@ health → 确认三层就绪（daemon / Plugin / SDK）
   ↓
 disconnect → 关闭 daemon，清空所有缓存
 \\\`\\\`\\\`
+
+### Headless 模式（自动连接）
+
+标准模式每次 connect 后都需要用户手动操作 RemNote。Headless 模式通过 setup（一次性）+ headless Chrome 实现自动连接，后续 connect 无需用户介入。
+
+#### 首次使用（setup）
+
+\\\`setup\\\` 会弹出 Chrome 窗口，用户需要完成两件事：
+1. **登录 RemNote**
+2. **配置 dev plugin**：插件图标 → 开发你的插件 → 填入 \\\`http://localhost:8080\\\`
+
+完成后**彻底退出 Chrome**（macOS 必须 Cmd+Q，仅关窗口不够）。
+
+**你必须这样与用户交互**：
+1. 调用 \\\`setup\\\`
+2. 立即告知用户：
+   "已打开 Chrome 浏览器。请完成以下操作：
+    1. 登录 RemNote
+    2. 在 RemNote 中配置开发插件：点击左下角插件图标 → 开发你的插件 → 输入 http://localhost:8080
+    3. 完成后彻底退出 Chrome（macOS 请按 Cmd+Q）"
+3. 等待 \\\`setup\\\` 返回（阻塞，最长 10 分钟）
+4. 成功 → 进入下一步 \\\`connect(headless=true)\\\`
+
+setup 只需执行一次。之后每次连接直接用 \\\`connect(headless=true)\\\`。
+
+#### 后续使用
+
+\\\`\\\`\\\`
+connect(headless=true) → 启动 daemon + headless Chrome 自动加载 RemNote 和 Plugin
+  ↓
+health → 等待三层就绪（Plugin 需要 10-30 秒连接，可多次轮询）
+  ↓
+业务操作（read / search / edit）
+  ↓
+disconnect → 关闭 daemon + headless Chrome，清空所有缓存
+\\\`\\\`\\\`
+
+**无需任何用户操作**——headless Chrome 在后台自动完成登录和 Plugin 加载。
+
+#### 排查
+
+- \\\`health(diagnose=true)\\\`：截图 + Chrome 状态 + console 错误（确认页面是否正常加载）
+- \\\`health(reload=true)\\\`：重载 headless Chrome 页面（Plugin 未连接时尝试）
+- 如果 Plugin 始终不连接，可能是 RemNote 登录 session 过期，需重新 setup
 
 **关键要点**：
 - \\\`connect\\\` 是所有业务操作的前提，未 connect 时任何命令都会报"守护进程未运行"
@@ -110,9 +156,9 @@ disconnect → 关闭 daemon，清空所有缓存
 - **\`--dev\` 依赖自动修复**：如果 webpack-dev-server 因依赖损坏而崩溃，daemon 会自动清洁重装依赖（删除 node_modules 后重新安装）并重试，最多重试 2 次
 - **端口残留**：多次 connect 失败后可能出现端口被占用（EADDRINUSE），用 \\\`remnote-bridge disconnect\\\` 或手动终止占用端口的进程后重试
 
-### ⚠️ connect 后需要用户配合（重要）
+### ⚠️ 标准模式：connect 后需要用户配合（重要）
 
-\\\`connect\\\` 成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成以下操作，Plugin 才能连接到 daemon：
+\\\`connect\\\`（不传 headless）成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成以下操作，Plugin 才能连接到 daemon：
 
 **首次使用**（RemNote 从未加载过此插件）：
 1. 打开 RemNote 桌面端或网页端

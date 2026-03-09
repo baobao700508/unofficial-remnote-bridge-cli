@@ -8,6 +8,7 @@
 import { createRequire } from 'module';
 import { Command } from 'commander';
 import { connectCommand } from './commands/connect.js';
+import { setupCommand } from './commands/setup.js';
 import { healthCommand } from './commands/health.js';
 import { disconnectCommand } from './commands/disconnect.js';
 import { readRemCommand } from './commands/read-rem.js';
@@ -65,20 +66,32 @@ program
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 
 program
+  .command('setup')
+  .description('启动 Chrome 让用户登录 RemNote（headless 模式前置步骤）')
+  .action(async () => {
+    const { json } = program.opts();
+    await setupCommand({ json });
+  });
+
+program
   .command('connect')
   .description('启动守护进程，等待 Plugin 连接')
   .option('--dev', '开发模式：使用 webpack-dev-server（支持 HMR）')
-  .action(async (cmdOpts: { dev?: boolean }) => {
+  .option('--headless', '无头模式：自动启动 headless Chrome 加载 Plugin（需先 setup）')
+  .option('--remote-debugging-port <port>', 'Chrome 远程调试端口（仅 --headless）', parseInt)
+  .action(async (cmdOpts: { dev?: boolean; headless?: boolean; remoteDebuggingPort?: number }) => {
     const { json } = program.opts();
-    await connectCommand({ json, dev: cmdOpts.dev });
+    await connectCommand({ json, dev: cmdOpts.dev, headless: cmdOpts.headless, remoteDebuggingPort: cmdOpts.remoteDebuggingPort });
   });
 
 program
   .command('health')
   .description('检查守护进程、Plugin 连接和 SDK 状态')
-  .action(async () => {
+  .option('--diagnose', '诊断 headless Chrome（截图 + 状态 + console 错误）')
+  .option('--reload', '重载 headless Chrome 页面')
+  .action(async (cmdOpts: { diagnose?: boolean; reload?: boolean }) => {
     const { json } = program.opts();
-    await healthCommand({ json });
+    await healthCommand({ json, diagnose: cmdOpts.diagnose, reload: cmdOpts.reload });
   });
 
 program

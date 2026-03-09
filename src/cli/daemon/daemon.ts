@@ -16,9 +16,11 @@ import { ConfigServer } from '../server/config-server.js';
 import { DevServerManager } from './dev-server.js';
 import { StaticServer } from './static-server.js';
 import type { PluginServer } from './static-server.js';
+import { HeadlessBrowserManager } from './headless-browser.js';
 import { writePid, removePid } from './pid.js';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
 import type { BridgeConfig } from '../config.js';
+import type { DiagnoseResult, ReloadResult } from '../protocol.js';
 
 let shutdownInProgress = false;
 
@@ -64,6 +66,28 @@ async function main() {
       onLog: log,
       getTimeoutRemaining,
       defaults: cfg.defaults,
+      // Headless Chrome 回调（闭包引用 headlessBrowser，调用时读取最新值）
+      getHeadlessStatus: () => headlessBrowser?.getDiagnostics() ?? null,
+      diagnoseHeadless: async (): Promise<DiagnoseResult | null> => {
+        if (!headlessBrowser) return null;
+        const diag = headlessBrowser.getDiagnostics();
+        const screenshotPath = await headlessBrowser.takeScreenshot();
+        return {
+          headless: diag,
+          screenshotPath,
+          pluginConnected: false, // 由 ws-server 填充
+          sdkReady: false,        // 由 ws-server 填充
+        };
+      },
+      reloadHeadless: async (): Promise<ReloadResult> => {
+        if (!headlessBrowser) return { ok: false, error: '非 headless 模式' };
+        try {
+          await headlessBrowser.manualReload();
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      },
     });
     srv.onCliRequest = () => resetTimeout();
     return srv;
@@ -106,6 +130,14 @@ async function main() {
   const packageRoot = path.resolve(import.meta.dirname, '..', '..', '..');
   const pluginDir = path.join(packageRoot, 'remnote-plugin');
   const devMode = process.env.REMNOTE_BRIDGE_DEV === '1';
+  const headlessMode = process.env.REMNOTE_HEADLESS === '1';
+  const headlessRemotePort = process.env.REMNOTE_HEADLESS_REMOTE_PORT
+    ? parseInt(process.env.REMNOTE_HEADLESS_REMOTE_PORT, 10)
+    : undefined;
+
+  // Headless Chrome 管理器（在 createServer 之前声明，闭包可引用）
+  let headlessBrowser: HeadlessBrowserManager | null = null;
+
   const distDir = path.join(pluginDir, 'dist');
   const distExists = fs.existsSync(path.join(distDir, 'index.html'));
 
@@ -141,6 +173,17 @@ async function main() {
 
     log('开始优雅关闭...');
     clearTimeout(timeoutTimer);
+
+    // 先关闭 headless Chrome
+    if (headlessBrowser) {
+      try {
+        await headlessBrowser.stop();
+        log('Headless Chrome 已关闭');
+      } catch (err) {
+        log(`Headless Chrome 关闭失败: ${err}`, 'error');
+      }
+      headlessBrowser = null;
+    }
 
     try {
       await server.stop();
@@ -206,6 +249,26 @@ async function main() {
   writePid(pidPath, process.pid);
   log(`PID 文件已写入: ${pidPath} (PID: ${process.pid})`);
 
+  // 启动 Headless Chrome（如果启用）
+  // headless Chrome 加载 RemNote 本身（不是 plugin 静态文件），
+  // RemNote 会自动加载已配置的 dev plugin（从 localhost:8080）
+  if (headlessMode) {
+    const remNoteUrl = 'https://www.remnote.com';
+    headlessBrowser = new HeadlessBrowserManager({
+      remNoteUrl,
+      remoteDebuggingPort: headlessRemotePort,
+      onLog: log,
+    });
+    try {
+      await headlessBrowser.start();
+      log(`Headless Chrome 已启动，加载 ${remNoteUrl}`);
+    } catch (err) {
+      // 非致命：daemon 继续运行，日志记录错误
+      log(`Headless Chrome 启动失败（非致命）: ${err}`, 'error');
+      headlessBrowser = null;
+    }
+  }
+
   // 启动超时计时器
   resetTimeout();
 
@@ -216,6 +279,7 @@ async function main() {
     devServerPort: config.devServerPort,
     configPort: config.configPort,
     pid: process.pid,
+    headless: headlessMode,
   });
 
   // 断开 IPC 通道（让父进程可以退出）

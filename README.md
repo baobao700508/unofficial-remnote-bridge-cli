@@ -43,12 +43,34 @@ Once connected, the AI will guide you through connecting to RemNote, loading the
 
 ## Quick Start
 
+### Headless Mode (recommended for AI agents)
+
+Zero human intervention after initial setup — ideal for automated workflows.
+
 ```bash
-# 1. Start the daemon (launches WS server + plugin dev server)
+# 1. One-time: login to RemNote in Chrome (saves credentials)
+remnote-bridge setup
+
+# 2. Auto-connect with headless Chrome (no browser window needed)
+remnote-bridge connect --headless
+
+# 3. Verify all layers are ready
+remnote-bridge health
+
+# 4. Use any command — done!
+remnote-bridge search "machine learning"
+```
+
+### Standard Mode
+
+Requires user to manually load the plugin in RemNote.
+
+```bash
+# 1. Start the daemon (launches WS server + plugin server)
 remnote-bridge connect
 
 # 2. Load the plugin in RemNote
-#    Open RemNote → Settings → Plugins → Add Local Plugin
+#    Open RemNote → Plugins → Develop Your Plugin
 #    Enter: http://localhost:8080
 
 # 3. Check system status
@@ -75,8 +97,9 @@ remnote-bridge disconnect
 
 | Command | Description |
 |:--------|:------------|
-| `connect` | Start the daemon process (WS server + plugin dev server) |
-| `health` | Check daemon, Plugin, and SDK status |
+| `setup` | Launch Chrome for RemNote login, save credentials for headless mode |
+| `connect` | Start the daemon (`--headless` for auto Chrome, default requires manual plugin load) |
+| `health` | Check daemon/Plugin/SDK status (`--diagnose` for screenshots, `--reload` to restart Chrome) |
 | `disconnect` | Stop the daemon and release resources |
 
 ### Read
@@ -182,14 +205,15 @@ remnote-bridge CLI
     ↕  WebSocket IPC
 Daemon (long-lived process: WS server + handlers + cache)
     ↕  WebSocket
-remnote-plugin (runs inside RemNote browser)
+remnote-plugin (runs inside RemNote browser or headless Chrome)
     ↕
 RemNote SDK → Knowledge Base
 ```
 
 - **CLI commands** are stateless — each invocation is an independent OS process
 - **Daemon** holds state: cache, WS connections, timeout timer
-- **Plugin** runs in the browser, calls RemNote SDK on behalf of the daemon
+- **Plugin** runs in the browser (or headless Chrome), calls RemNote SDK on behalf of the daemon
+- **Headless mode** launches Chrome automatically using saved credentials — no browser window needed
 - **Three safety guards** protect edits: cache existence check, optimistic concurrency detection, str_replace exact match
 
 ## Configuration

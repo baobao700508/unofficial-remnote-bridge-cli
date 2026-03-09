@@ -16,6 +16,9 @@ import type {
   BridgeRequest,
   BridgeResponse,
   StatusResult,
+  HeadlessDiagnostics,
+  DiagnoseResult,
+  ReloadResult,
 } from '../protocol.js';
 import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol.js';
 import type { DefaultsConfig } from '../config.js';
@@ -41,6 +44,12 @@ export interface BridgeServerConfig {
   getTimeoutRemaining?: () => number;
   /** 业务默认值（由 daemon 注入） */
   defaults?: DefaultsConfig;
+  /** Headless Chrome 状态回调（由 daemon 注入） */
+  getHeadlessStatus?: () => HeadlessDiagnostics | null;
+  /** Headless Chrome 诊断回调（由 daemon 注入） */
+  diagnoseHeadless?: () => Promise<DiagnoseResult | null>;
+  /** Headless Chrome 重载回调（由 daemon 注入） */
+  reloadHeadless?: () => Promise<ReloadResult>;
 }
 
 export class BridgeServer {
@@ -66,9 +75,12 @@ export class BridgeServer {
   private contextReadHandler: ContextReadHandler;
   private defaults: DefaultsConfig;
 
-  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults'>> & {
+  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults' | 'getHeadlessStatus' | 'diagnoseHeadless' | 'reloadHeadless'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
     getTimeoutRemaining?: () => number;
+    getHeadlessStatus?: () => HeadlessDiagnostics | null;
+    diagnoseHeadless?: () => Promise<DiagnoseResult | null>;
+    reloadHeadless?: () => Promise<ReloadResult>;
   };
 
   /** 每当收到 CLI 命令请求时触发（用于刷新守护进程超时计时器） */
@@ -82,6 +94,9 @@ export class BridgeServer {
       pongTimeoutMs: config.pongTimeoutMs ?? 10_000,
       onLog: config.onLog,
       getTimeoutRemaining: config.getTimeoutRemaining,
+      getHeadlessStatus: config.getHeadlessStatus,
+      diagnoseHeadless: config.diagnoseHeadless,
+      reloadHeadless: config.reloadHeadless,
     };
 
     this.defaults = config.defaults ?? DEFAULT_DEFAULTS;
@@ -255,6 +270,59 @@ export class BridgeServer {
       return;
     }
 
+    // diagnose：headless 诊断（不需要 Plugin）
+    if (request.action === 'diagnose') {
+      if (!this.config.diagnoseHeadless) {
+        const response: BridgeResponse = {
+          id: request.id,
+          error: '非 headless 模式，不支持 diagnose',
+        };
+        ws.send(JSON.stringify(response));
+        return;
+      }
+      try {
+        const diagResult = await this.config.diagnoseHeadless();
+        if (diagResult) {
+          // 补充 pluginConnected 和 sdkReady
+          diagResult.pluginConnected = this.pluginSocket?.readyState === WebSocket.OPEN;
+          diagResult.sdkReady = this.pluginSdkReady;
+        }
+        const response: BridgeResponse = { id: request.id, result: diagResult };
+        ws.send(JSON.stringify(response));
+      } catch (err) {
+        const response: BridgeResponse = {
+          id: request.id,
+          error: err instanceof Error ? err.message : String(err),
+        };
+        ws.send(JSON.stringify(response));
+      }
+      return;
+    }
+
+    // headless_reload：重载 headless Chrome 页面（不需要 Plugin）
+    if (request.action === 'headless_reload') {
+      if (!this.config.reloadHeadless) {
+        const response: BridgeResponse = {
+          id: request.id,
+          error: '非 headless 模式，不支持 reload',
+        };
+        ws.send(JSON.stringify(response));
+        return;
+      }
+      try {
+        const reloadResult = await this.config.reloadHeadless();
+        const response: BridgeResponse = { id: request.id, result: reloadResult };
+        ws.send(JSON.stringify(response));
+      } catch (err) {
+        const response: BridgeResponse = {
+          id: request.id,
+          error: err instanceof Error ? err.message : String(err),
+        };
+        ws.send(JSON.stringify(response));
+      }
+      return;
+    }
+
     // 以下 action 都需要 Plugin 连接
     if (!this.pluginSocket || this.pluginSocket.readyState !== WebSocket.OPEN) {
       const response: BridgeResponse = {
@@ -392,11 +460,18 @@ export class BridgeServer {
 
   /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */
   getStatus(): StatusResult {
-    return {
+    const result: StatusResult = {
       pluginConnected: this.pluginSocket?.readyState === WebSocket.OPEN,
       sdkReady: this.pluginSdkReady,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       timeoutRemaining: this.config.getTimeoutRemaining?.() ?? 0,
     };
+
+    const headlessStatus = this.config.getHeadlessStatus?.();
+    if (headlessStatus) {
+      result.headless = headlessStatus;
+    }
+
+    return result;
   }
 }
