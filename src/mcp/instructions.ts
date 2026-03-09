@@ -105,19 +105,20 @@ disconnect → 关闭 daemon，清空所有缓存
 
 ### Windows 注意事项
 
-- **首次 connect 较慢**：daemon 启动时会自动安装 remnote-plugin 的依赖（约 600+ 个包），在 Windows 上可能需要 30-60 秒，connect 超时设为 60 秒
-- **依赖自动修复**：如果 webpack-dev-server 因依赖损坏而崩溃，daemon 会自动清洁重装依赖（删除 node_modules 后重新安装）并重试，最多重试 2 次
+- **默认模式秒级启动**：使用预构建 plugin，无需安装依赖
+- **\`--dev\` 模式首次较慢**：会自动安装 remnote-plugin 的依赖（约 600+ 个包），在 Windows 上可能需要 30-60 秒，connect 超时设为 60 秒
+- **\`--dev\` 依赖自动修复**：如果 webpack-dev-server 因依赖损坏而崩溃，daemon 会自动清洁重装依赖（删除 node_modules 后重新安装）并重试，最多重试 2 次
 - **端口残留**：多次 connect 失败后可能出现端口被占用（EADDRINUSE），用 \\\`remnote-bridge disconnect\\\` 或手动终止占用端口的进程后重试
 
 ### ⚠️ connect 后需要用户配合（重要）
 
-\\\`connect\\\` 成功只意味着 daemon 和 webpack-dev-server 已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成以下操作，Plugin 才能连接到 daemon：
+\\\`connect\\\` 成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成以下操作，Plugin 才能连接到 daemon：
 
 **首次使用**（RemNote 从未加载过此插件）：
 1. 打开 RemNote 桌面端或网页端
 2. 点击左侧边栏底部的插件图标（拼图形状）
 3. 点击「开发你的插件」（Develop Your Plugin）
-4. 在输入框中填入 \\\`http://localhost:8080\\\`（即 connect 输出的 webpack-dev-server 地址）
+4. 在输入框中填入 \\\`http://localhost:8080\\\`（即 connect 输出的 Plugin 服务地址）
 5. 等待插件加载完成
 
 **非首次使用**（之前已加载过此插件）：

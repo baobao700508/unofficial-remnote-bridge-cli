@@ -10,7 +10,7 @@
 
 1. 关闭 WS Server（断开所有连接）
 2. 关闭 ConfigServer
-3. 停止 webpack-dev-server 子进程
+3. 停止 Plugin 服务（静态文件服务器 或 webpack-dev-server）
 4. 删除 PID 文件
 5. 内存缓存随进程退出自动消失
 

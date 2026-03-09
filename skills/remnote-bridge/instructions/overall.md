@@ -206,7 +206,7 @@ disconnect → daemon 关闭 → 会话结束，缓存清空
 | 服务 | 默认端口 | 用途 |
 |:-----|:---------|:-----|
 | WS Server | 3002 | CLI ↔ daemon ↔ Plugin 通信 |
-| webpack-dev-server | 8080 | 热加载 Plugin 到 RemNote |
+| Plugin 服务 | 8080 | 加载 Plugin 到 RemNote（默认静态服务器，`--dev` 时为 webpack-dev-server） |
 | ConfigServer | 3003 | HTTP 配置界面 |
 
 超时机制：daemon 默认 **30 分钟无活动**自动关闭。每次收到 CLI 请求时重置计时器。

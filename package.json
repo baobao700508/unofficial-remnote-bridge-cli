@@ -9,6 +9,7 @@
   },
   "files": [
     "dist/**/*.js",
+    "remnote-plugin/dist/",
     "remnote-plugin/src/bridge/",
     "remnote-plugin/src/services/",
     "remnote-plugin/src/utils/",
@@ -27,6 +28,8 @@
   ],
   "scripts": {
     "build": "tsc",
+    "build:plugin": "cd remnote-plugin && npm install && npm run build",
+    "prepublishOnly": "npm run build && npm run build:plugin",
     "dev": "tsx src/cli/main.ts",
     "test": "vitest run",
     "lint:deps": "node scripts/check-layer-deps.cjs"

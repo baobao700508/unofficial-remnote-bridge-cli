@@ -62,10 +62,11 @@ program
 
 program
   .command('connect')
-  .description('启动守护进程（WS Server + webpack-dev-server），等待 Plugin 连接')
-  .action(async () => {
+  .description('启动守护进程，等待 Plugin 连接')
+  .option('--dev', '开发模式：使用 webpack-dev-server（支持 HMR）')
+  .action(async (cmdOpts: { dev?: boolean }) => {
     const { json } = program.opts();
-    await connectCommand({ json });
+    await connectCommand({ json, dev: cmdOpts.dev });
   });
 
 program

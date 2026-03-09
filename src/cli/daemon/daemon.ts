@@ -3,7 +3,7 @@
  *
  * 作为 fork 子进程运行：
  * 1. 启动 WS Server
- * 2. 启动 webpack-dev-server 子进程
+ * 2. 启动 Plugin 服务（静态文件服务器 或 webpack-dev-server）
  * 3. 写入 PID 文件
  * 4. 管理自动超时关闭
  * 5. 通过 IPC 向父进程发送 ready 信号
@@ -14,6 +14,7 @@ import fs from 'fs';
 import { BridgeServer } from '../server/ws-server.js';
 import { ConfigServer } from '../server/config-server.js';
 import { DevServerManager } from './dev-server.js';
+import { StaticServer } from './static-server.js';
 import { writePid, removePid } from './pid.js';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
 import type { BridgeConfig } from '../config.js';
@@ -99,21 +100,39 @@ async function main() {
     onLog: log,
   });
 
-  // 启动 webpack-dev-server
+  // 启动 Plugin 服务（静态文件服务器 或 webpack-dev-server）
   // 从包安装路径计算 pluginDir（dist/cli/daemon/daemon.js → 包根/remnote-plugin）
   const packageRoot = path.resolve(import.meta.dirname, '..', '..', '..');
   const pluginDir = path.join(packageRoot, 'remnote-plugin');
-  const devServer = new DevServerManager({
-    pluginDir,
-    port: config.devServerPort,
-    onLog: log,
-    onExit: (code) => {
-      if (!shutdownInProgress && code !== 0) {
-        log('webpack-dev-server 异常退出，守护进程关闭', 'error');
-        shutdown();
-      }
-    },
-  });
+  const devMode = process.env.REMNOTE_BRIDGE_DEV === '1';
+  const distDir = path.join(pluginDir, 'dist');
+  const distExists = fs.existsSync(path.join(distDir, 'index.html'));
+
+  if (!devMode && !distExists) {
+    const msg = 'Plugin dist/ 未找到。请使用 --dev 模式，或确认 remnote-bridge 包完整性。';
+    log(msg, 'error');
+    process.send?.({ type: 'error', message: msg });
+    process.exit(1);
+  }
+
+  const pluginServerLabel = devMode ? 'webpack-dev-server' : '静态文件服务器';
+  const pluginServer: { start(): void | Promise<void>; stop(): Promise<void>; isRunning(): boolean } = devMode
+    ? new DevServerManager({
+        pluginDir,
+        port: config.devServerPort,
+        onLog: log,
+        onExit: (code) => {
+          if (!shutdownInProgress && code !== 0) {
+            log('webpack-dev-server 异常退出，守护进程关闭', 'error');
+            shutdown();
+          }
+        },
+      })
+    : new StaticServer({
+        distDir,
+        port: config.devServerPort,
+        onLog: log,
+      });
 
   async function shutdown() {
     if (shutdownInProgress) return;
@@ -137,10 +156,10 @@ async function main() {
     }
 
     try {
-      await devServer.stop();
-      log('webpack-dev-server 已关闭');
+      await pluginServer.stop();
+      log(`${pluginServerLabel} 已关闭`);
     } catch (err) {
-      log(`webpack-dev-server 关闭失败: ${err}`, 'error');
+      log(`${pluginServerLabel} 关闭失败: ${err}`, 'error');
     }
 
     removePid(pidPath);
@@ -173,12 +192,12 @@ async function main() {
   }
 
   try {
-    devServer.start();
-    log(`webpack-dev-server 启动中 (端口 ${config.devServerPort})`);
+    await pluginServer.start();
+    log(`${pluginServerLabel} 已启动 (端口 ${config.devServerPort})`);
   } catch (err) {
-    log(`webpack-dev-server 启动失败: ${err}`, 'error');
+    log(`${pluginServerLabel} 启动失败: ${err}`, 'error');
     await server.stop();
-    process.send?.({ type: 'error', message: `webpack-dev-server 启动失败: ${err}` });
+    process.send?.({ type: 'error', message: `${pluginServerLabel} 启动失败: ${err}` });
     process.exit(1);
   }
 
