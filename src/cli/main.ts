@@ -5,7 +5,11 @@
  * 伞命令：CLI 命令 + mcp 子命令 + install 子命令。
  */
 
+import { createRequire } from 'module';
 import { Command } from 'commander';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../../package.json');
 import { connectCommand } from './commands/connect.js';
 import { healthCommand } from './commands/health.js';
 import { disconnectCommand } from './commands/disconnect.js';
@@ -57,7 +61,7 @@ function parseJsonInput(command: string, jsonStr: string | undefined, requiredFi
 program
   .name('remnote-bridge')
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
-  .version('0.1.6')
+  .version(version)
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
 
 program
