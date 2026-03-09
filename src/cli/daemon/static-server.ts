@@ -50,10 +50,11 @@ export class StaticServer {
         }
 
         const urlPath = req.url?.split('?')[0] || '/';
-        const filePath = path.join(distDir, urlPath === '/' ? 'index.html' : urlPath);
+        const filePath = path.resolve(distDir, urlPath === '/' ? 'index.html' : '.' + urlPath);
 
-        // 防止目录遍历
-        if (!filePath.startsWith(distDir)) {
+        // 防止目录遍历（resolve 规范化后，确保仍在 distDir + sep 下）
+        const safePrefix = distDir.endsWith(path.sep) ? distDir : distDir + path.sep;
+        if (!filePath.startsWith(safePrefix) && filePath !== distDir) {
           res.writeHead(403);
           res.end('Forbidden');
           return;
