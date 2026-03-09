@@ -7,6 +7,7 @@
  */
 
 import type { ReactRNPlugin } from '@remnote/plugin-sdk';
+import { safeToMarkdown } from './rem-builder';
 
 export interface SearchPayload {
   query: string;
@@ -39,7 +40,7 @@ export async function search(
 
   const results: SearchResultItem[] = [];
   for (const rem of rems) {
-    const markdownText = await plugin.richText.toMarkdown(rem.text ?? []);
+    const markdownText = await safeToMarkdown(plugin, rem.text ?? []);
     const isDocument = await rem.isDocument();
     results.push({
       remId: rem._id,

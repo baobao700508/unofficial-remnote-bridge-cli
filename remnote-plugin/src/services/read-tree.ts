@@ -18,7 +18,7 @@ import {
 } from '../utils/tree-serializer';
 import { filterNoisyChildren } from './powerup-filter';
 import { sliceSiblings } from '../utils/elision';
-import { buildFullSerializableRem, sanitizeNewlines } from './rem-builder';
+import { buildFullSerializableRem, sanitizeNewlines, safeToMarkdown } from './rem-builder';
 
 export interface ReadTreePayload {
   remId: string;
@@ -190,7 +190,7 @@ export async function readTree(
       const parent = await current.getParentRem();
       if (!parent) break;
       const [name, children, isDoc] = await Promise.all([
-        plugin.richText.toMarkdown(parent.text ?? []),
+        safeToMarkdown(plugin, parent.text ?? []),
         parent.getChildrenRem(),
         parent.isDocument(),
       ]);

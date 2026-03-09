@@ -21,6 +21,7 @@ import {
 } from '../utils/tree-serializer';
 import { sliceSiblings } from '../utils/elision';
 import { filterNoisyChildren } from './powerup-filter';
+import { safeToMarkdown } from './rem-builder';
 
 export interface ReadGlobePayload {
   depth?: number;
@@ -75,7 +76,7 @@ export async function readGlobe(
 
     const isPortal = rem.type === 6;
     const [markdownText, portalIncludedRems] = await Promise.all([
-      plugin.richText.toMarkdown(rem.text ?? []),
+      safeToMarkdown(plugin, rem.text ?? []),
       isPortal ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
     ]);
 

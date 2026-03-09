@@ -19,7 +19,7 @@ import {
 import { filterNoisyChildren } from './powerup-filter';
 import { sliceSiblings } from '../utils/elision';
 import { buildBreadcrumb } from './breadcrumb';
-import { buildFullSerializableRem as buildFullRem } from './rem-builder';
+import { buildFullSerializableRem as buildFullRem, safeToMarkdown } from './rem-builder';
 
 export interface ReadContextPayload {
   mode?: 'focus' | 'page';
@@ -350,7 +350,7 @@ async function buildMinimalSerializableRem(
 ) {
   const isPortal = rem.type === 6;
   const [markdownText, isDocument, portalIncludedRems] = await Promise.all([
-    plugin.richText.toMarkdown(rem.text ?? []),
+    safeToMarkdown(plugin, rem.text ?? []),
     rem.isDocument(),
     isPortal ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
   ]);
