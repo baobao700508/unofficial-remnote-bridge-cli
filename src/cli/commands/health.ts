@@ -48,6 +48,28 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
     return;
   }
 
+  // --diagnose / --reload 需要先检查是否为 headless 模式
+  if (diagnose || reload) {
+    let isHeadless = false;
+    try {
+      const st = await sendDaemonRequest('get_status', {}, { timeout: 5_000 }) as StatusResult;
+      isHeadless = !!st.headless;
+    } catch {
+      // 连不上 daemon，后续具体操作会报错
+    }
+
+    if (!isHeadless) {
+      const msg = '--diagnose 和 --reload 仅在 headless 模式下可用（connect --headless）';
+      if (json) {
+        jsonOutput({ ok: false, command: 'health', error: msg });
+      } else {
+        console.error(msg);
+      }
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   // --reload：触发 headless Chrome 页面重载
   if (reload) {
     try {
