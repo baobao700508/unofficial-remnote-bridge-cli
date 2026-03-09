@@ -13,6 +13,8 @@ import { fork } from 'child_process';
 import { loadConfig, pidFilePath, findProjectRoot } from '../config.js';
 import { checkDaemon } from '../daemon/pid.js';
 import { jsonOutput } from '../utils/output.js';
+import { isSetupDone } from './setup.js';
+import { defaultUserDataDir } from '../daemon/headless-browser.js';
 
 export interface ConnectOptions {
   json?: boolean;
@@ -64,6 +66,21 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
     }
     process.exitCode = 0;
     return;
+  }
+
+  // headless 模式：检查是否已完成 setup
+  if (headless || remoteDebuggingPort) {
+    const userDataDir = config.headless?.userDataDir || defaultUserDataDir();
+    if (!isSetupDone(userDataDir)) {
+      const msg = '尚未完成登录设置。请先运行: remnote-bridge setup';
+      if (json) {
+        jsonOutput({ ok: false, command: 'connect', error: msg });
+      } else {
+        console.error(msg);
+      }
+      process.exitCode = 1;
+      return;
+    }
   }
 
   // fork 守护进程

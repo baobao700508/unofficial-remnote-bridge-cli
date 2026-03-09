@@ -18,6 +18,7 @@ import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 import { cleanCommand } from './commands/clean.js';
+import { setupCommand } from './commands/setup.js';
 
 const program = new Command();
 
@@ -59,6 +60,14 @@ program
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
   .version('0.1.6')
   .option('--json', '以 JSON 格式输出（适用于程序化调用）');
+
+program
+  .command('setup')
+  .description('首次使用引导：打开 Chrome 登录 RemNote（关闭浏览器后自动完成）')
+  .action(async () => {
+    const { json } = program.opts();
+    await setupCommand({ json });
+  });
 
 program
   .command('connect')

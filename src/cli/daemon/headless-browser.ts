@@ -24,7 +24,7 @@ export interface HeadlessBrowserOptions {
 /**
  * 在常见位置查找 Chrome/Chromium 可执行文件
  */
-function findChromePath(): string | null {
+export function findChromePath(): string | null {
   const candidates: string[] = [];
 
   if (process.platform === 'linux') {
@@ -60,7 +60,7 @@ function findChromePath(): string | null {
 /**
  * 默认 user data dir 路径（~/.remnote-bridge/chrome-profile）
  */
-function defaultUserDataDir(): string {
+export function defaultUserDataDir(): string {
   const home = process.env['HOME'] || process.env['USERPROFILE'] || '/tmp';
   return path.join(home, '.remnote-bridge', 'chrome-profile');
 }
