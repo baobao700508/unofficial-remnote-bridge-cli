@@ -56,19 +56,41 @@ async function main() {
   }
 
   // 创建 WS Server（抽取为函数，供软重启复用）
-  function createServer(cfg: BridgeConfig): BridgeServer {
+  function createServer(cfg: BridgeConfig, browser?: HeadlessBrowserManager): BridgeServer {
     const srv = new BridgeServer({
       port: cfg.wsPort,
       host: '127.0.0.1',
       onLog: log,
       getTimeoutRemaining,
       defaults: cfg.defaults,
+      headlessBrowser: browser,
+      logFile: logPath,
     });
     srv.onCliRequest = () => resetTimeout();
     return srv;
   }
 
-  let server = createServer(config);
+  // 无头浏览器（通过环境变量 REMNOTE_HEADLESS=1 启用）
+  // 先创建实例（供 WS Server 引用），稍后再 start
+  const headlessEnabled = process.env['REMNOTE_HEADLESS'] === '1';
+  const headlessRemotePort = process.env['REMNOTE_HEADLESS_REMOTE_PORT']
+    ? parseInt(process.env['REMNOTE_HEADLESS_REMOTE_PORT'], 10)
+    : undefined;
+
+  let headlessBrowser: HeadlessBrowserManager | null = null;
+  if (headlessEnabled) {
+    // 远程调试端口优先级：环境变量 > 配置文件
+    const remotePort = headlessRemotePort || config.headless?.remoteDebuggingPort;
+    headlessBrowser = new HeadlessBrowserManager({
+      remNoteUrl: `http://localhost:${config.devServerPort}`,
+      chromePath: config.headless?.chromePath,
+      userDataDir: config.headless?.userDataDir,
+      remoteDebuggingPort: remotePort,
+      onLog: log,
+    });
+  }
+
+  let server = createServer(config, headlessBrowser ?? undefined);
 
   // 软重启：关闭旧 WS Server → 重新读配置 → 创建新 WS Server → 启动
   async function reload() {
@@ -83,7 +105,7 @@ async function main() {
     config = loadConfig(projectRoot);
     timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
 
-    server = createServer(config);
+    server = createServer(config, headlessBrowser ?? undefined);
     await server.start();
     log(`新 WS Server 已启动 (端口 ${config.wsPort})`);
 
@@ -115,25 +137,6 @@ async function main() {
       }
     },
   });
-
-  // 无头浏览器（通过环境变量 REMNOTE_HEADLESS=1 启用）
-  const headlessEnabled = process.env['REMNOTE_HEADLESS'] === '1';
-  const headlessRemotePort = process.env['REMNOTE_HEADLESS_REMOTE_PORT']
-    ? parseInt(process.env['REMNOTE_HEADLESS_REMOTE_PORT'], 10)
-    : undefined;
-
-  let headlessBrowser: HeadlessBrowserManager | null = null;
-  if (headlessEnabled) {
-    // 远程调试端口优先级：环境变量 > 配置文件
-    const remotePort = headlessRemotePort || config.headless?.remoteDebuggingPort;
-    headlessBrowser = new HeadlessBrowserManager({
-      remNoteUrl: `http://localhost:${config.devServerPort}`,
-      chromePath: config.headless?.chromePath,
-      userDataDir: config.headless?.userDataDir,
-      remoteDebuggingPort: remotePort,
-      onLog: log,
-    });
-  }
 
   async function shutdown() {
     if (shutdownInProgress) return;

@@ -48,6 +48,31 @@ export interface StatusResult {
   sdkReady: boolean;
   uptime: number;
   timeoutRemaining: number;
+  /** headless 模式下的浏览器状态（非 headless 时为 undefined） */
+  headless?: {
+    status: string;       // 'stopped' | 'starting' | 'running' | 'crashed' | 'reloading'
+    chromeConnected: boolean;
+    pageUrl: string | null;
+    reloadCount: number;
+    lastError: string | null;
+  };
+}
+
+// ── diagnose 响应 ──
+
+export interface DiagnoseResult {
+  headless: {
+    status: string;
+    chromeConnected: boolean;
+    pageUrl: string | null;
+    reloadCount: number;
+    lastError: string | null;
+    recentConsoleErrors: string[];
+    screenshotPath: string | null;
+  };
+  pluginConnected: boolean;
+  sdkReady: boolean;
+  logFile: string;
 }
 
 // ── 消息类型判断辅助 ──

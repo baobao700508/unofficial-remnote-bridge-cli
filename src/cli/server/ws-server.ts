@@ -16,10 +16,12 @@ import type {
   BridgeRequest,
   BridgeResponse,
   StatusResult,
+  DiagnoseResult,
 } from '../protocol.js';
 import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol.js';
 import type { DefaultsConfig } from '../config.js';
 import { DEFAULT_DEFAULTS } from '../config.js';
+import type { HeadlessBrowserManager } from '../daemon/headless-browser.js';
 import { RemCache } from '../handlers/rem-cache.js';
 import { ReadHandler } from '../handlers/read-handler.js';
 import { EditHandler } from '../handlers/edit-handler.js';
@@ -41,6 +43,10 @@ export interface BridgeServerConfig {
   getTimeoutRemaining?: () => number;
   /** 业务默认值（由 daemon 注入） */
   defaults?: DefaultsConfig;
+  /** Headless 浏览器管理器（由 daemon 注入，非 headless 模式为 undefined） */
+  headlessBrowser?: HeadlessBrowserManager;
+  /** 日志文件路径（供 diagnose 输出） */
+  logFile?: string;
 }
 
 export class BridgeServer {
@@ -66,7 +72,10 @@ export class BridgeServer {
   private contextReadHandler: ContextReadHandler;
   private defaults: DefaultsConfig;
 
-  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults'>> & {
+  private headlessBrowser?: HeadlessBrowserManager;
+  private logFile?: string;
+
+  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults' | 'headlessBrowser' | 'logFile'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
     getTimeoutRemaining?: () => number;
   };
@@ -85,6 +94,8 @@ export class BridgeServer {
     };
 
     this.defaults = config.defaults ?? DEFAULT_DEFAULTS;
+    this.headlessBrowser = config.headlessBrowser;
+    this.logFile = config.logFile;
     const defaults = this.defaults;
     const remCache = new RemCache(defaults.cacheMaxSize);
     const forwardFn = (action: string, payload: Record<string, unknown>) =>
@@ -255,6 +266,22 @@ export class BridgeServer {
       return;
     }
 
+    // diagnose：headless 诊断（截图 + console 错误 + 状态，不需要 Plugin）
+    if (request.action === 'diagnose') {
+      const result = await this.handleDiagnose();
+      const response: BridgeResponse = { id: request.id, result };
+      ws.send(JSON.stringify(response));
+      return;
+    }
+
+    // headless_reload：手动触发 headless Chrome 重载（不需要 Plugin）
+    if (request.action === 'headless_reload') {
+      const result = await this.handleHeadlessReload();
+      const response: BridgeResponse = { id: request.id, result };
+      ws.send(JSON.stringify(response));
+      return;
+    }
+
     // 以下 action 都需要 Plugin 连接
     if (!this.pluginSocket || this.pluginSocket.readyState !== WebSocket.OPEN) {
       const response: BridgeResponse = {
@@ -392,11 +419,75 @@ export class BridgeServer {
 
   /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */
   getStatus(): StatusResult {
-    return {
+    const result: StatusResult = {
       pluginConnected: this.pluginSocket?.readyState === WebSocket.OPEN,
       sdkReady: this.pluginSdkReady,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       timeoutRemaining: this.config.getTimeoutRemaining?.() ?? 0,
     };
+
+    // headless 模式下附加浏览器状态
+    if (this.headlessBrowser) {
+      const diag = this.headlessBrowser.getDiagnostics();
+      result.headless = {
+        status: diag.status,
+        chromeConnected: diag.chromeConnected,
+        pageUrl: diag.pageUrl,
+        reloadCount: diag.reloadCount,
+        lastError: diag.lastError,
+      };
+    }
+
+    return result;
+  }
+
+  /** diagnose：完整诊断信息 + 截图 */
+  private async handleDiagnose(): Promise<DiagnoseResult> {
+    const pluginConnected = this.pluginSocket?.readyState === WebSocket.OPEN;
+
+    if (!this.headlessBrowser) {
+      return {
+        headless: {
+          status: 'stopped',
+          chromeConnected: false,
+          pageUrl: null,
+          reloadCount: 0,
+          lastError: '非 headless 模式',
+          recentConsoleErrors: [],
+          screenshotPath: null,
+        },
+        pluginConnected,
+        sdkReady: this.pluginSdkReady,
+        logFile: this.logFile ?? '',
+      };
+    }
+
+    const diag = this.headlessBrowser.getDiagnostics();
+    const screenshotPath = await this.headlessBrowser.takeScreenshot();
+
+    return {
+      headless: {
+        ...diag,
+        screenshotPath,
+      },
+      pluginConnected,
+      sdkReady: this.pluginSdkReady,
+      logFile: this.logFile ?? '',
+    };
+  }
+
+  /** headless_reload：手动重载 headless Chrome 页面 */
+  private async handleHeadlessReload(): Promise<{ ok: boolean; error?: string }> {
+    if (!this.headlessBrowser) {
+      return { ok: false, error: '非 headless 模式' };
+    }
+
+    const success = await this.headlessBrowser.manualReload();
+    if (success) {
+      return { ok: true };
+    } else {
+      const diag = this.headlessBrowser.getDiagnostics();
+      return { ok: false, error: diag.lastError ?? '重载失败' };
+    }
   }
 }

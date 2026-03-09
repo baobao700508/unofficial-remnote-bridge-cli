@@ -19,6 +19,7 @@ import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 import { cleanCommand } from './commands/clean.js';
 import { setupCommand } from './commands/setup.js';
+import { diagnoseCommand } from './commands/diagnose.js';
 
 const program = new Command();
 
@@ -85,6 +86,15 @@ program
   .action(async () => {
     const { json } = program.opts();
     await healthCommand({ json });
+  });
+
+program
+  .command('diagnose')
+  .description('诊断 headless Chrome 状态（截图、console 错误、排查建议）')
+  .option('--reload', '手动触发 headless Chrome 页面重载')
+  .action(async (opts: { reload?: boolean }) => {
+    const { json } = program.opts();
+    await diagnoseCommand({ json, reload: opts.reload });
   });
 
 program

@@ -76,6 +76,7 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
       daemon: { running: true, pid: daemonStatus.pid, reachable: true, uptime: status.uptime },
       plugin: { connected: status.pluginConnected },
       sdk: { ready: status.sdkReady },
+      headless: status.headless ?? null,
       timeoutRemaining: status.timeoutRemaining,
     });
   } else {
@@ -91,6 +92,16 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
       console.log('✅ SDK       就绪');
     } else {
       console.log('❌ SDK       未就绪');
+    }
+
+    // headless 模式下显示浏览器状态
+    if (status.headless) {
+      const h = status.headless;
+      const chromeOk = h.chromeConnected && h.status === 'running';
+      console.log(`${chromeOk ? '✅' : '❌'} Chrome     ${h.status}${h.lastError ? `（${h.lastError}）` : ''}`);
+      if (h.reloadCount > 0) {
+        console.log(`  自动重载次数: ${h.reloadCount}`);
+      }
     }
 
     console.log(`\n超时: ${formatUptime(status.timeoutRemaining)} 后自动关闭`);
