@@ -15,7 +15,7 @@ import fs from 'fs';
 import { fork } from 'child_process';
 import { loadConfig, pidFilePath, findProjectRoot } from '../config.js';
 import { checkDaemon } from '../daemon/pid.js';
-import { getSetupDonePath } from '../daemon/headless-browser.js';
+import { getSetupDonePath, cleanupOrphanChrome } from '../daemon/headless-browser.js';
 import { jsonOutput } from '../utils/output.js';
 
 export interface ConnectOptions {
@@ -57,6 +57,9 @@ export async function connectCommand(options: ConnectOptions = {}): Promise<void
 
   // headless 前置检查
   if (options.headless) {
+    // 清理上次可能残留的孤儿 Chrome 进程
+    cleanupOrphanChrome(json ? undefined : (msg) => console.log(msg));
+
     const setupDonePath = getSetupDonePath();
     if (!fs.existsSync(setupDonePath)) {
       const error = '尚未完成 setup。请先执行 `remnote-bridge setup` 登录 RemNote，然后再使用 --headless';

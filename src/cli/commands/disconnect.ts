@@ -8,6 +8,7 @@
 
 import { pidFilePath, findProjectRoot } from '../config.js';
 import { checkDaemon, removePid } from '../daemon/pid.js';
+import { cleanupOrphanChrome } from '../daemon/headless-browser.js';
 import { jsonOutput } from '../utils/output.js';
 
 const WAIT_TIMEOUT_MS = 10_000;
@@ -58,6 +59,8 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
 
   if (exited) {
     removePid(pidPath);
+    // 清理可能残留的孤儿 headless Chrome
+    cleanupOrphanChrome(json ? undefined : (msg) => console.log(msg));
     if (json) {
       jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false });
     } else {
@@ -71,6 +74,8 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
       // 可能已退出
     }
     removePid(pidPath);
+    // daemon 被强杀后 Chrome 更可能成为孤儿，务必清理
+    cleanupOrphanChrome(json ? undefined : (msg) => console.log(msg));
     if (json) {
       jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: true });
     } else {
