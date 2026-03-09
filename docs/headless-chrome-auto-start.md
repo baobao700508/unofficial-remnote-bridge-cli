@@ -28,9 +28,9 @@
     → 完整链路自动建立
 
 出问题时：
-  remnote-bridge health --json        ← 看哪层断了
-  remnote-bridge diagnose --json      ← Chrome 详细状态 + 截图 + console 错误
-  remnote-bridge diagnose --reload    ← 手动重载页面
+  remnote-bridge health --json              ← 看哪层断了
+  remnote-bridge health --diagnose --json   ← Chrome 详细状态 + 截图 + console 错误
+  remnote-bridge health --reload            ← 手动重载页面
 ```
 
 ## 新增文件
@@ -38,7 +38,6 @@
 | 文件 | 说明 |
 |------|------|
 | `src/cli/commands/setup.ts` | `setup` 命令：首次登录引导 |
-| `src/cli/commands/diagnose.ts` | `diagnose` 命令：headless 诊断与修复 |
 | `src/cli/daemon/headless-browser.ts` | `HeadlessBrowserManager`：Chrome 生命周期管理 |
 
 ## 修改文件
@@ -78,13 +77,16 @@
 
 可选 `--remote-debugging-port <port>` 暴露 Chrome DevTools 远程调试端口。
 
-### `remnote-bridge diagnose`
+### `remnote-bridge health` 扩展选项
 
-AI agent 专用的诊断命令：
+基础用法不变（检查 daemon/plugin/SDK 三层状态），新增两个 headless 相关选项：
 
 ```bash
-# 查看完整状态
-remnote-bridge diagnose --json
+# 基础状态（headless 模式下自动包含 Chrome 状态行）
+remnote-bridge health --json
+
+# --diagnose：深度诊断（截图 + console 错误 + 排查建议）
+remnote-bridge health --diagnose --json
 
 # 返回：
 {
@@ -102,8 +104,8 @@ remnote-bridge diagnose --json
   "logFile": "/path/to/.remnote-bridge.log"
 }
 
-# 手动重载 Chrome 页面
-remnote-bridge diagnose --reload
+# --reload：手动触发 headless Chrome 页面重载
+remnote-bridge health --reload
 ```
 
 ---
@@ -124,9 +126,9 @@ remnote-bridge diagnose --reload
 
 | 方法 | 用途 |
 |------|------|
-| `getDiagnostics()` | 返回结构化状态（供 `get_status`、`diagnose` 使用） |
+| `getDiagnostics()` | 返回结构化状态（供 `get_status`、`health --diagnose` 使用） |
 | `takeScreenshot()` | 截图保存到文件（供 AI agent 查看页面状态） |
-| `manualReload()` | 手动重载（重置重试计数，供 `diagnose --reload` 使用） |
+| `manualReload()` | 手动重载（重置重试计数，供 `health --reload` 使用） |
 
 ---
 
@@ -156,14 +158,14 @@ connect --headless 后命令报 "Plugin 未连接"
   ├─ remnote-bridge health --json
   │    看 headless.status 和 pluginConnected
   │
-  ├─ remnote-bridge diagnose --json
+  ├─ remnote-bridge health --diagnose --json
   │    看 recentConsoleErrors、screenshotPath、lastError
   │
   ├─ 截图显示登录页？
   │    → 登录态过期，需在有桌面的机器上重新 setup
   │
   ├─ Chrome crashed / 断连？
-  │    → remnote-bridge diagnose --reload
+  │    → remnote-bridge health --reload
   │    → 还不行 → disconnect + connect --headless
   │
   └─ 查完整日志
