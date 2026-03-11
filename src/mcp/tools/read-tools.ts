@@ -154,7 +154,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'read_context',
     description:
-      '读取用户在 RemNote 中的当前上下文视图，生成带面包屑路径的 Markdown 大纲。\n无需指定 remId，自动获取用户当前焦点位置或打开的页面。\n\n适用场景：\n- 用户说"我现在在看什么"、"当前页面是什么"\n- 需要了解用户焦点位置以提供上下文帮助\n- 不适合查看特定 Rem（已知 remId 用 read_tree）\n\n两种模式：\n- focus（默认）：以焦点 Rem 为中心的鱼眼视图。焦点完全展开（depth=3），siblings 浅层预览（depth=1），叔伯不展开。焦点行以 * 前缀标记。\n- page：以当前页面为根均匀展开子树。\n\n输出：Markdown 大纲 + 面包屑路径。不缓存。\n前提：focus 模式需用户有焦点 Rem，page 模式需有打开的页面。\n典型工作流：read_context 了解位置 → read_tree/read_rem 深入。',
+      '读取用户在 RemNote 中的当前上下文视图，生成带面包屑路径的 Markdown 大纲。\n无需指定 remId，自动获取用户当前焦点位置或打开的页面。\n\n适用场景：\n- 用户说"我现在在看什么"、"当前页面是什么"\n- 需要了解用户焦点位置以提供上下文帮助\n- 不适合查看特定 Rem（已知 remId 用 read_tree）\n\n两种模式：\n- focus（默认）：以焦点 Rem 为中心的鱼眼视图。焦点完全展开（depth=3），siblings 浅层预览（depth=1），叔伯不展开。焦点行以 * 前缀标记。可通过 focusRemId 指定任意 Rem 作为鱼眼中心，此时不依赖用户焦点。\n- page：以当前页面为根均匀展开子树。\n\n输出：Markdown 大纲 + 面包屑路径。不缓存。\n前提：focus 模式需用户有焦点 Rem 或指定 focusRemId，page 模式需有打开的页面。\n典型工作流：read_context 了解位置 → read_tree/read_rem 深入。',
     parameters: z.object({
       mode: z
         .enum(['focus', 'page'])
