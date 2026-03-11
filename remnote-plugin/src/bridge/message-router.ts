@@ -49,7 +49,7 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
       case 'read_globe':
         return readGlobe(plugin, request.payload as { depth?: number; maxNodes?: number; maxSiblings?: number });
       case 'read_context':
-        return readContext(plugin, request.payload as { mode?: 'focus' | 'page'; ancestorLevels?: number; maxNodes?: number; maxSiblings?: number; depth?: number });
+        return readContext(plugin, request.payload as { mode?: 'focus' | 'page'; ancestorLevels?: number; maxNodes?: number; maxSiblings?: number; depth?: number; focusRemId?: string });
       case 'search':
         return search(plugin, request.payload as { query: string; numResults?: number });
 

@@ -183,7 +183,8 @@ program
   .option('--depth <depth>', '展开深度（默认 3，仅 page 模式）')
   .option('--max-nodes <maxNodes>', '全局节点上限（默认 200）')
   .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
-  .action(async (jsonStr: string | undefined, cmdOpts: { mode?: string; ancestorLevels?: string; depth?: string; maxNodes?: string; maxSiblings?: string }) => {
+  .option('--focus-rem-id <remId>', '指定鱼眼中心 Rem ID（仅 focus 模式，默认使用当前焦点）')
+  .action(async (jsonStr: string | undefined, cmdOpts: { mode?: string; ancestorLevels?: string; depth?: string; maxNodes?: string; maxSiblings?: string; focusRemId?: string }) => {
     const { json } = program.opts();
     if (json) {
       let input: Record<string, unknown> = {};
@@ -201,6 +202,7 @@ program
         depth: input.depth?.toString(),
         maxNodes: input.maxNodes?.toString(),
         maxSiblings: input.maxSiblings?.toString(),
+        focusRemId: input.focusRemId as string | undefined,
       });
     } else {
       await readContextCommand({ json, ...cmdOpts });

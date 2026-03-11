@@ -176,6 +176,10 @@ export function registerReadTools(server: FastMCP): void {
         .number()
         .optional()
         .describe('同级节点显示上限'),
+      focusRemId: z
+        .string()
+        .optional()
+        .describe('指定鱼眼中心 Rem ID（仅 focus 模式，默认使用当前焦点）'),
     }),
     execute: async (args) => {
       const payload: Record<string, unknown> = {};
@@ -186,6 +190,8 @@ export function registerReadTools(server: FastMCP): void {
       if (args.maxNodes !== undefined) payload.maxNodes = args.maxNodes;
       if (args.maxSiblings !== undefined)
         payload.maxSiblings = args.maxSiblings;
+      if (args.focusRemId !== undefined)
+        payload.focusRemId = args.focusRemId;
       const response = await callCli('read-context', payload);
       const data = response.data as Record<string, unknown> | undefined;
       if (data?.outline && typeof data.outline === 'string') {
