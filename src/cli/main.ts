@@ -20,6 +20,7 @@ import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 import { cleanCommand } from './commands/clean.js';
+import { addonListCommand, addonInstallCommand, addonUninstallCommand } from './commands/addon.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../../package.json');
@@ -299,6 +300,34 @@ program
   .action(async () => {
     const { json } = program.opts();
     await cleanCommand({ json });
+  });
+
+// addon 子命令组
+const addonCmd = program.command('addon').description('管理增强项目（addon）');
+
+addonCmd
+  .command('list')
+  .description('查看所有增强项目状态')
+  .action(async () => {
+    const { json } = program.opts();
+    await addonListCommand({ json });
+  });
+
+addonCmd
+  .command('install <name>')
+  .description('安装指定增强项目')
+  .action(async (name: string) => {
+    const { json } = program.opts();
+    await addonInstallCommand(name, { json });
+  });
+
+addonCmd
+  .command('uninstall <name>')
+  .description('卸载指定增强项目')
+  .option('--purge', '同时删除数据目录')
+  .action(async (name: string, cmdOpts: { purge?: boolean }) => {
+    const { json } = program.opts();
+    await addonUninstallCommand(name, { json, purge: cmdOpts.purge });
   });
 
 program.parse();

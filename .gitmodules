@@ -1,0 +1,3 @@
+[submodule "remnote-rag"]
+	path = remnote-rag
+	url = git@github.com:baobao700508/remnote-rag.git

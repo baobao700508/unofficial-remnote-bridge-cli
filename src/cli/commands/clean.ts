@@ -13,6 +13,7 @@ import path from 'path';
 import os from 'os';
 import { findProjectRoot, pidFilePath, logFilePath, configFilePath } from '../config.js';
 import { checkDaemon, removePid } from '../daemon/pid.js';
+import { ADDON_REGISTRY } from '../addon/registry.js';
 import { jsonOutput } from '../utils/output.js';
 
 export interface CleanOptions {
@@ -97,7 +98,29 @@ export async function cleanCommand(options: CleanOptions = {}): Promise<void> {
     }
   }
 
-  // 4. 输出结果
+  // 4. 清理 addon 数据目录
+  for (const [, def] of ADDON_REGISTRY) {
+    if (!def.dataDirs) continue;
+    for (const dir of def.dataDirs) {
+      const resolved = dir.replace(/^~/, os.homedir());
+      if (fs.existsSync(resolved)) {
+        try {
+          fs.rmSync(resolved, { recursive: true, force: true });
+          removed.push(resolved);
+          if (!json) {
+            console.log(`  已删除: ${resolved}`);
+          }
+        } catch (err: any) {
+          errors.push(`${resolved}: ${err.message}`);
+          if (!json) {
+            console.error(`  删除失败: ${resolved} — ${err.message}`);
+          }
+        }
+      }
+    }
+  }
+
+  // 5. 输出结果
   if (json) {
     jsonOutput({
       ok: errors.length === 0,

@@ -41,12 +41,22 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   searchNumResults: 20,
 };
 
+/** 单个 addon 的用户配置 */
+export interface AddonUserConfig {
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+/** addons 配置：addon 名称 → 用户配置 */
+export type AddonsConfig = Record<string, AddonUserConfig>;
+
 export interface BridgeConfig {
   wsPort: number;
   devServerPort: number;
   configPort: number;
   daemonTimeoutMinutes: number;
   defaults: DefaultsConfig;
+  addons?: AddonsConfig;
 }
 
 export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
@@ -110,6 +120,23 @@ function mergeDefaults(parsed: Partial<DefaultsConfig> | undefined): DefaultsCon
   };
 }
 
+function mergeAddons(parsed: Record<string, unknown> | undefined): AddonsConfig | undefined {
+  if (!parsed || typeof parsed !== 'object') return undefined;
+
+  const result: AddonsConfig = {};
+  for (const [name, raw] of Object.entries(parsed)) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const obj = raw as Record<string, unknown>;
+    result[name] = {
+      enabled: typeof obj.enabled === 'boolean' ? obj.enabled : false,
+      settings: typeof obj.settings === 'object' && obj.settings !== null
+        ? obj.settings as Record<string, unknown>
+        : undefined,
+    };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 /**
  * 加载配置。不存在时返回默认值。
  */
@@ -123,7 +150,10 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
 
   try {
     const raw = fs.readFileSync(configPath, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<BridgeConfig & { defaults?: Partial<DefaultsConfig> }>;
+    const parsed = JSON.parse(raw) as Partial<BridgeConfig & {
+      defaults?: Partial<DefaultsConfig>;
+      addons?: Record<string, unknown>;
+    }>;
 
     const config: BridgeConfig = {
       wsPort: isValidPort(parsed.wsPort) ? parsed.wsPort : DEFAULT_CONFIG.wsPort,
@@ -134,6 +164,7 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
           ? parsed.daemonTimeoutMinutes
           : DEFAULT_CONFIG.daemonTimeoutMinutes,
       defaults: mergeDefaults(parsed.defaults),
+      addons: mergeAddons(parsed.addons as Record<string, unknown> | undefined),
     };
 
     // 端口冲突校验

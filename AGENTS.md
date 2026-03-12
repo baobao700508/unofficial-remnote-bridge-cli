@@ -32,6 +32,7 @@ skill/ (Markdown Skills)  +  src/mcp/ (FastMCP Server)
 | 命令层 | src/cli/ | Node.js / TypeScript (ESM) / Commander.js | 开发中 |
 | 接入层 | src/mcp/ | Node.js / TypeScript (ESM) / FastMCP | 开发中 |
 | 接入层 | skill/ | Markdown (SKILL.md) | 开发中 |
+| 搜索增强 | remnote-rag/ | Python / ChromaDB / DashScope | 开发中 |
 
 - **我应该从哪里开始看**：
   - 约束红线：见本文件第 2 节
@@ -255,6 +256,10 @@ remnote-bridge-cli/                    (repo root = npm 包根)
 │   └── remnote-bridge/                # Vercel Skills 生态兼容
 │       ├── SKILL.md                   # Agent Skill 定义
 │       └── instructions/              # 命令详细文档（11 个 .md）
+├── remnote-rag/                       # 语义搜索增强（独立 Python 包，pip install）
+│   ├── pyproject.toml                 # hatchling 构建，bin: remnote-rag
+│   ├── src/remnote_rag/               # 核心代码（直读 SQLite + ChromaDB + DashScope）
+│   └── tests/                         # pytest 测试
 ├── scripts/                           # 脚本工具
 ├── docs/                              # 项目文档
 │   └── RemNote API Reference/         # RemNote Plugin SDK 文档（151 页）
