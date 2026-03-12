@@ -8,7 +8,6 @@
 import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConnectionStatus, ChatStreamChunk, ChatSessionResponse } from '../bridge/websocket-client';
-import { wsClient } from './index';
 
 // ── Types ──
 
@@ -33,6 +32,32 @@ interface SessionInfo {
 }
 
 type Tab = 'status' | 'chat';
+
+// ── Storage command helpers (避免 widget 直接 import wsClient) ──
+
+function sendChatCommand(plugin: ReturnType<typeof usePlugin>, sessionId: string, message: string) {
+  void plugin.storage.setSession('chat-command', {
+    action: 'send_chat',
+    sessionId,
+    message,
+    _ts: Date.now(),
+  });
+}
+
+function sendSessionRequest(
+  plugin: ReturnType<typeof usePlugin>,
+  requestAction: 'list' | 'create' | 'delete' | 'get_history',
+  sessionId?: string,
+  title?: string,
+) {
+  void plugin.storage.setSession('chat-command', {
+    action: 'session_request',
+    requestAction,
+    sessionId,
+    title,
+    _ts: Date.now(),
+  });
+}
 
 // ── Shared styles ──
 
@@ -121,6 +146,10 @@ function ChatTab({ plugin }: { plugin: ReturnType<typeof usePlugin> }) {
   const [activeToolCalls, setActiveToolCalls] = useState<Array<{ name: string; status: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastChunkTs = useRef(0);
+  const pendingMessageRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  // 保持 ref 与 state 同步
+  useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -171,7 +200,7 @@ function ChatTab({ plugin }: { plugin: ReturnType<typeof usePlugin> }) {
       }
     }
 
-    const timer = setInterval(pollChat, 100);
+    const timer = setInterval(pollChat, 300);
     return () => { active = false; clearInterval(timer); };
   }, [plugin, currentSessionId]);
 
@@ -191,8 +220,14 @@ function ChatTab({ plugin }: { plugin: ReturnType<typeof usePlugin> }) {
       } else if (resp.requestAction === 'create' && resp.session) {
         setCurrentSessionId(resp.session.id);
         setMessages([]);
+        // 如果有待发送的消息（创建会话后自动发送）
+        const pending = pendingMessageRef.current;
+        if (pending) {
+          pendingMessageRef.current = null;
+          sendChatCommand(plugin, resp.session.id, pending);
+        }
         // Refresh list
-        wsClient?.sendChatSessionRequest('list');
+        sendSessionRequest(plugin, 'list');
       } else if (resp.requestAction === 'get_history' && resp.history) {
         setMessages(resp.history.map(m => ({
           role: m.role as 'user' | 'assistant',
@@ -207,11 +242,11 @@ function ChatTab({ plugin }: { plugin: ReturnType<typeof usePlugin> }) {
 
   // Load sessions on mount
   useEffect(() => {
-    wsClient?.sendChatSessionRequest('list');
-  }, []);
+    sendSessionRequest(plugin, 'list');
+  }, [plugin]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || isStreaming || !wsClient) return;
+    if (!input.trim() || isStreaming) return;
 
     const userMsg = input.trim();
     setInput('');
@@ -221,31 +256,24 @@ function ChatTab({ plugin }: { plugin: ReturnType<typeof usePlugin> }) {
     setActiveToolCalls([]);
 
     if (!currentSessionId) {
-      // Create session first, then send
-      wsClient.sendChatSessionRequest('create');
-      // We'll send the message after session is created
-      // Store pending message
-      setTimeout(() => {
-        if (wsClient) {
-          const sid = currentSessionId;
-          if (sid) wsClient.sendChat(sid, userMsg);
-        }
-      }, 1000);
+      // 先创建会话，消息暂存到 ref，session 创建回调中自动发送
+      pendingMessageRef.current = userMsg;
+      sendSessionRequest(plugin, 'create');
       return;
     }
 
-    wsClient.sendChat(currentSessionId, userMsg);
-  }, [input, isStreaming, currentSessionId]);
+    sendChatCommand(plugin, currentSessionId, userMsg);
+  }, [plugin, input, isStreaming, currentSessionId]);
 
   const handleNewSession = useCallback(() => {
-    wsClient?.sendChatSessionRequest('create');
-  }, []);
+    sendSessionRequest(plugin, 'create');
+  }, [plugin]);
 
   const handleSelectSession = useCallback((sid: string) => {
     setCurrentSessionId(sid);
     setMessages([]);
-    wsClient?.sendChatSessionRequest('get_history', sid);
-  }, []);
+    sendSessionRequest(plugin, 'get_history', sid);
+  }, [plugin]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '400px' }}>

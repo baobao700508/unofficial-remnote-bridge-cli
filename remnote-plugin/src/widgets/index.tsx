@@ -13,8 +13,8 @@ import { createMessageRouter } from '../bridge/message-router';
 // import { runRichTextMatrixTest } from '../test-scripts/test-richtext-matrix';
 // import { runPowerupRenderingTest } from '../test-scripts/test-powerup-rendering';
 
-// Export wsClient so widget can access chat methods
-export let wsClient: WebSocketClient | null = null;
+let wsClient: WebSocketClient | null = null;
+let chatCmdPollTimer: ReturnType<typeof setInterval> | null = null;
 // 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
 const logBuffer: Array<{ time: number; message: string; level: string }> = [];
 let logFlushPending = false;
@@ -75,6 +75,25 @@ async function onActivate(plugin: ReactRNPlugin) {
     },
   });
 
+  // 将 chat 发送方法通过 storage 暴露给 widget（避免 widget 直接 import wsClient）
+  // widget 写入 chat-command → index.tsx 轮询执行
+  let lastChatCmdTs = 0;
+  chatCmdPollTimer = setInterval(async () => {
+    if (!wsClient) return;
+    const cmd = await plugin.storage.getSession('chat-command') as { action: string; _ts: number; [k: string]: unknown } | null;
+    if (!cmd || cmd._ts <= lastChatCmdTs) return;
+    lastChatCmdTs = cmd._ts;
+    if (cmd.action === 'send_chat') {
+      wsClient.sendChat(cmd.sessionId as string, cmd.message as string);
+    } else if (cmd.action === 'session_request') {
+      wsClient.sendChatSessionRequest(
+        cmd.requestAction as 'list' | 'create' | 'delete' | 'get_history',
+        cmd.sessionId as string | undefined,
+        cmd.title as string | undefined,
+      );
+    }
+  }, 200);
+
   // 路由守护进程转发的请求到 services 层
   wsClient.setMessageHandler(createMessageRouter(plugin));
 
@@ -89,6 +108,10 @@ async function onActivate(plugin: ReactRNPlugin) {
 }
 
 async function onDeactivate(_: ReactRNPlugin) {
+  if (chatCmdPollTimer) {
+    clearInterval(chatCmdPollTimer);
+    chatCmdPollTimer = null;
+  }
   wsClient?.disconnect();
   wsClient = null;
 }

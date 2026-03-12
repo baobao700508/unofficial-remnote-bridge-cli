@@ -141,7 +141,7 @@ export function cleanupOrphanChrome(onLog?: (msg: string) => void): void {
   onLog?.(`发现孤儿 headless Chrome 进程 (PID: ${pid})，正在清理...`);
   try {
     process.kill(pid, 'SIGTERM');
-    // 给 Chrome 1 秒优雅退出
+    // 给 Chrome 1 秒优雅退出（同步等待，每 50ms 检查一次，避免忙轮询）
     const start = Date.now();
     while (Date.now() - start < 1000) {
       try {
@@ -149,6 +149,8 @@ export function cleanupOrphanChrome(onLog?: (msg: string) => void): void {
       } catch {
         break; // 已退出
       }
+      // 同步 sleep 50ms，避免 CPU 忙等待
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
     // 如果还没退出，强杀
     try {

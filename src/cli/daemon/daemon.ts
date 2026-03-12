@@ -318,63 +318,63 @@ async function main() {
         aiChatEnv.AI_CHAT_SYSTEM_PROMPT = config.aiChat.systemPrompt;
       }
 
-    try {
-      // Step 2: 使用 venv python 启动 AI Chat server
-      aiChatProcess = spawn(
-        pythonPath,
-        ['-m', 'ai_chat', '--port', String(aiChatPort), '--db-path', dbPath],
-        {
-          cwd: aiChatDir,
-          env: aiChatEnv,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        },
-      );
+      try {
+        // Step 2: 使用 venv python 启动 AI Chat server
+        aiChatProcess = spawn(
+          pythonPath,
+          ['-m', 'ai_chat', '--port', String(aiChatPort), '--db-path', dbPath],
+          {
+            cwd: aiChatDir,
+            env: aiChatEnv,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          },
+        );
 
-      aiChatProcess.stdout?.on('data', (data: Buffer) => {
-        log(`[ai-chat] ${data.toString().trimEnd()}`);
-      });
-      aiChatProcess.stderr?.on('data', (data: Buffer) => {
-        log(`[ai-chat] ${data.toString().trimEnd()}`, 'warn');
-      });
-      aiChatProcess.on('exit', (code) => {
-        if (!shutdownInProgress) {
-          log(`AI Chat 进程退出 (code: ${code})`, code === 0 ? 'info' : 'error');
-          aiChatProcess = null;
-          aiChatReady = false;
-        }
-      });
-
-      // 健康检查：最多等 10 秒
-      const healthUrl = `http://127.0.0.1:${aiChatPort}/health`;
-      let attempts = 0;
-      const maxAttempts = 20;
-      const checkHealth = async (): Promise<boolean> => {
-        while (attempts < maxAttempts) {
-          attempts++;
-          try {
-            const resp = await fetch(healthUrl);
-            if (resp.ok) return true;
-          } catch {
-            // 进程还没就绪
+        aiChatProcess.stdout?.on('data', (data: Buffer) => {
+          log(`[ai-chat] ${data.toString().trimEnd()}`);
+        });
+        aiChatProcess.stderr?.on('data', (data: Buffer) => {
+          log(`[ai-chat] ${data.toString().trimEnd()}`, 'warn');
+        });
+        aiChatProcess.on('exit', (code) => {
+          if (!shutdownInProgress) {
+            log(`AI Chat 进程退出 (code: ${code})`, code === 0 ? 'info' : 'error');
+            aiChatProcess = null;
+            aiChatReady = false;
           }
-          await new Promise(r => setTimeout(r, 500));
-        }
-        return false;
-      };
+        });
 
-      checkHealth().then(ready => {
-        aiChatReady = ready;
-        if (ready) {
-          log(`AI Chat 已启动 (端口 ${aiChatPort})`);
-        } else {
-          log('AI Chat 健康检查超时（非致命）', 'warn');
-        }
-      });
-    } catch (err) {
-      log(`AI Chat 启动失败（非致命）: ${err}`, 'error');
-      aiChatProcess = null;
+        // 健康检查：最多等 10 秒
+        const healthUrl = `http://127.0.0.1:${aiChatPort}/health`;
+        let attempts = 0;
+        const maxAttempts = 20;
+        const checkHealth = async (): Promise<boolean> => {
+          while (attempts < maxAttempts) {
+            attempts++;
+            try {
+              const resp = await fetch(healthUrl);
+              if (resp.ok) return true;
+            } catch {
+              // 进程还没就绪
+            }
+            await new Promise(r => setTimeout(r, 500));
+          }
+          return false;
+        };
+
+        checkHealth().then(ready => {
+          aiChatReady = ready;
+          if (ready) {
+            log(`AI Chat 已启动 (端口 ${aiChatPort})`);
+          } else {
+            log('AI Chat 健康检查超时（非致命）', 'warn');
+          }
+        });
+      } catch (err) {
+        log(`AI Chat 启动失败（非致命）: ${err}`, 'error');
+        aiChatProcess = null;
+      }
     }
-    } // end if (aiChatEnvResult)
   }
 
   // 将 aiChat 状态注入 server（供 get_status 和路由使用）
