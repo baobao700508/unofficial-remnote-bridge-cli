@@ -404,6 +404,7 @@ newStr:   最后一个兄弟 <!--idZ-->
 | orphan_detected | 删了父行但保留了子行 | 同时删除所有子行 |
 | folded_delete | 删除有隐藏子节点的行 | 用更大 depth 重新 read_tree |
 | children_captured | 新行插在父 Rem 和它的 children 之间，劫持了已有子节点 | 把新行插到所有兄弟的**末尾**而非紧跟父 Rem 之后（见下方说明） |
+| focusRemId 仅在 focus 模式下有效 | page 模式下不应传 focusRemId | 去掉 focusRemId 参数，或改用 focus 模式 |
 
 完整错误参考见 \\\`resource://error-reference\\\`。
 `;

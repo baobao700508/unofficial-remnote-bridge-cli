@@ -79,6 +79,7 @@ export const ERROR_REFERENCE_CONTENT = `
 |:---------|:---------|:-----|:---------|
 | Rem not found: {remId} | read_rem / read_tree | remId 无效或 Rem 已被删除 | 使用 \\\`search\\\` 重新定位 |
 | 指定的 Rem 不存在: {remId} | read_context (focus + focusRemId) | focusRemId 无效或 Rem 已被删除 | 使用 \\\`search\\\` 重新定位 |
+| focusRemId 仅在 focus 模式下有效 | read_context (page + focusRemId) | page 模式下不应传 focusRemId | 去掉 focusRemId 参数，或改用 focus 模式 |
 | 无法获取当前聚焦的 Rem | read_context (focus) | 用户未在 RemNote 中点击任何 Rem（且未指定 focusRemId） | 提醒用户在 RemNote 中点击一个 Rem，或传入 focusRemId |
 | 无法获取当前页面 | read_context (page) | RemNote 未打开文档页面 | 提醒用户打开一个文档页面 |
 

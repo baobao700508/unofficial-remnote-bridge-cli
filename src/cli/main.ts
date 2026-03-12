@@ -202,7 +202,7 @@ program
         depth: input.depth?.toString(),
         maxNodes: input.maxNodes?.toString(),
         maxSiblings: input.maxSiblings?.toString(),
-        focusRemId: input.focusRemId as string | undefined,
+        focusRemId: input.focusRemId ? String(input.focusRemId) : undefined,
       });
     } else {
       await readContextCommand({ json, ...cmdOpts });

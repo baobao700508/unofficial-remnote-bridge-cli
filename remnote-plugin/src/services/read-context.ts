@@ -51,6 +51,7 @@ export async function readContext(
   } = payload;
 
   if (mode === 'page') {
+    if (focusRemId) throw new Error('focusRemId 仅在 focus 模式下有效，page 模式下请勿指定');
     return readContextPage(plugin, { maxNodes, maxSiblings, depth });
   }
   return readContextFocus(plugin, { ancestorLevels, maxNodes, maxSiblings, focusRemId });
