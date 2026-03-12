@@ -210,7 +210,7 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存
 先用 \\\`read_context\\\` 看到用户所看到的，再做决策，沟通才能顺畅。
 
 使用 \\\`read_context\\\`：
-- **focus 模式**（默认）：以用户当前光标所在的 Rem 为中心，构建鱼眼视图——焦点处完全展开，周围递减。焦点行以 \\\`* \\\` 前缀标记。需要用户在 RemNote 中已点击某个 Rem。
+- **focus 模式**（默认）：以用户当前光标所在的 Rem 为中心，构建鱼眼视图——焦点处完全展开，周围递减。焦点行以 \\\`* \\\` 前缀标记。需要用户在 RemNote 中已点击某个 Rem。可通过 \\\`focusRemId\\\` 指定任意 Rem 作为鱼眼中心，此时不依赖用户焦点。
 - **page 模式**：以当前打开的页面为根，均匀展开子树。
 
 两种模式都会返回面包屑路径，帮助你理解当前位置在知识库中的层级。
@@ -404,6 +404,7 @@ newStr:   最后一个兄弟 <!--idZ-->
 | orphan_detected | 删了父行但保留了子行 | 同时删除所有子行 |
 | folded_delete | 删除有隐藏子节点的行 | 用更大 depth 重新 read_tree |
 | children_captured | 新行插在父 Rem 和它的 children 之间，劫持了已有子节点 | 把新行插到所有兄弟的**末尾**而非紧跟父 Rem 之后（见下方说明） |
+| focusRemId 仅在 focus 模式下有效 | page 模式下不应传 focusRemId | 去掉 focusRemId 参数，或改用 focus 模式 |
 
 完整错误参考见 \\\`resource://error-reference\\\`。
 `;

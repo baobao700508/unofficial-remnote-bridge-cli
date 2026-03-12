@@ -30,9 +30,11 @@ export class ContextReadHandler {
     const depth = (payload.depth as number) ?? this.defaults.readContextDepth;
     const maxNodes = (payload.maxNodes as number) ?? this.defaults.maxNodes;
     const maxSiblings = (payload.maxSiblings as number) ?? this.defaults.maxSiblings;
+    const focusRemId = payload.focusRemId as string | undefined;
 
-    return await this.forwardToPlugin('read_context', {
-      mode, ancestorLevels, depth, maxNodes, maxSiblings,
-    }) as ContextReadResult;
+    const pluginPayload: Record<string, unknown> = { mode, ancestorLevels, depth, maxNodes, maxSiblings };
+    if (focusRemId) pluginPayload.focusRemId = focusRemId;
+
+    return await this.forwardToPlugin('read_context', pluginPayload) as ContextReadResult;
   }
 }

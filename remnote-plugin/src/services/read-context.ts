@@ -27,6 +27,7 @@ export interface ReadContextPayload {
   maxNodes?: number;
   maxSiblings?: number;
   depth?: number;
+  focusRemId?: string;
 }
 
 export interface ReadContextResult {
@@ -46,12 +47,14 @@ export async function readContext(
     maxNodes = 200,
     maxSiblings = 20,
     depth = 3,
+    focusRemId,
   } = payload;
 
   if (mode === 'page') {
+    if (focusRemId) throw new Error('focusRemId 仅在 focus 模式下有效，page 模式下请勿指定');
     return readContextPage(plugin, { maxNodes, maxSiblings, depth });
   }
-  return readContextFocus(plugin, { ancestorLevels, maxNodes, maxSiblings });
+  return readContextFocus(plugin, { ancestorLevels, maxNodes, maxSiblings, focusRemId });
 }
 
 // ────────────────────────── Page 模式 ──────────────────────────
@@ -87,10 +90,16 @@ async function readContextPage(
 
 async function readContextFocus(
   plugin: ReactRNPlugin,
-  opts: { ancestorLevels: number; maxNodes: number; maxSiblings: number },
+  opts: { ancestorLevels: number; maxNodes: number; maxSiblings: number; focusRemId?: string },
 ): Promise<ReadContextResult> {
-  const focusRem = await plugin.focus.getFocusedRem();
-  if (!focusRem) throw new Error('当前没有聚焦的 Rem，请先在 RemNote 中点击一个 Rem');
+  let focusRem: Rem | undefined;
+  if (opts.focusRemId) {
+    focusRem = await plugin.rem.findOne(opts.focusRemId);
+    if (!focusRem) throw new Error(`指定的 Rem 不存在: ${opts.focusRemId}`);
+  } else {
+    focusRem = await plugin.focus.getFocusedRem();
+    if (!focusRem) throw new Error('当前没有聚焦的 Rem，请先在 RemNote 中点击一个 Rem');
+  }
 
   const breadcrumb = await buildBreadcrumb(plugin, focusRem);
 
