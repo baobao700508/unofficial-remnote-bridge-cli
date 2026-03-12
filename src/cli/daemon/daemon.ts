@@ -22,6 +22,7 @@ import { writePid, removePid } from './pid.js';
 import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
 import type { BridgeConfig } from '../config.js';
 import type { DiagnoseResult, ReloadResult } from '../protocol.js';
+import { ensureAiChatEnv } from './ai-chat-env.js';
 
 let shutdownInProgress = false;
 
@@ -289,27 +290,38 @@ async function main() {
   // 启动 AI Chat Python 子进程（如果启用）
   if (config.aiChat.enabled) {
     const aiChatPort = config.aiChat.port;
-    const packageRoot = path.resolve(import.meta.dirname, '..', '..', '..');
-    const aiChatDir = path.join(packageRoot, 'ai-chat');
+    const pkgRoot = path.resolve(import.meta.dirname, '..', '..', '..');
     const dbPath = path.join(projectRoot, '.remnote-bridge-chat.db');
 
-    const aiChatEnv: Record<string, string> = {
-      ...process.env as Record<string, string>,
-      AI_CHAT_ENDPOINT: config.aiChat.endpoint,
-      AI_CHAT_MODEL: config.aiChat.model,
-      AI_CHAT_API_KEY: config.aiChat.apiKey,
-      AI_CHAT_DB_PATH: dbPath,
-      AI_CHAT_MAX_HISTORY_TOKENS: String(config.aiChat.maxHistoryTokens),
-      AI_CHAT_SUMMARY_THRESHOLD: String(config.aiChat.summaryThreshold),
-      PYTHONPATH: aiChatDir,
-    };
-    if (config.aiChat.systemPrompt) {
-      aiChatEnv.AI_CHAT_SYSTEM_PROMPT = config.aiChat.systemPrompt;
+    // Step 1: 确保 venv 存在且依赖已安装
+    let aiChatEnvResult: { pythonPath: string; venvDir: string; aiChatDir: string } | null = null;
+    try {
+      aiChatEnvResult = ensureAiChatEnv(projectRoot, pkgRoot, log);
+    } catch (err) {
+      log(`AI Chat 环境准备失败（非致命）: ${err}`, 'error');
     }
 
+    if (aiChatEnvResult) {
+      const { pythonPath, aiChatDir } = aiChatEnvResult;
+
+      const aiChatEnv: Record<string, string> = {
+        ...process.env as Record<string, string>,
+        AI_CHAT_ENDPOINT: config.aiChat.endpoint,
+        AI_CHAT_MODEL: config.aiChat.model,
+        AI_CHAT_API_KEY: config.aiChat.apiKey,
+        AI_CHAT_DB_PATH: dbPath,
+        AI_CHAT_MAX_HISTORY_TOKENS: String(config.aiChat.maxHistoryTokens),
+        AI_CHAT_SUMMARY_THRESHOLD: String(config.aiChat.summaryThreshold),
+        PYTHONPATH: aiChatDir,
+      };
+      if (config.aiChat.systemPrompt) {
+        aiChatEnv.AI_CHAT_SYSTEM_PROMPT = config.aiChat.systemPrompt;
+      }
+
     try {
+      // Step 2: 使用 venv python 启动 AI Chat server
       aiChatProcess = spawn(
-        'python3',
+        pythonPath,
         ['-m', 'ai_chat', '--port', String(aiChatPort), '--db-path', dbPath],
         {
           cwd: aiChatDir,
@@ -362,6 +374,7 @@ async function main() {
       log(`AI Chat 启动失败（非致命）: ${err}`, 'error');
       aiChatProcess = null;
     }
+    } // end if (aiChatEnvResult)
   }
 
   // 将 aiChat 状态注入 server（供 get_status 和路由使用）

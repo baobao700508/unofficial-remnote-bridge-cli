@@ -10,6 +10,7 @@ dist/
 .remnote-bridge.log
 .remnote-bridge.json
 .remnote-bridge-chat.db
+.remnote-bridge-venv/
 
 # 第三方爬取文档（体积大，本地开发参考用）
 docs/RemNote API Reference/
