@@ -3,6 +3,7 @@ import '../style.css';
 import '../index.css';
 import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
 import { WebSocketClient } from '../bridge/websocket-client';
+import type { ChatStreamChunk, ChatSessionResponse } from '../bridge/websocket-client';
 import { createMessageRouter } from '../bridge/message-router';
 // test-scripts 已完成数据收集，不再打包进生产代码
 // 如需重跑，取消注释对应 import 和 onActivate 调用
@@ -12,7 +13,8 @@ import { createMessageRouter } from '../bridge/message-router';
 // import { runRichTextMatrixTest } from '../test-scripts/test-richtext-matrix';
 // import { runPowerupRenderingTest } from '../test-scripts/test-powerup-rendering';
 
-let wsClient: WebSocketClient | null = null;
+// Export wsClient so widget can access chat methods
+export let wsClient: WebSocketClient | null = null;
 // 本地日志缓冲区：避免 onLog 并发读写 plugin.storage 的竞态
 const logBuffer: Array<{ time: number; message: string; level: string }> = [];
 let logFlushPending = false;
@@ -58,6 +60,18 @@ async function onActivate(plugin: ReactRNPlugin) {
           await plugin.storage.setSession('bridge-logs', logBuffer.slice());
         });
       }
+    },
+    onChatStream: (chunk: ChatStreamChunk) => {
+      void plugin.storage.setSession('chat-stream-chunk', {
+        ...chunk,
+        _ts: Date.now(),
+      });
+    },
+    onChatSessionResponse: (response: ChatSessionResponse) => {
+      void plugin.storage.setSession('chat-session-response', {
+        ...response,
+        _ts: Date.now(),
+      });
     },
   });
 

@@ -41,6 +41,45 @@ export interface BridgeResponse {
   error?: string;
 }
 
+// ── AI Chat 协议类型（独立定义）──
+
+export interface ChatMessage {
+  type: 'chat';
+  sessionId: string;
+  message: string;
+}
+
+export interface ChatStreamChunk {
+  type: 'chat_stream';
+  sessionId: string;
+  chunk: string;
+  done: boolean;
+  toolCall?: {
+    name: string;
+    args?: string;
+    result?: string;
+    status: 'calling' | 'done';
+  };
+  error?: string;
+}
+
+export interface ChatSessionRequest {
+  type: 'chat_session';
+  action: 'list' | 'create' | 'delete' | 'get_history';
+  sessionId?: string;
+  title?: string;
+}
+
+export interface ChatSessionResponse {
+  type: 'chat_session_response';
+  requestAction: string;
+  sessions?: Array<{ id: string; title: string; createdAt: number; updatedAt: number; messageCount: number }>;
+  history?: Array<{ id: string; role: string; content: string; timestamp: number }>;
+  session?: { id: string; title: string; createdAt: number };
+  ok?: boolean;
+  error?: string;
+}
+
 // ── 配置 ──
 
 export interface WebSocketClientConfig {
@@ -52,6 +91,8 @@ export interface WebSocketClientConfig {
   maxReconnectDelay?: number;
   onStatusChange?: (status: ConnectionStatus) => void;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+  onChatStream?: (chunk: ChatStreamChunk) => void;
+  onChatSessionResponse?: (response: ChatSessionResponse) => void;
 }
 
 // ── WebSocket Client 实现 ──
@@ -65,9 +106,11 @@ export class WebSocketClient {
   private isShuttingDown = false;
   private _sdkReady: boolean;
 
-  private config: Required<Omit<WebSocketClientConfig, 'onStatusChange' | 'onLog'>> & {
+  private config: Required<Omit<WebSocketClientConfig, 'onStatusChange' | 'onLog' | 'onChatStream' | 'onChatSessionResponse'>> & {
     onStatusChange?: (status: ConnectionStatus) => void;
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+    onChatStream?: (chunk: ChatStreamChunk) => void;
+    onChatSessionResponse?: (response: ChatSessionResponse) => void;
   };
 
   constructor(config: WebSocketClientConfig) {
@@ -81,6 +124,8 @@ export class WebSocketClient {
       maxReconnectDelay: config.maxReconnectDelay ?? 30000,
       onStatusChange: config.onStatusChange,
       onLog: config.onLog,
+      onChatStream: config.onChatStream,
+      onChatSessionResponse: config.onChatSessionResponse,
     };
   }
 
@@ -158,6 +203,18 @@ export class WebSocketClient {
       // 心跳响应
       if (message.type === 'ping') {
         this.ws?.send(JSON.stringify({ type: 'pong' } as PongMessage));
+        return;
+      }
+
+      // AI Chat 流式响应
+      if (message.type === 'chat_stream') {
+        this.config.onChatStream?.(message as ChatStreamChunk);
+        return;
+      }
+
+      // AI Chat 会话管理响应
+      if (message.type === 'chat_session_response') {
+        this.config.onChatSessionResponse?.(message as ChatSessionResponse);
         return;
       }
 
@@ -241,5 +298,25 @@ export class WebSocketClient {
 
   getStatus(): ConnectionStatus {
     return this.status;
+  }
+
+  // ── AI Chat 发送方法 ──
+
+  sendChat(sessionId: string, message: string): void {
+    const msg: ChatMessage = { type: 'chat', sessionId, message };
+    try {
+      this.ws?.send(JSON.stringify(msg));
+    } catch (error) {
+      this.log(`发送聊天消息失败: ${error}`, 'error');
+    }
+  }
+
+  sendChatSessionRequest(action: 'list' | 'create' | 'delete' | 'get_history', sessionId?: string, title?: string): void {
+    const msg: ChatSessionRequest = { type: 'chat_session', action, sessionId, title };
+    try {
+      this.ws?.send(JSON.stringify(msg));
+    } catch (error) {
+      this.log(`发送会话请求失败: ${error}`, 'error');
+    }
   }
 }

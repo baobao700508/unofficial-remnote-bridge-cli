@@ -41,12 +41,34 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   searchNumResults: 20,
 };
 
+export interface AiChatConfig {
+  enabled: boolean;
+  endpoint: string;
+  model: string;
+  apiKey: string;
+  port: number;
+  systemPrompt?: string;
+  maxHistoryTokens: number;
+  summaryThreshold: number;
+}
+
+export const DEFAULT_AI_CHAT: Readonly<AiChatConfig> = {
+  enabled: false,
+  endpoint: 'https://api.openai.com/v1',
+  model: 'gpt-4o',
+  apiKey: '',
+  port: 3005,
+  maxHistoryTokens: 8000,
+  summaryThreshold: 20,
+};
+
 export interface BridgeConfig {
   wsPort: number;
   devServerPort: number;
   configPort: number;
   daemonTimeoutMinutes: number;
   defaults: DefaultsConfig;
+  aiChat: AiChatConfig;
 }
 
 export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
@@ -55,6 +77,7 @@ export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
   configPort: 3003,
   daemonTimeoutMinutes: 30,
   defaults: { ...DEFAULT_DEFAULTS },
+  aiChat: { ...DEFAULT_AI_CHAT },
 };
 
 const CONFIG_FILENAME = '.remnote-bridge.json';
@@ -110,6 +133,20 @@ function mergeDefaults(parsed: Partial<DefaultsConfig> | undefined): DefaultsCon
   };
 }
 
+function mergeAiChat(parsed: Partial<AiChatConfig> | undefined): AiChatConfig {
+  if (!parsed) return { ...DEFAULT_AI_CHAT };
+  return {
+    enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_AI_CHAT.enabled,
+    endpoint: typeof parsed.endpoint === 'string' && parsed.endpoint ? parsed.endpoint : DEFAULT_AI_CHAT.endpoint,
+    model: typeof parsed.model === 'string' && parsed.model ? parsed.model : DEFAULT_AI_CHAT.model,
+    apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : DEFAULT_AI_CHAT.apiKey,
+    port: isValidPort(parsed.port) ? parsed.port : DEFAULT_AI_CHAT.port,
+    systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : undefined,
+    maxHistoryTokens: isPositiveNumber(parsed.maxHistoryTokens) ? parsed.maxHistoryTokens : DEFAULT_AI_CHAT.maxHistoryTokens,
+    summaryThreshold: isPositiveNumber(parsed.summaryThreshold) ? parsed.summaryThreshold : DEFAULT_AI_CHAT.summaryThreshold,
+  };
+}
+
 /**
  * 加载配置。不存在时返回默认值。
  */
@@ -118,12 +155,12 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
   const configPath = path.join(root, CONFIG_FILENAME);
 
   if (!fs.existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
+    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS }, aiChat: { ...DEFAULT_AI_CHAT } };
   }
 
   try {
     const raw = fs.readFileSync(configPath, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<BridgeConfig & { defaults?: Partial<DefaultsConfig> }>;
+    const parsed = JSON.parse(raw) as Partial<BridgeConfig & { defaults?: Partial<DefaultsConfig>; aiChat?: Partial<AiChatConfig> }>;
 
     const config: BridgeConfig = {
       wsPort: isValidPort(parsed.wsPort) ? parsed.wsPort : DEFAULT_CONFIG.wsPort,
@@ -134,18 +171,22 @@ export function loadConfig(projectRoot?: string): BridgeConfig {
           ? parsed.daemonTimeoutMinutes
           : DEFAULT_CONFIG.daemonTimeoutMinutes,
       defaults: mergeDefaults(parsed.defaults),
+      aiChat: mergeAiChat(parsed.aiChat),
     };
 
     // 端口冲突校验
     const ports = [config.wsPort, config.devServerPort, config.configPort];
+    if (config.aiChat.enabled) {
+      ports.push(config.aiChat.port);
+    }
     if (new Set(ports).size !== ports.length) {
-      throw new Error('wsPort, devServerPort, configPort must be different');
+      throw new Error('wsPort, devServerPort, configPort, aiChat.port must be different');
     }
 
     return config;
   } catch {
     // 配置文件损坏时使用默认值
-    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
+    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS }, aiChat: { ...DEFAULT_AI_CHAT } };
   }
 }
 

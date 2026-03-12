@@ -11,6 +11,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import { spawn, type ChildProcess } from 'child_process';
 import { BridgeServer } from '../server/ws-server.js';
 import { ConfigServer } from '../server/config-server.js';
 import { DevServerManager } from './dev-server.js';
@@ -138,6 +139,10 @@ async function main() {
   // Headless Chrome 管理器（在 createServer 之前声明，闭包可引用）
   let headlessBrowser: HeadlessBrowserManager | null = null;
 
+  // AI Chat Python 子进程（在 createServer 之前声明）
+  let aiChatProcess: ChildProcess | null = null;
+  let aiChatReady = false;
+
   const distDir = path.join(pluginDir, 'dist');
   const distExists = fs.existsSync(path.join(distDir, 'index.html'));
 
@@ -174,7 +179,19 @@ async function main() {
     log('开始优雅关闭...');
     clearTimeout(timeoutTimer);
 
-    // 先关闭 headless Chrome
+    // 先关闭 AI Chat
+    if (aiChatProcess) {
+      try {
+        aiChatProcess.kill('SIGTERM');
+        log('AI Chat 进程已发送 SIGTERM');
+      } catch (err) {
+        log(`AI Chat 关闭失败: ${err}`, 'error');
+      }
+      aiChatProcess = null;
+      aiChatReady = false;
+    }
+
+    // 关闭 headless Chrome
     if (headlessBrowser) {
       try {
         await headlessBrowser.stop();
@@ -268,6 +285,89 @@ async function main() {
       headlessBrowser = null;
     }
   }
+
+  // 启动 AI Chat Python 子进程（如果启用）
+  if (config.aiChat.enabled) {
+    const aiChatPort = config.aiChat.port;
+    const packageRoot = path.resolve(import.meta.dirname, '..', '..', '..');
+    const aiChatDir = path.join(packageRoot, 'ai-chat');
+    const dbPath = path.join(projectRoot, '.remnote-bridge-chat.db');
+
+    const aiChatEnv: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      AI_CHAT_ENDPOINT: config.aiChat.endpoint,
+      AI_CHAT_MODEL: config.aiChat.model,
+      AI_CHAT_API_KEY: config.aiChat.apiKey,
+      AI_CHAT_DB_PATH: dbPath,
+      AI_CHAT_MAX_HISTORY_TOKENS: String(config.aiChat.maxHistoryTokens),
+      AI_CHAT_SUMMARY_THRESHOLD: String(config.aiChat.summaryThreshold),
+      PYTHONPATH: aiChatDir,
+    };
+    if (config.aiChat.systemPrompt) {
+      aiChatEnv.AI_CHAT_SYSTEM_PROMPT = config.aiChat.systemPrompt;
+    }
+
+    try {
+      aiChatProcess = spawn(
+        'python3',
+        ['-m', 'ai_chat', '--port', String(aiChatPort), '--db-path', dbPath],
+        {
+          cwd: aiChatDir,
+          env: aiChatEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+
+      aiChatProcess.stdout?.on('data', (data: Buffer) => {
+        log(`[ai-chat] ${data.toString().trimEnd()}`);
+      });
+      aiChatProcess.stderr?.on('data', (data: Buffer) => {
+        log(`[ai-chat] ${data.toString().trimEnd()}`, 'warn');
+      });
+      aiChatProcess.on('exit', (code) => {
+        if (!shutdownInProgress) {
+          log(`AI Chat 进程退出 (code: ${code})`, code === 0 ? 'info' : 'error');
+          aiChatProcess = null;
+          aiChatReady = false;
+        }
+      });
+
+      // 健康检查：最多等 10 秒
+      const healthUrl = `http://127.0.0.1:${aiChatPort}/health`;
+      let attempts = 0;
+      const maxAttempts = 20;
+      const checkHealth = async (): Promise<boolean> => {
+        while (attempts < maxAttempts) {
+          attempts++;
+          try {
+            const resp = await fetch(healthUrl);
+            if (resp.ok) return true;
+          } catch {
+            // 进程还没就绪
+          }
+          await new Promise(r => setTimeout(r, 500));
+        }
+        return false;
+      };
+
+      checkHealth().then(ready => {
+        aiChatReady = ready;
+        if (ready) {
+          log(`AI Chat 已启动 (端口 ${aiChatPort})`);
+        } else {
+          log('AI Chat 健康检查超时（非致命）', 'warn');
+        }
+      });
+    } catch (err) {
+      log(`AI Chat 启动失败（非致命）: ${err}`, 'error');
+      aiChatProcess = null;
+    }
+  }
+
+  // 将 aiChat 状态注入 server（供 get_status 和路由使用）
+  server.aiChatConfig = config.aiChat.enabled
+    ? { port: config.aiChat.port, getReady: () => aiChatReady }
+    : null;
 
   // 启动超时计时器
   resetTimeout();

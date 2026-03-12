@@ -20,7 +20,11 @@ import type {
   DiagnoseResult,
   ReloadResult,
 } from '../protocol.js';
-import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol.js';
+import {
+  isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse,
+  isChatMessage, isChatSessionRequest,
+} from '../protocol.js';
+import type { ChatMessage, ChatStreamChunk, ChatSessionRequest, ChatSessionResponse } from '../protocol.js';
 import type { DefaultsConfig } from '../config.js';
 import { DEFAULT_DEFAULTS } from '../config.js';
 import { RemCache } from '../handlers/rem-cache.js';
@@ -85,6 +89,9 @@ export class BridgeServer {
 
   /** 每当收到 CLI 命令请求时触发（用于刷新守护进程超时计时器） */
   public onCliRequest?: () => void;
+
+  /** AI Chat 配置（由 daemon 注入，null = 未启用） */
+  public aiChatConfig: { port: number; getReady: () => boolean } | null = null;
 
   constructor(config: BridgeServerConfig) {
     this.config = {
@@ -208,6 +215,15 @@ export class BridgeServer {
         // Plugin 返回的 BridgeResponse（子请求的响应）
         if (isBridgeResponse(message)) {
           this.handlePluginResponse(message);
+          return;
+        }
+        // AI Chat 消息（Plugin → Daemon → Python server）
+        if (isChatMessage(message)) {
+          this.handleChatMessage(ws, message);
+          return;
+        }
+        if (isChatSessionRequest(message)) {
+          this.handleChatSessionRequest(ws, message);
           return;
         }
         return;
@@ -458,6 +474,166 @@ export class BridgeServer {
     }
   }
 
+  // ── AI Chat 消息处理 ──
+
+  /**
+   * 处理 Plugin 发来的聊天消息：转发到 Python server，流式回传 SSE 响应。
+   */
+  private async handleChatMessage(ws: WebSocket, chat: ChatMessage): Promise<void> {
+    if (!this.aiChatConfig) {
+      const err: ChatStreamChunk = {
+        type: 'chat_stream',
+        sessionId: chat.sessionId,
+        chunk: '',
+        done: true,
+        error: 'AI Chat 未启用',
+      };
+      ws.send(JSON.stringify(err));
+      return;
+    }
+
+    if (!this.aiChatConfig.getReady()) {
+      const err: ChatStreamChunk = {
+        type: 'chat_stream',
+        sessionId: chat.sessionId,
+        chunk: '',
+        done: true,
+        error: 'AI Chat 服务未就绪',
+      };
+      ws.send(JSON.stringify(err));
+      return;
+    }
+
+    const url = `http://127.0.0.1:${this.aiChatConfig.port}/chat`;
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: chat.sessionId, message: chat.message }),
+      });
+
+      if (!resp.ok || !resp.body) {
+        const text = await resp.text().catch(() => 'Unknown error');
+        const err: ChatStreamChunk = {
+          type: 'chat_stream',
+          sessionId: chat.sessionId,
+          chunk: '',
+          done: true,
+          error: `AI Chat 请求失败: ${resp.status} ${text}`,
+        };
+        ws.send(JSON.stringify(err));
+        return;
+      }
+
+      // Read SSE stream and forward chunks to Plugin via WS
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const data = JSON.parse(jsonStr);
+            const chunk: ChatStreamChunk = {
+              type: 'chat_stream',
+              sessionId: chat.sessionId,
+              chunk: data.chunk ?? '',
+              done: data.done ?? false,
+              toolCall: data.toolCall,
+              error: data.error,
+            };
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(chunk));
+            }
+          } catch {
+            // Skip malformed SSE data
+          }
+        }
+      }
+    } catch (err) {
+      const errChunk: ChatStreamChunk = {
+        type: 'chat_stream',
+        sessionId: chat.sessionId,
+        chunk: '',
+        done: true,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(errChunk));
+      }
+    }
+  }
+
+  /**
+   * 处理 Plugin 发来的会话管理请求：转发到 Python server REST API。
+   */
+  private async handleChatSessionRequest(ws: WebSocket, req: ChatSessionRequest): Promise<void> {
+    if (!this.aiChatConfig || !this.aiChatConfig.getReady()) {
+      const resp: ChatSessionResponse = {
+        type: 'chat_session_response',
+        requestAction: req.action,
+        error: 'AI Chat 未启用或未就绪',
+      };
+      ws.send(JSON.stringify(resp));
+      return;
+    }
+
+    const base = `http://127.0.0.1:${this.aiChatConfig.port}`;
+
+    try {
+      let resp: ChatSessionResponse;
+
+      if (req.action === 'list') {
+        const r = await fetch(`${base}/sessions`);
+        const data = await r.json() as { sessions: Array<{ id: string; title: string; createdAt: number; updatedAt: number; messageCount: number }> };
+        resp = { type: 'chat_session_response', requestAction: 'list', sessions: data.sessions };
+      } else if (req.action === 'create') {
+        const r = await fetch(`${base}/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: req.title ?? 'New Chat' }),
+        });
+        const data = await r.json() as { id: string; title: string; createdAt: number };
+        resp = { type: 'chat_session_response', requestAction: 'create', session: data };
+      } else if (req.action === 'delete' && req.sessionId) {
+        const r = await fetch(`${base}/sessions/${req.sessionId}`, { method: 'DELETE' });
+        const data = await r.json() as { ok: boolean };
+        resp = { type: 'chat_session_response', requestAction: 'delete', ok: data.ok };
+      } else if (req.action === 'get_history' && req.sessionId) {
+        const r = await fetch(`${base}/sessions/${req.sessionId}/history`);
+        const data = await r.json() as { messages: Array<{ id: string; role: string; content: string; timestamp: number }> };
+        resp = { type: 'chat_session_response', requestAction: 'get_history', history: data.messages };
+      } else {
+        resp = { type: 'chat_session_response', requestAction: req.action, error: `未知 action: ${req.action}` };
+      }
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(resp));
+      }
+    } catch (err) {
+      const resp: ChatSessionResponse = {
+        type: 'chat_session_response',
+        requestAction: req.action,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(resp));
+      }
+    }
+  }
+
   /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */
   getStatus(): StatusResult {
     const result: StatusResult = {
@@ -470,6 +646,13 @@ export class BridgeServer {
     const headlessStatus = this.config.getHeadlessStatus?.();
     if (headlessStatus) {
       result.headless = headlessStatus;
+    }
+
+    if (this.aiChatConfig) {
+      result.aiChat = {
+        enabled: true,
+        ready: this.aiChatConfig.getReady(),
+      };
     }
 
     return result;
