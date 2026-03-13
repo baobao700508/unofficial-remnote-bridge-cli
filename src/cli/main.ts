@@ -20,6 +20,7 @@ import { readContextCommand } from './commands/read-context.js';
 import { searchCommand } from './commands/search.js';
 import { installSkillCommand, installSkillCopyCommand } from './commands/install-skill.js';
 import { cleanCommand } from './commands/clean.js';
+import { addonListCommand, addonInstallCommand, addonUninstallCommand } from './commands/addon.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../../package.json');
@@ -63,7 +64,24 @@ program
   .name('remnote-bridge')
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
   .version(version)
-  .option('--json', '以 JSON 格式输出（适用于程序化调用）');
+  .option('--json', '以 JSON 格式输出（适用于程序化调用）')
+  .option('--instance <name>', '指定 daemon 实例名（也可用 REMNOTE_BRIDGE_INSTANCE 环境变量）')
+  .option('--headless', '使用 headless 实例（覆盖 --instance，也可用 REMNOTE_HEADLESS=1 环境变量）');
+
+// 全局参数同步到环境变量，使所有命令中的 resolveInstanceId() 自动生效
+program.hook('preAction', () => {
+  const opts = program.opts();
+  const headlessEnv = process.env.REMNOTE_HEADLESS;
+  const isHeadless = opts.headless || headlessEnv === '1' || headlessEnv === 'true';
+
+  if (isHeadless) {
+    // headless 覆盖 instance，固定实例名
+    process.env.REMNOTE_HEADLESS = '1';
+    process.env.REMNOTE_BRIDGE_INSTANCE = 'headless';
+  } else if (opts.instance) {
+    process.env.REMNOTE_BRIDGE_INSTANCE = opts.instance;
+  }
+});
 
 program
   .command('setup')
@@ -77,11 +95,10 @@ program
   .command('connect')
   .description('启动守护进程，等待 Plugin 连接')
   .option('--dev', '开发模式：使用 webpack-dev-server（支持 HMR）')
-  .option('--headless', '无头模式：自动启动 headless Chrome 加载 Plugin（需先 setup）')
-  .option('--remote-debugging-port <port>', 'Chrome 远程调试端口（仅 --headless）', parseInt)
-  .action(async (cmdOpts: { dev?: boolean; headless?: boolean; remoteDebuggingPort?: number }) => {
-    const { json } = program.opts();
-    await connectCommand({ json, dev: cmdOpts.dev, headless: cmdOpts.headless, remoteDebuggingPort: cmdOpts.remoteDebuggingPort });
+  .option('--remote-debugging-port <port>', 'Chrome 远程调试端口（仅 headless 模式）', parseInt)
+  .action(async (cmdOpts: { dev?: boolean; remoteDebuggingPort?: number }) => {
+    const { json, instance } = program.opts();
+    await connectCommand({ json, instance, dev: cmdOpts.dev, remoteDebuggingPort: cmdOpts.remoteDebuggingPort });
   });
 
 program
@@ -90,16 +107,16 @@ program
   .option('--diagnose', '诊断 headless Chrome（截图 + 状态 + console 错误）')
   .option('--reload', '重载 headless Chrome 页面')
   .action(async (cmdOpts: { diagnose?: boolean; reload?: boolean }) => {
-    const { json } = program.opts();
-    await healthCommand({ json, diagnose: cmdOpts.diagnose, reload: cmdOpts.reload });
+    const { json, instance } = program.opts();
+    await healthCommand({ json, instance, diagnose: cmdOpts.diagnose, reload: cmdOpts.reload });
   });
 
 program
   .command('disconnect')
   .description('停止守护进程，释放端口和资源')
   .action(async () => {
-    const { json } = program.opts();
-    await disconnectCommand({ json });
+    const { json, instance } = program.opts();
+    await disconnectCommand({ json, instance });
   });
 
 program
@@ -299,6 +316,34 @@ program
   .action(async () => {
     const { json } = program.opts();
     await cleanCommand({ json });
+  });
+
+// addon 子命令组
+const addonCmd = program.command('addon').description('管理增强项目（addon）');
+
+addonCmd
+  .command('list')
+  .description('查看所有增强项目状态')
+  .action(async () => {
+    const { json } = program.opts();
+    await addonListCommand({ json });
+  });
+
+addonCmd
+  .command('install <name>')
+  .description('安装指定增强项目')
+  .action(async (name: string) => {
+    const { json } = program.opts();
+    await addonInstallCommand(name, { json });
+  });
+
+addonCmd
+  .command('uninstall <name>')
+  .description('卸载指定增强项目')
+  .option('--purge', '同时删除数据目录')
+  .action(async (name: string, cmdOpts: { purge?: boolean }) => {
+    const { json } = program.opts();
+    await addonUninstallCommand(name, { json, purge: cmdOpts.purge });
   });
 
 program.parse();

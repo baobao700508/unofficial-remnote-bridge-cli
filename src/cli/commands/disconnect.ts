@@ -6,8 +6,15 @@
  * - 守护进程未运行 → 打印提示，退出码 0
  */
 
-import { pidFilePath, findProjectRoot } from '../config.js';
-import { checkDaemon, removePid } from '../daemon/pid.js';
+import {
+  resolveInstanceId,
+  loadRegistry,
+  cleanStaleSlots,
+  findSlotByInstance,
+  releaseSlot,
+  instancePidPath,
+} from '../daemon/registry.js';
+import { removePid } from '../daemon/pid.js';
 import { cleanupOrphanChrome } from '../daemon/headless-browser.js';
 import { jsonOutput } from '../utils/output.js';
 
@@ -16,37 +23,43 @@ const POLL_INTERVAL_MS = 200;
 
 export interface DisconnectOptions {
   json?: boolean;
+  instance?: string;
 }
 
 export async function disconnectCommand(options: DisconnectOptions = {}): Promise<void> {
   const { json } = options;
-  const projectRoot = findProjectRoot();
-  const pidPath = pidFilePath(projectRoot);
+  const instanceId = resolveInstanceId(options.instance);
 
-  const status = checkDaemon(pidPath);
-  if (!status.running) {
+  const registry = loadRegistry();
+  cleanStaleSlots(registry);
+
+  const entry = findSlotByInstance(registry, instanceId);
+  if (!entry) {
     if (json) {
-      jsonOutput({ ok: true, command: 'disconnect', wasRunning: false });
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: false, instance: instanceId });
     } else {
-      console.log('守护进程未在运行');
+      console.log(`守护进程未在运行（实例: ${instanceId}）`);
     }
     process.exitCode = 0;
     return;
   }
 
-  const pid = status.pid;
+  const pid = entry.pid;
+  const pidPath = instancePidPath(entry.index);
+
   if (!json) {
-    console.log(`正在停止守护进程（PID: ${pid}）...`);
+    console.log(`正在停止守护进程（PID: ${pid}，实例: ${instanceId}）...`);
   }
 
   // 发送 SIGTERM
   try {
     process.kill(pid, 'SIGTERM');
-  } catch (err) {
+  } catch {
     // 进程可能已经退出
     removePid(pidPath);
+    releaseSlot(registry, instanceId);
     if (json) {
-      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false });
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, instance: instanceId, pid, forced: false });
     } else {
       console.log('守护进程已停止');
     }
@@ -59,10 +72,10 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
 
   if (exited) {
     removePid(pidPath);
-    // 清理可能残留的孤儿 headless Chrome
+    releaseSlot(registry, instanceId);
     cleanupOrphanChrome(json ? undefined : (msg) => console.log(msg));
     if (json) {
-      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: false });
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, instance: instanceId, pid, forced: false });
     } else {
       console.log('守护进程已停止');
     }
@@ -74,10 +87,10 @@ export async function disconnectCommand(options: DisconnectOptions = {}): Promis
       // 可能已退出
     }
     removePid(pidPath);
-    // daemon 被强杀后 Chrome 更可能成为孤儿，务必清理
+    releaseSlot(registry, instanceId);
     cleanupOrphanChrome(json ? undefined : (msg) => console.log(msg));
     if (json) {
-      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, pid, forced: true });
+      jsonOutput({ ok: true, command: 'disconnect', wasRunning: true, instance: instanceId, pid, forced: true });
     } else {
       console.error(`守护进程未在 ${WAIT_TIMEOUT_MS / 1000} 秒内退出，尝试强制终止...`);
       console.log('守护进程已强制终止');
@@ -92,16 +105,13 @@ function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
 
     const check = () => {
       try {
-        // kill(pid, 0) 不发信号，只检查进程是否存在
         process.kill(pid, 0);
-        // 进程仍在运行
         if (Date.now() - start >= timeoutMs) {
           resolve(false);
         } else {
           setTimeout(check, POLL_INTERVAL_MS);
         }
       } catch {
-        // 进程已退出
         resolve(true);
       }
     };

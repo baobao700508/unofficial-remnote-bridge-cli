@@ -7,6 +7,10 @@
  * 3. 写入 PID 文件
  * 4. 管理自动超时关闭
  * 5. 通过 IPC 向父进程发送 ready 信号
+ *
+ * 端口来源：env SLOT_WS_PORT / SLOT_DEV_PORT / SLOT_CONFIG_PORT
+ * 实例标识：env REMNOTE_BRIDGE_INSTANCE
+ * 日志/PID：~/.remnote-bridge/instances/N.*
  */
 
 import path from 'path';
@@ -18,21 +22,35 @@ import { StaticServer } from './static-server.js';
 import type { PluginServer } from './static-server.js';
 import { HeadlessBrowserManager } from './headless-browser.js';
 import { writePid, removePid } from './pid.js';
-import { loadConfig, pidFilePath, logFilePath, findProjectRoot } from '../config.js';
+import { instancePidPath, instanceLogPath } from './registry.js';
+import { loadConfig, ensureGlobalDir } from '../config.js';
 import type { BridgeConfig } from '../config.js';
 import type { DiagnoseResult, ReloadResult } from '../protocol.js';
 
 let shutdownInProgress = false;
 
 async function main() {
-  const projectRoot = findProjectRoot();
-  let config = loadConfig(projectRoot);
-  const pidPath = pidFilePath(projectRoot);
-  const logPath = logFilePath(projectRoot);
+  // 从环境变量获取槽位信息
+  const slotIndex = parseInt(process.env.SLOT_INDEX ?? '', 10);
+  const wsPort = parseInt(process.env.SLOT_WS_PORT ?? '', 10);
+  const devServerPort = parseInt(process.env.SLOT_DEV_PORT ?? '', 10);
+  const configPort = parseInt(process.env.SLOT_CONFIG_PORT ?? '', 10);
+  const instanceId = process.env.REMNOTE_BRIDGE_INSTANCE ?? 'default';
+
+  if (isNaN(slotIndex) || isNaN(wsPort) || isNaN(devServerPort) || isNaN(configPort)) {
+    console.error('守护进程缺少必要的环境变量 (SLOT_INDEX, SLOT_WS_PORT, SLOT_DEV_PORT, SLOT_CONFIG_PORT)');
+    process.exit(1);
+  }
+
+  let config = loadConfig();
+  ensureGlobalDir();
+
+  const pidPath = instancePidPath(slotIndex);
+  const logPath = instanceLogPath(slotIndex);
 
   // 日志写入文件（追加模式，保留前次会话日志）
   const logStream = fs.createWriteStream(logPath, { flags: 'a' });
-  logStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] 守护进程启动 (PID: ${process.pid})\n${'='.repeat(60)}\n`);
+  logStream.write(`\n${'='.repeat(60)}\n[${new Date().toISOString()}] 守护进程启动 (PID: ${process.pid}, instance: ${instanceId}, slot: ${slotIndex})\n${'='.repeat(60)}\n`);
   function log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
@@ -61,7 +79,7 @@ async function main() {
   // 创建 WS Server（抽取为函数，供软重启复用）
   function createServer(cfg: BridgeConfig): BridgeServer {
     const srv = new BridgeServer({
-      port: cfg.wsPort,
+      port: wsPort,
       host: '127.0.0.1',
       onLog: log,
       getTimeoutRemaining,
@@ -105,12 +123,12 @@ async function main() {
       log(`旧 WS Server 关闭失败: ${err}`, 'error');
     }
 
-    config = loadConfig(projectRoot);
+    config = loadConfig();
     timeoutMs = config.daemonTimeoutMinutes * 60 * 1000;
 
     server = createServer(config);
     await server.start();
-    log(`新 WS Server 已启动 (端口 ${config.wsPort})`);
+    log(`新 WS Server 已启动 (端口 ${wsPort})`);
 
     resetTimeout();
     log('软重启完成');
@@ -118,9 +136,8 @@ async function main() {
 
   // 启动 ConfigServer
   const configServer = new ConfigServer({
-    port: config.configPort,
+    port: configPort,
     host: '127.0.0.1',
-    projectRoot,
     onRestart: reload,
     onLog: log,
   });
@@ -152,7 +169,7 @@ async function main() {
   const pluginServer: PluginServer = devMode
     ? new DevServerManager({
         pluginDir,
-        port: config.devServerPort,
+        port: devServerPort,
         onLog: log,
         onExit: (code) => {
           if (!shutdownInProgress && code !== 0) {
@@ -163,7 +180,7 @@ async function main() {
       })
     : new StaticServer({
         distDir,
-        port: config.devServerPort,
+        port: devServerPort,
         onLog: log,
       });
 
@@ -220,7 +237,7 @@ async function main() {
 
   try {
     await server.start();
-    log(`WS Server 已启动 (端口 ${config.wsPort})`);
+    log(`WS Server 已启动 (端口 ${wsPort})`);
   } catch (err) {
     log(`WS Server 启动失败: ${err}`, 'error');
     process.send?.({ type: 'error', message: `WS Server 启动失败: ${err}` });
@@ -229,7 +246,7 @@ async function main() {
 
   try {
     await configServer.start();
-    log(`ConfigServer 已启动 (端口 ${config.configPort})`);
+    log(`ConfigServer 已启动 (端口 ${configPort})`);
   } catch (err) {
     log(`ConfigServer 启动失败: ${err}`, 'warn');
     // ConfigServer 非关键，启动失败不阻塞
@@ -237,7 +254,7 @@ async function main() {
 
   try {
     await pluginServer.start();
-    log(`${pluginServerLabel} 已启动 (端口 ${config.devServerPort})`);
+    log(`${pluginServerLabel} 已启动 (端口 ${devServerPort})`);
   } catch (err) {
     log(`${pluginServerLabel} 启动失败: ${err}`, 'error');
     await server.stop();
@@ -245,13 +262,62 @@ async function main() {
     process.exit(1);
   }
 
-  // 写入 PID 文件
-  writePid(pidPath, process.pid);
+  // 取实际绑定的端口（可能与 env 传入的不同，若原端口被占用则 OS 自动分配）
+  const actualWsPort = server.actualPort;
+  const actualConfigPort = configServer.actualPort;
+  // StaticServer 有 actualPort；DevServerManager 通过 spawn 无法获取，用 env 值
+  const actualDevPort = 'actualPort' in pluginServer
+    ? (pluginServer as StaticServer).actualPort
+    : devServerPort;
+
+  // Headless 模式：关键端口不允许回退（Plugin 无法发现新端口）
+  if (headlessMode) {
+    if (actualWsPort !== wsPort) {
+      log(`Headless 模式下 WS 端口被占用（${wsPort} → ${actualWsPort}），终止启动`, 'error');
+      await server.stop();
+      await configServer.stop();
+      await pluginServer.stop();
+      process.send?.({
+        type: 'error',
+        message: `Headless 模式不支持端口回退：WS 端口 ${wsPort} 被占用。请释放端口或修改配置后重试`,
+      });
+      process.exit(1);
+    }
+    if (actualDevPort !== devServerPort) {
+      log(`Headless 模式下 Plugin 服务端口被占用（${devServerPort} → ${actualDevPort}），终止启动`, 'error');
+      await server.stop();
+      await configServer.stop();
+      await pluginServer.stop();
+      process.send?.({
+        type: 'error',
+        message: `Headless 模式不支持端口回退：Plugin 服务端口 ${devServerPort} 被占用。请释放端口或修改配置后重试`,
+      });
+      process.exit(1);
+    }
+  }
+
+  // 设置 discovery 数据（供 Plugin 通过 /api/discovery 自动发现端口）
+  if (pluginServer instanceof StaticServer) {
+    pluginServer.setDiscovery({
+      wsPort: actualWsPort,
+      configPort: actualConfigPort,
+      instance: instanceId,
+    });
+    log(`Discovery 端点已就绪 (wsPort=${actualWsPort}, configPort=${actualConfigPort}, instance=${instanceId})`);
+  }
+
+  // 写入 PID 文件（JSON 格式，使用实际端口）
+  writePid(pidPath, {
+    pid: process.pid,
+    slotIndex,
+    instance: instanceId,
+    wsPort: actualWsPort,
+    devServerPort: actualDevPort,
+    configPort: actualConfigPort,
+  });
   log(`PID 文件已写入: ${pidPath} (PID: ${process.pid})`);
 
   // 启动 Headless Chrome（如果启用）
-  // headless Chrome 加载 RemNote 本身（不是 plugin 静态文件），
-  // RemNote 会自动加载已配置的 dev plugin（从 localhost:8080）
   if (headlessMode) {
     const remNoteUrl = 'https://www.remnote.com';
     headlessBrowser = new HeadlessBrowserManager({
@@ -272,20 +338,38 @@ async function main() {
   // 启动超时计时器
   resetTimeout();
 
-  // 通知父进程就绪
+  // 通知父进程就绪（使用实际端口）
   process.send?.({
     type: 'ready',
-    wsPort: config.wsPort,
-    devServerPort: config.devServerPort,
-    configPort: config.configPort,
+    wsPort: actualWsPort,
+    devServerPort: actualDevPort,
+    configPort: actualConfigPort,
     pid: process.pid,
     headless: headlessMode,
+    slotIndex,
+    instance: instanceId,
   });
 
   // 断开 IPC 通道（让父进程可以退出）
   if (process.channel) {
     process.channel.unref();
   }
+
+  // 自动安装已启用的 addon（非阻塞，不影响启动速度）
+  import('../addon/addon-manager.js').then(({ AddonManager }) => {
+    const addonManager = new AddonManager(config);
+    return addonManager.ensureEnabledAddons(log);
+  }).then((addonResults) => {
+    for (const r of addonResults) {
+      if (r.action === 'installed') {
+        log(`[addon] ${r.name} 已自动安装`);
+      } else if (r.action === 'failed') {
+        log(`[addon] ${r.name} 自动安装失败: ${r.error}`, 'warn');
+      }
+    }
+  }).catch((err) => {
+    log(`[addon] 自动安装检查失败: ${err}`, 'warn');
+  });
 }
 
 main().catch((err) => {

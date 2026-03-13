@@ -13,7 +13,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'search',
     description:
-      '在 RemNote 知识库中按关键词全文搜索 Rem，返回匹配结果的摘要列表。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text（Markdown 单行）、isDocument，以及 totalFound。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n中文搜索限制：SDK 分词基于空格，中文多字词可能搜不到，建议用单字重试或改用 read_globe + read_tree 按结构定位。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
+      '在 RemNote 知识库中搜索 Rem，返回匹配结果列表。\n\n搜索来源（配置驱动）：在 .remnote-bridge.json 中启用 addons.remnote-rag 后，优先使用语义向量搜索（source:"rag"，中文支持更好）；未启用或不可用时降级到 SDK 全文搜索（source:"sdk"）。\nRAG 模式额外返回：backText、ancestorPath、type、tags、score。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text、isDocument，以及 totalFound 和 source。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
     parameters: z.object({
       query: z.string().describe('搜索关键词'),
       numResults: z

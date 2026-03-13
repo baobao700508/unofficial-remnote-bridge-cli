@@ -1,12 +1,26 @@
 /**
  * 配置加载
  *
- * 从项目根目录读取 .remnote-bridge.json，合并默认值。
+ * 从 ~/.remnote-bridge/config.json 读取全局配置，合并默认值。
  * 文件不存在时使用全部默认值，不报错。
+ *
+ * 端口字段由 slots.json 管理，不再出现在配置文件中。
+ * BridgeConfig 仍保留端口字段（填充默认值），供旧代码兼容。
  */
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+
+// ── 全局目录 ──
+
+/** ~/.remnote-bridge/ — 所有运行时文件的根目录 */
+export const GLOBAL_DIR = path.join(os.homedir(), '.remnote-bridge');
+
+/** 确保全局目录和 instances/ 子目录存在 */
+export function ensureGlobalDir(): void {
+  fs.mkdirSync(path.join(GLOBAL_DIR, 'instances'), { recursive: true });
+}
 
 export interface DefaultsConfig {
   // 共享
@@ -41,49 +55,34 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   searchNumResults: 20,
 };
 
+/** 单个 addon 的用户配置 */
+export interface AddonUserConfig {
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+/** addons 配置：addon 名称 → 用户配置 */
+export type AddonsConfig = Record<string, AddonUserConfig>;
+
 export interface BridgeConfig {
   wsPort: number;
   devServerPort: number;
   configPort: number;
   daemonTimeoutMinutes: number;
   defaults: DefaultsConfig;
+  addons?: AddonsConfig;
 }
 
 export const DEFAULT_CONFIG: Readonly<BridgeConfig> = {
-  wsPort: 3002,
-  devServerPort: 8080,
-  configPort: 3003,
+  wsPort: 29100,
+  devServerPort: 29101,
+  configPort: 29102,
   daemonTimeoutMinutes: 30,
   defaults: { ...DEFAULT_DEFAULTS },
 };
 
-const CONFIG_FILENAME = '.remnote-bridge.json';
-
-function isValidPort(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535;
-}
-
-/**
- * 查找项目根目录（monorepo 根：包含 .git 目录的最近祖先）
- *
- * 从 startDir 向上查找 .git 目录，找到即返回。
- * 到达文件系统根仍未找到时回退到 cwd。
- */
-export function findProjectRoot(startDir: string = process.cwd()): string {
-  let dir = path.resolve(startDir);
-  while (true) {
-    // 优先匹配 .git 目录（monorepo 根标识）
-    if (fs.existsSync(path.join(dir, '.git'))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      // 到达文件系统根，回退到 cwd
-      return process.cwd();
-    }
-    dir = parent;
-  }
-}
+const CONFIG_FILENAME = 'config.json';
+const LEGACY_CONFIG_FILENAME = '.remnote-bridge.json';
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === 'number' && value > 0;
@@ -110,74 +109,136 @@ function mergeDefaults(parsed: Partial<DefaultsConfig> | undefined): DefaultsCon
   };
 }
 
-/**
- * 加载配置。不存在时返回默认值。
- */
-export function loadConfig(projectRoot?: string): BridgeConfig {
-  const root = projectRoot ?? findProjectRoot();
-  const configPath = path.join(root, CONFIG_FILENAME);
+function mergeAddons(parsed: Record<string, unknown> | undefined): AddonsConfig | undefined {
+  if (!parsed || typeof parsed !== 'object') return undefined;
 
-  if (!fs.existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
-  }
-
-  try {
-    const raw = fs.readFileSync(configPath, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<BridgeConfig & { defaults?: Partial<DefaultsConfig> }>;
-
-    const config: BridgeConfig = {
-      wsPort: isValidPort(parsed.wsPort) ? parsed.wsPort : DEFAULT_CONFIG.wsPort,
-      devServerPort: isValidPort(parsed.devServerPort) ? parsed.devServerPort : DEFAULT_CONFIG.devServerPort,
-      configPort: isValidPort(parsed.configPort) ? parsed.configPort : DEFAULT_CONFIG.configPort,
-      daemonTimeoutMinutes:
-        typeof parsed.daemonTimeoutMinutes === 'number' && parsed.daemonTimeoutMinutes > 0
-          ? parsed.daemonTimeoutMinutes
-          : DEFAULT_CONFIG.daemonTimeoutMinutes,
-      defaults: mergeDefaults(parsed.defaults),
+  const result: AddonsConfig = {};
+  for (const [name, raw] of Object.entries(parsed)) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const obj = raw as Record<string, unknown>;
+    result[name] = {
+      enabled: typeof obj.enabled === 'boolean' ? obj.enabled : false,
+      settings: typeof obj.settings === 'object' && obj.settings !== null
+        ? obj.settings as Record<string, unknown>
+        : undefined,
     };
-
-    // 端口冲突校验
-    const ports = [config.wsPort, config.devServerPort, config.configPort];
-    if (new Set(ports).size !== ports.length) {
-      throw new Error('wsPort, devServerPort, configPort must be different');
-    }
-
-    return config;
-  } catch {
-    // 配置文件损坏时使用默认值
-    return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
   }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**
- * 获取配置文件路径
+ * 解析配置 JSON（不含端口字段）。端口由 slots.json 管理，此处填充默认值。
  */
-export function configFilePath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectRoot();
-  return path.join(root, CONFIG_FILENAME);
+function parseConfig(raw: string): BridgeConfig {
+  const parsed = JSON.parse(raw) as Partial<BridgeConfig & {
+    defaults?: Partial<DefaultsConfig>;
+    addons?: Record<string, unknown>;
+  }>;
+
+  return {
+    // 端口填充默认值（实际使用 slots 分配的端口）
+    wsPort: DEFAULT_CONFIG.wsPort,
+    devServerPort: DEFAULT_CONFIG.devServerPort,
+    configPort: DEFAULT_CONFIG.configPort,
+    daemonTimeoutMinutes:
+      typeof parsed.daemonTimeoutMinutes === 'number' && parsed.daemonTimeoutMinutes > 0
+        ? parsed.daemonTimeoutMinutes
+        : DEFAULT_CONFIG.daemonTimeoutMinutes,
+    defaults: mergeDefaults(parsed.defaults),
+    addons: mergeAddons(parsed.addons as Record<string, unknown> | undefined),
+  };
 }
 
 /**
- * 原子写入配置文件（写临时文件 → rename）
+ * 全局配置文件路径 (~/.remnote-bridge/config.json)
+ * @param configDir 可选，覆盖全局目录（测试用）
+ */
+export function configFilePath(configDir?: string): string {
+  return path.join(configDir ?? GLOBAL_DIR, CONFIG_FILENAME);
+}
+
+/**
+ * 加载配置。从 ~/.remnote-bridge/config.json 读取。
+ * 不存在时返回默认值。
+ * @param configDir 可选，覆盖全局目录（测试用）
+ */
+export function loadConfig(configDir?: string): BridgeConfig {
+  const globalPath = configFilePath(configDir);
+
+  // 全局配置存在 → 直接读取
+  if (fs.existsSync(globalPath)) {
+    try {
+      return parseConfig(fs.readFileSync(globalPath, 'utf-8'));
+    } catch {
+      return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
+    }
+  }
+
+  // 尝试从旧项目根迁移（仅在使用默认全局目录时）
+  if (configDir) return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
+  const legacyPath = findLegacyConfigPath();
+  if (legacyPath) {
+    try {
+      const config = parseConfig(fs.readFileSync(legacyPath, 'utf-8'));
+      // 迁移到全局（去掉端口字段）
+      ensureGlobalDir();
+      saveConfig(globalPath, config);
+      return config;
+    } catch {
+      // 迁移失败，使用默认值
+    }
+  }
+
+  return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_DEFAULTS } };
+}
+
+/**
+ * 原子写入配置文件（写临时文件 → rename）。
+ * 只写非端口字段。
  */
 export function saveConfig(filePath: string, config: BridgeConfig): void {
+  ensureGlobalDir();
+  // 持久化时去掉端口字段（端口由 slots.json 管理）
+  const persisted = {
+    daemonTimeoutMinutes: config.daemonTimeoutMinutes,
+    defaults: config.defaults,
+    ...(config.addons ? { addons: config.addons } : {}),
+  };
   const tmpPath = filePath + '.tmp.' + process.pid;
-  fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(tmpPath, JSON.stringify(persisted, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
   fs.renameSync(tmpPath, filePath);
 }
 
+// ── 旧配置迁移辅助 ──
+
 /**
- * PID 文件路径
+ * 查找项目根目录（monorepo 根：包含 .git 目录的最近祖先）。
+ * 仅用于旧配置迁移，不再作为实例标识。
  */
-export function pidFilePath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectRoot();
-  return path.join(root, '.remnote-bridge.pid');
+export function findProjectRoot(startDir: string = process.cwd()): string {
+  let dir = path.resolve(startDir);
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return process.cwd();
+    }
+    dir = parent;
+  }
 }
 
 /**
- * 日志文件路径
+ * 查找旧的项目根配置文件路径（.remnote-bridge.json）。
+ * 存在时返回路径，不存在返回 null。
  */
-export function logFilePath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectRoot();
-  return path.join(root, '.remnote-bridge.log');
+function findLegacyConfigPath(): string | null {
+  try {
+    const root = findProjectRoot();
+    const legacyPath = path.join(root, LEGACY_CONFIG_FILENAME);
+    return fs.existsSync(legacyPath) ? legacyPath : null;
+  } catch {
+    return null;
+  }
 }

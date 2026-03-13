@@ -9,19 +9,22 @@
  */
 
 import http from 'http';
-import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath, findProjectRoot } from '../config.js';
+import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath } from '../config.js';
 
 export interface ConfigServerOptions {
   port: number;
   host?: string;
-  projectRoot: string;
   onRestart: () => Promise<void>;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
 }
 
 export class ConfigServer {
   private server: http.Server | null = null;
+  private _actualPort: number = 0;
   private options: ConfigServerOptions;
+
+  /** 实际监听的端口（可能与 options.port 不同，若原端口被占用则 OS 自动分配） */
+  get actualPort(): number { return this._actualPort; }
 
   constructor(options: ConfigServerOptions) {
     this.options = options;
@@ -33,17 +36,33 @@ export class ConfigServer {
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      const host = this.options.host ?? '127.0.0.1';
 
-      this.server.on('error', (err) => {
-        this.log(`ConfigServer 错误: ${err.message}`, 'error');
-        reject(err);
-      });
+      const tryListen = (port: number) => {
+        this.server = http.createServer((req, res) => this.handleRequest(req, res));
 
-      this.server.listen(this.options.port, this.options.host ?? '127.0.0.1', () => {
-        this.log(`ConfigServer 监听 ${this.options.host ?? '127.0.0.1'}:${this.options.port}`);
-        resolve();
-      });
+        this.server.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && port !== 0) {
+            this.log(`端口 ${port} 被占用，尝试自动分配...`, 'warn');
+            this.server = null;
+            tryListen(0);
+          } else {
+            this.log(`ConfigServer 错误: ${err.message}`, 'error');
+            reject(err);
+          }
+        });
+
+        this.server.listen(port, host, () => {
+          this._actualPort = (this.server!.address() as { port: number }).port;
+          if (this._actualPort !== this.options.port) {
+            this.log(`端口 ${this.options.port} 被占用，ConfigServer 自动分配到 ${this._actualPort}`, 'warn');
+          }
+          this.log(`ConfigServer 监听 ${host}:${this._actualPort}`);
+          resolve();
+        });
+      };
+
+      tryListen(this.options.port);
     });
   }
 
@@ -63,6 +82,11 @@ export class ConfigServer {
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = req.url ?? '/';
 
+    // 安全响应头
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cache-Control', 'no-store');
+
     try {
       if (req.method === 'GET' && url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -71,7 +95,7 @@ export class ConfigServer {
       }
 
       if (req.method === 'GET' && url === '/api/config') {
-        const config = loadConfig(this.options.projectRoot);
+        const config = loadConfig();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(config));
         return;
@@ -79,7 +103,22 @@ export class ConfigServer {
 
       if (req.method === 'POST' && url === '/api/config') {
         const body = await readBody(req);
-        const newConfig = JSON.parse(body) as BridgeConfig;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '无效的 JSON' }));
+          return;
+        }
+
+        const validation = validateConfigPayload(parsed);
+        if (!validation.ok) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: validation.error }));
+          return;
+        }
+        const newConfig = validation.config;
 
         // 端口冲突校验
         const ports = [newConfig.wsPort, newConfig.devServerPort, newConfig.configPort];
@@ -89,7 +128,7 @@ export class ConfigServer {
           return;
         }
 
-        const filePath = configFilePath(this.options.projectRoot);
+        const filePath = configFilePath();
         saveConfig(filePath, newConfig);
         this.log('配置已保存');
 
@@ -377,11 +416,60 @@ loadConfig();
   }
 }
 
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
+
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let totalSize = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalSize += chunk.length;
+      if (totalSize > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error('请求体超过大小限制 (1 MB)'));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     req.on('error', reject);
   });
+}
+
+function isValidPort(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535;
+}
+
+function validateConfigPayload(raw: unknown): { ok: true; config: BridgeConfig } | { ok: false; error: string } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { ok: false, error: '配置必须是对象' };
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (!isValidPort(obj.wsPort)) return { ok: false, error: 'wsPort 必须为有效端口号 (1-65535)' };
+  if (!isValidPort(obj.devServerPort)) return { ok: false, error: 'devServerPort 必须为有效端口号 (1-65535)' };
+  if (!isValidPort(obj.configPort)) return { ok: false, error: 'configPort 必须为有效端口号 (1-65535)' };
+  if (typeof obj.daemonTimeoutMinutes !== 'number' || obj.daemonTimeoutMinutes <= 0) {
+    return { ok: false, error: 'daemonTimeoutMinutes 必须为正数' };
+  }
+
+  if (obj.defaults !== undefined) {
+    if (typeof obj.defaults !== 'object' || obj.defaults === null || Array.isArray(obj.defaults)) {
+      return { ok: false, error: 'defaults 必须是对象' };
+    }
+  }
+
+  return {
+    ok: true,
+    config: {
+      wsPort: obj.wsPort as number,
+      devServerPort: obj.devServerPort as number,
+      configPort: obj.configPort as number,
+      daemonTimeoutMinutes: obj.daemonTimeoutMinutes as number,
+      defaults: obj.defaults
+        ? { ...DEFAULT_DEFAULTS, ...(obj.defaults as Partial<DefaultsConfig>) }
+        : { ...DEFAULT_DEFAULTS },
+      addons: obj.addons as BridgeConfig['addons'],
+    },
+  };
 }

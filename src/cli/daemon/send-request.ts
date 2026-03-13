@@ -3,12 +3,13 @@
  *
  * 封装 WS 连接建立、请求发送、响应等待、超时处理的完整流程。
  * 所有业务命令（health、read-rem、edit-rem 等）均通过此函数与 daemon 通信。
+ *
+ * 端口发现：通过 registry.json 查找当前 instance 对应的槽位端口。
  */
 
 import WebSocket from 'ws';
 import crypto from 'crypto';
-import { loadConfig, pidFilePath, findProjectRoot } from '../config.js';
-import { checkDaemon } from './pid.js';
+import { resolveInstanceId, loadRegistry, cleanStaleSlots, findSlotByInstance } from './registry.js';
 import type { BridgeResponse } from '../protocol.js';
 import { isBridgeResponse } from '../protocol.js';
 
@@ -32,31 +33,30 @@ export class DaemonUnreachableError extends Error {
 /**
  * 向守护进程发送请求并等待响应。
  *
- * 流程：读取 PID 文件 → 建立 WS 连接 → 发送 BridgeRequest → 等待 BridgeResponse → 关闭连接
+ * 流程：解析 instance → 查 registry → 建立 WS 连接 → 发送请求 → 等待响应 → 关闭连接
  *
- * @throws DaemonNotRunningError — PID 文件不存在或进程已死
+ * @throws DaemonNotRunningError — registry 中找不到当前 instance 或进程已死
  * @throws DaemonUnreachableError — WS 连接失败
  * @throws Error — daemon 返回 error 字段或响应超时
  */
 export async function sendDaemonRequest(
   action: string,
   payload: Record<string, unknown> = {},
-  options?: { timeout?: number },
+  options?: { timeout?: number; instance?: string },
 ): Promise<unknown> {
-  const projectRoot = findProjectRoot();
-  const config = loadConfig(projectRoot);
-  const pidPath = pidFilePath(projectRoot);
+  const instanceId = resolveInstanceId(options?.instance);
+  const registry = loadRegistry();
+  cleanStaleSlots(registry);
 
-  // 检查 daemon 是否运行
-  const daemonStatus = checkDaemon(pidPath);
-  if (!daemonStatus.running) {
+  const entry = findSlotByInstance(registry, instanceId);
+  if (!entry) {
     throw new DaemonNotRunningError();
   }
 
   const responseTimeout = options?.timeout ?? DEFAULT_RESPONSE_TIMEOUT_MS;
 
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${config.wsPort}`);
+    const ws = new WebSocket(`ws://127.0.0.1:${entry.wsPort}`);
     const requestId = crypto.randomUUID();
     let responseTimer: ReturnType<typeof setTimeout> | null = null;
 
