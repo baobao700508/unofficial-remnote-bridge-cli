@@ -72,10 +72,11 @@ export async function cleanCommand(options: CleanOptions = {}): Promise<void> {
         if (!json) {
           console.log(`  已删除: ${filePath}`);
         }
-      } catch (err: any) {
-        errors.push(`${filePath}: ${err.message}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${filePath}: ${msg}`);
         if (!json) {
-          console.error(`  删除失败: ${filePath} — ${err.message}`);
+          console.error(`  删除失败: ${filePath} — ${msg}`);
         }
       }
     }
@@ -90,10 +91,11 @@ export async function cleanCommand(options: CleanOptions = {}): Promise<void> {
       if (!json) {
         console.log(`  已删除: ${skillDir}`);
       }
-    } catch (err: any) {
-      errors.push(`${skillDir}: ${err.message}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${skillDir}: ${msg}`);
       if (!json) {
-        console.error(`  删除失败: ${skillDir} — ${err.message}`);
+        console.error(`  删除失败: ${skillDir} — ${msg}`);
       }
     }
   }
@@ -110,10 +112,11 @@ export async function cleanCommand(options: CleanOptions = {}): Promise<void> {
           if (!json) {
             console.log(`  已删除: ${resolved}`);
           }
-        } catch (err: any) {
-          errors.push(`${resolved}: ${err.message}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push(`${resolved}: ${msg}`);
           if (!json) {
-            console.error(`  删除失败: ${resolved} — ${err.message}`);
+            console.error(`  删除失败: ${resolved} — ${msg}`);
           }
         }
       }

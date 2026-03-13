@@ -218,22 +218,6 @@ async function main() {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  // 自动安装已启用的 addon
-  try {
-    const { AddonManager } = await import('../addon/addon-manager.js');
-    const addonManager = new AddonManager(config);
-    const addonResults = await addonManager.ensureEnabledAddons(log);
-    for (const r of addonResults) {
-      if (r.action === 'installed') {
-        log(`[addon] ${r.name} 已自动安装`);
-      } else if (r.action === 'failed') {
-        log(`[addon] ${r.name} 自动安装失败: ${r.error}`, 'warn');
-      }
-    }
-  } catch (err) {
-    log(`[addon] 自动安装检查失败: ${err}`, 'warn');
-  }
-
   try {
     await server.start();
     log(`WS Server 已启动 (端口 ${config.wsPort})`);
@@ -302,6 +286,22 @@ async function main() {
   if (process.channel) {
     process.channel.unref();
   }
+
+  // 自动安装已启用的 addon（非阻塞，不影响启动速度）
+  import('../addon/addon-manager.js').then(({ AddonManager }) => {
+    const addonManager = new AddonManager(config);
+    return addonManager.ensureEnabledAddons(log);
+  }).then((addonResults) => {
+    for (const r of addonResults) {
+      if (r.action === 'installed') {
+        log(`[addon] ${r.name} 已自动安装`);
+      } else if (r.action === 'failed') {
+        log(`[addon] ${r.name} 自动安装失败: ${r.error}`, 'warn');
+      }
+    }
+  }).catch((err) => {
+    log(`[addon] 自动安装检查失败: ${err}`, 'warn');
+  });
 }
 
 main().catch((err) => {

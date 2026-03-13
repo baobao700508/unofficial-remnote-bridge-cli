@@ -67,7 +67,7 @@ export async function addonInstallCommand(name: string, options: AddonOptions = 
       console.log(`${name} 已安装`);
     }
     // 确保配置中标记为 enabled
-    ensureEnabled(config, name);
+    setAddonEnabled(config, name, true);
     return;
   }
 
@@ -75,7 +75,7 @@ export async function addonInstallCommand(name: string, options: AddonOptions = 
     await manager.install(name, json ? undefined : (msg) => console.log(msg));
 
     // 安装成功，自动启用
-    ensureEnabled(config, name);
+    setAddonEnabled(config, name, true);
 
     if (json) {
       jsonOutput({ ok: true, command: 'addon-install', name, action: 'installed' });
@@ -121,7 +121,7 @@ export async function addonUninstallCommand(name: string, options: AddonOptions 
     await manager.uninstall(name, purge, json ? undefined : (msg) => console.log(msg));
 
     // 卸载后在配置中禁用
-    ensureDisabled(config, name);
+    setAddonEnabled(config, name, false);
 
     if (json) {
       jsonOutput({ ok: true, command: 'addon-uninstall', name, purged: purge ?? false });
@@ -141,21 +141,15 @@ export async function addonUninstallCommand(name: string, options: AddonOptions 
 
 // ── 辅助：更新配置文件 ──
 
-function ensureEnabled(config: BridgeConfig, name: string): void {
-  if (!config.addons) config.addons = {};
-  if (!config.addons[name]) config.addons[name] = { enabled: true };
-  else config.addons[name].enabled = true;
-
-  try {
-    saveConfig(configFilePath(), config);
-  } catch {
-    // 写配置失败不阻塞主流程
+function setAddonEnabled(config: BridgeConfig, name: string, enabled: boolean): void {
+  if (!enabled) {
+    if (!config.addons?.[name]) return;
+    config.addons[name].enabled = false;
+  } else {
+    if (!config.addons) config.addons = {};
+    if (!config.addons[name]) config.addons[name] = { enabled: true };
+    else config.addons[name].enabled = true;
   }
-}
-
-function ensureDisabled(config: BridgeConfig, name: string): void {
-  if (!config.addons?.[name]) return;
-  config.addons[name].enabled = false;
 
   try {
     saveConfig(configFilePath(), config);

@@ -7,7 +7,6 @@
 import { execFile } from 'node:child_process';
 import fs from 'fs';
 import os from 'os';
-import path from 'path';
 import type { AddonDefinition } from './registry.js';
 import { ADDON_REGISTRY } from './registry.js';
 import type { AddonsConfig, AddonUserConfig, BridgeConfig } from '../config.js';
@@ -37,22 +36,20 @@ export class AddonManager {
 
   /** 获取所有已注册 addon 的状态 */
   async listAll(): Promise<AddonStatus[]> {
-    const results: AddonStatus[] = [];
-    for (const [, def] of ADDON_REGISTRY) {
+    const entries = [...ADDON_REGISTRY.values()];
+    const installedChecks = await Promise.all(entries.map((def) => this.isInstalled(def.name)));
+    return entries.map((def, i) => {
       const userConfig = this.config.addons?.[def.name];
-      const enabled = userConfig?.enabled ?? false;
-      const installed = await this.isInstalled(def.name);
       const validation = this.validateSettings(def.name);
-      results.push({
+      return {
         name: def.name,
         description: def.description,
-        enabled,
-        installed,
+        enabled: userConfig?.enabled ?? false,
+        installed: installedChecks[i],
         settingsValid: validation.valid,
         missingSettings: validation.missing,
-      });
-    }
-    return results;
+      };
+    });
   }
 
   /** 检测单个 addon 是否已安装 */
@@ -207,8 +204,8 @@ export class AddonManager {
 
   // ── 内部方法 ──
 
-  private buildEnv(name: string): Record<string, string> {
-    return { ...process.env as Record<string, string>, ...this.getEnvVars(name) };
+  private buildEnv(name: string): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.getEnvVars(name) };
   }
 
   private async pipInstall(spec: string, onLog?: LogFn): Promise<void> {
@@ -225,7 +222,7 @@ export class AddonManager {
     bin: string,
     args: string[],
     timeout: number,
-    env?: Record<string, string>,
+    env?: NodeJS.ProcessEnv,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       execFile(bin, args, {

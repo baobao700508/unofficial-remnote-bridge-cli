@@ -12,7 +12,6 @@
 import { execFile } from 'node:child_process';
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
 import { loadConfig } from '../config.js';
-import { AddonManager } from '../addon/addon-manager.js';
 import { jsonOutput } from '../utils/output.js';
 
 const RAG_TIMEOUT_MS = 10_000;
@@ -42,7 +41,7 @@ interface RagSearchResult {
  * 尝试通过 remnote-rag 子进程进行语义搜索（配置驱动）。
  *
  * 1. 检查 addons.remnote-rag.enabled — 未启用则跳过
- * 2. 从配置注入环境变量（如 DASHSCOPE_API_KEY）
+ * 2. 通过 REMNOTE_RAG_CONFIG 环境变量注入 embedding/reranker 配置
  * 3. 未安装（ENOENT）、超时、JSON 解析失败、ok:false 均返回 null（静默降级）
  */
 async function tryRagSearch(query: string, numResults: number): Promise<RagSearchResult | null> {
@@ -52,8 +51,11 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
     return null;
   }
 
-  const addonManager = new AddonManager(config);
-  const addonEnv = addonManager.getEnvVars('remnote-rag');
+  // 将 settings 中的 embedding/reranker 配置通过 REMNOTE_RAG_CONFIG 环境变量传递给子进程
+  const ragEnv: Record<string, string> = {};
+  if (ragConfig.settings && Object.keys(ragConfig.settings).length > 0) {
+    ragEnv.REMNOTE_RAG_CONFIG = JSON.stringify(ragConfig.settings);
+  }
 
   const jsonPayload = JSON.stringify({ query, numResults });
   const args = ['search', '--json', jsonPayload];
@@ -63,7 +65,7 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
       execFile('remnote-rag', args, {
         timeout: RAG_TIMEOUT_MS,
         maxBuffer: 5 * 1024 * 1024,
-        env: { ...process.env, ...addonEnv },
+        env: { ...process.env, ...ragEnv },
       }, (error, stdout) => {
         if (error) {
           reject(error);
@@ -73,8 +75,12 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
       });
     });
 
-    const result = JSON.parse(stdout) as RagSearchResult;
-    if (!result.ok) {
+    const parsed: unknown = JSON.parse(stdout);
+    if (typeof parsed !== 'object' || parsed === null || !('ok' in parsed) || !('results' in parsed)) {
+      return null;
+    }
+    const result = parsed as RagSearchResult;
+    if (!result.ok || !Array.isArray(result.results)) {
       return null;
     }
     return result;

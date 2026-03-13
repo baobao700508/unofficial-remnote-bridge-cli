@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { loadConfig, DEFAULT_CONFIG, pidFilePath, logFilePath } from '../src/cli/config.js';
+import { loadConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, pidFilePath, logFilePath } from '../src/cli/config.js';
 
 describe('loadConfig', () => {
   let tmpDir: string;
@@ -39,7 +39,14 @@ describe('loadConfig', () => {
       JSON.stringify({ wsPort: 5000, devServerPort: 9090, daemonTimeoutMinutes: 60 })
     );
     const config = loadConfig(tmpDir);
-    expect(config).toEqual({ wsPort: 5000, devServerPort: 9090, daemonTimeoutMinutes: 60 });
+    expect(config).toEqual({
+      wsPort: 5000,
+      devServerPort: 9090,
+      configPort: DEFAULT_CONFIG.configPort,
+      daemonTimeoutMinutes: 60,
+      defaults: { ...DEFAULT_DEFAULTS },
+      addons: undefined,
+    });
   });
 
   it('配置文件损坏时返回默认值', () => {

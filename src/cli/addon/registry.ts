@@ -49,10 +49,8 @@ export const ADDON_REGISTRY: ReadonlyMap<string, AddonDefinition> = new Map([
       packageName: 'remnote-rag',
       executableName: 'remnote-rag',
       detectCommand: { bin: 'remnote-rag', args: ['status'] },
-      envMapping: {
-        dashscopeApiKey: 'DASHSCOPE_API_KEY',
-      },
-      requiredSettings: ['dashscopeApiKey'],
+      envMapping: {},
+      requiredSettings: [],
       dataDirs: ['~/.remnote-rag'],
       versionConstraint: '>=0.1.0',
     },

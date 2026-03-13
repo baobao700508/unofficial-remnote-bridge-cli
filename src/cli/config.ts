@@ -193,7 +193,7 @@ export function configFilePath(projectRoot?: string): string {
  */
 export function saveConfig(filePath: string, config: BridgeConfig): void {
   const tmpPath = filePath + '.tmp.' + process.pid;
-  fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
   fs.renameSync(tmpPath, filePath);
 }
 
