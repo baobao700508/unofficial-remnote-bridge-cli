@@ -1,7 +1,7 @@
 import { declareIndexPlugin, type ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
 import '../style.css';
 import '../index.css';
-import { SETTING_WS_URL, DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
+import { DEFAULT_WS_URL, DEFAULT_PLUGIN_VERSION } from '../settings';
 import { WebSocketClient } from '../bridge/websocket-client';
 import { createMessageRouter } from '../bridge/message-router';
 // test-scripts 已完成数据收集，不再打包进生产代码
@@ -18,23 +18,37 @@ const logBuffer: Array<{ time: number; message: string; level: string }> = [];
 let logFlushPending = false;
 
 async function onActivate(plugin: ReactRNPlugin) {
-  // 注册 WS Server URL 设置
-  await plugin.settings.registerStringSetting({
-    id: SETTING_WS_URL,
-    title: 'Bridge WS Server URL',
-    description: '守护进程 WebSocket Server 地址（默认 ws://127.0.0.1:3002）',
-    defaultValue: DEFAULT_WS_URL,
-  });
-
   // 注册 Bridge Widget（右侧边栏）
   await plugin.app.registerWidget('bridge_widget', WidgetLocation.RightSidebar, {
     dimensions: { height: 'auto', width: '100%' },
     widgetTabIcon: 'https://cdn.jsdelivr.net/npm/lucide-static@0.460.0/icons/globe.svg',
   });
 
-  // 读取 WS URL 设置
-  const wsUrl =
-    (await plugin.settings.getSetting<string>(SETTING_WS_URL)) || DEFAULT_WS_URL;
+  // 自动发现 wsPort：Plugin 由 daemon 的 static-server 提供服务，
+  // fetch('/api/discovery') 是同源请求，返回 daemon 的实际端口信息
+  let wsUrl = DEFAULT_WS_URL;
+  let instanceName = '';
+  let configPort = 29102;
+  try {
+    const resp = await fetch('/api/discovery');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.wsPort) {
+        wsUrl = `ws://127.0.0.1:${data.wsPort}`;
+      }
+      if (data.instance) {
+        instanceName = data.instance;
+      }
+      if (data.configPort) {
+        configPort = data.configPort;
+      }
+    }
+  } catch {
+    // discovery 失败（dev 模式 / 非 daemon 环境），使用默认值
+  }
+  // 存储实例名和配置端口，供 widget 显示
+  await plugin.storage.setSession('bridge-instance', instanceName);
+  await plugin.storage.setSession('bridge-config-port', configPort);
 
   // 在 onActivate 中建立 WebSocket 连接（插件激活即连接，无需打开 widget）
   wsClient = new WebSocketClient({

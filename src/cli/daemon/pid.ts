@@ -1,26 +1,40 @@
 /**
  * PID 文件管理
  *
- * 写入、读取、stale 检测、清理。
+ * PID 文件为 JSON 格式，包含 pid、slotIndex、instance 和端口信息。
+ * 路径：~/.remnote-bridge/instances/N.pid
  */
 
 import fs from 'fs';
+import { execFileSync } from 'child_process';
 
-/**
- * 写入 PID 文件
- */
-export function writePid(filePath: string, pid: number): void {
-  fs.writeFileSync(filePath, String(pid), 'utf-8');
+export interface PidInfo {
+  pid: number;
+  slotIndex: number;
+  instance: string;
+  wsPort: number;
+  devServerPort: number;
+  configPort: number;
 }
 
 /**
- * 读取 PID 文件。文件不存在返回 null。
+ * 写入 PID 文件（JSON 格式）
  */
-export function readPid(filePath: string): number | null {
+export function writePid(filePath: string, info: PidInfo): void {
+  fs.writeFileSync(filePath, JSON.stringify(info, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * 读取 PID 文件。文件不存在或格式错误返回 null。
+ */
+export function readPidInfo(filePath: string): PidInfo | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8').trim();
-    const pid = parseInt(content, 10);
-    return isNaN(pid) ? null : pid;
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(content);
+    if (typeof parsed.pid === 'number' && typeof parsed.slotIndex === 'number') {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -50,23 +64,28 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 /**
- * 检查守护进程状态。返回：
- * - { running: true, pid } — 守护进程正在运行
- * - { running: false } — 守护进程未运行（无 PID 文件或 stale）
+ * 检查进程是否是我们的 daemon。
  *
- * 若 PID 文件存在但进程已死（stale），自动清理 PID 文件。
+ * 仅 kill -0 无法防止 PID recycling：OS 可能把同一 PID 分配给无关进程，
+ * 导致 cleanStaleSlots 误判槽位为"存活"而不清理。
+ * 此函数额外校验进程命令行是否包含 daemon 关键字。
  */
-export function checkDaemon(pidPath: string): { running: true; pid: number } | { running: false } {
-  const pid = readPid(pidPath);
-  if (pid === null) {
-    return { running: false };
-  }
+export function isDaemonAlive(pid: number): boolean {
+  // PID 0 是 allocateSlot 的占位值，不是有效的 daemon PID
+  // process.kill(0, 0) 发信号给进程组，会误返回 true
+  if (pid <= 0) return false;
+  if (!isProcessAlive(pid)) return false;
 
-  if (isProcessAlive(pid)) {
-    return { running: true, pid };
+  try {
+    const cmd = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+      encoding: 'utf-8',
+      timeout: 3000,
+    }).trim();
+    // daemon.ts 编译后路径包含 "daemon/daemon"（dist/cli/daemon/daemon.js）
+    // 使用更精确的匹配避免误匹配 dockerd 等含 "daemon" 的无关进程
+    return cmd.includes('daemon/daemon') || cmd.includes('daemon.js');
+  } catch {
+    // ps 失败时回退到基本检查（kill -0 已通过）
+    return true;
   }
-
-  // stale PID 文件，清理
-  removePid(pidPath);
-  return { running: false };
 }

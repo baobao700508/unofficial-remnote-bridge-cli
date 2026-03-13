@@ -54,6 +54,7 @@ export interface BridgeServerConfig {
 
 export class BridgeServer {
   private wss: WebSocketServer | null = null;
+  private _actualPort: number = 0;
   private pluginSocket: WebSocket | null = null;
   private pluginVersion: string | null = null;
   private pluginSdkReady = false;
@@ -82,6 +83,9 @@ export class BridgeServer {
     diagnoseHeadless?: () => Promise<DiagnoseResult | null>;
     reloadHeadless?: () => Promise<ReloadResult>;
   };
+
+  /** 实际监听的端口（可能与 config.port 不同，若原端口被占用则 OS 自动分配） */
+  get actualPort(): number { return this._actualPort; }
 
   /** 每当收到 CLI 命令请求时触发（用于刷新守护进程超时计时器） */
   public onCliRequest?: () => void;
@@ -124,26 +128,39 @@ export class BridgeServer {
     return new Promise((resolve, reject) => {
       this.startTime = Date.now();
 
-      this.wss = new WebSocketServer({
-        port: this.config.port,
-        host: this.config.host,
-        maxPayload: 1 * 1024 * 1024, // 1MB，足够所有 JSON 消息
-      });
+      const tryListen = (port: number) => {
+        this.wss = new WebSocketServer({
+          port,
+          host: this.config.host,
+          maxPayload: 1 * 1024 * 1024, // 1MB，足够所有 JSON 消息
+        });
 
-      this.wss.on('listening', () => {
-        this.log(`WS Server 监听 ${this.config.host}:${this.config.port}`);
-        this.startPingInterval();
-        resolve();
-      });
+        this.wss.on('listening', () => {
+          this._actualPort = (this.wss!.address() as { port: number }).port;
+          if (this._actualPort !== this.config.port) {
+            this.log(`端口 ${this.config.port} 被占用，WS Server 自动分配到 ${this._actualPort}`, 'warn');
+          }
+          this.log(`WS Server 监听 ${this.config.host}:${this._actualPort}`);
+          this.startPingInterval();
+          resolve();
+        });
 
-      this.wss.on('error', (err) => {
-        this.log(`WS Server 错误: ${err.message}`, 'error');
-        reject(err);
-      });
+        this.wss.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && port !== 0) {
+            this.log(`端口 ${port} 被占用，尝试自动分配...`, 'warn');
+            tryListen(0);
+          } else {
+            this.log(`WS Server 错误: ${err.message}`, 'error');
+            reject(err);
+          }
+        });
 
-      this.wss.on('connection', (ws) => {
-        this.handleConnection(ws);
-      });
+        this.wss.on('connection', (ws) => {
+          this.handleConnection(ws);
+        });
+      };
+
+      tryListen(this.config.port);
     });
   }
 

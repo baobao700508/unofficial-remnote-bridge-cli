@@ -9,19 +9,22 @@
  */
 
 import http from 'http';
-import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath, findProjectRoot } from '../config.js';
+import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath } from '../config.js';
 
 export interface ConfigServerOptions {
   port: number;
   host?: string;
-  projectRoot: string;
   onRestart: () => Promise<void>;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
 }
 
 export class ConfigServer {
   private server: http.Server | null = null;
+  private _actualPort: number = 0;
   private options: ConfigServerOptions;
+
+  /** 实际监听的端口（可能与 options.port 不同，若原端口被占用则 OS 自动分配） */
+  get actualPort(): number { return this._actualPort; }
 
   constructor(options: ConfigServerOptions) {
     this.options = options;
@@ -33,17 +36,33 @@ export class ConfigServer {
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      const host = this.options.host ?? '127.0.0.1';
 
-      this.server.on('error', (err) => {
-        this.log(`ConfigServer 错误: ${err.message}`, 'error');
-        reject(err);
-      });
+      const tryListen = (port: number) => {
+        this.server = http.createServer((req, res) => this.handleRequest(req, res));
 
-      this.server.listen(this.options.port, this.options.host ?? '127.0.0.1', () => {
-        this.log(`ConfigServer 监听 ${this.options.host ?? '127.0.0.1'}:${this.options.port}`);
-        resolve();
-      });
+        this.server.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && port !== 0) {
+            this.log(`端口 ${port} 被占用，尝试自动分配...`, 'warn');
+            this.server = null;
+            tryListen(0);
+          } else {
+            this.log(`ConfigServer 错误: ${err.message}`, 'error');
+            reject(err);
+          }
+        });
+
+        this.server.listen(port, host, () => {
+          this._actualPort = (this.server!.address() as { port: number }).port;
+          if (this._actualPort !== this.options.port) {
+            this.log(`端口 ${this.options.port} 被占用，ConfigServer 自动分配到 ${this._actualPort}`, 'warn');
+          }
+          this.log(`ConfigServer 监听 ${host}:${this._actualPort}`);
+          resolve();
+        });
+      };
+
+      tryListen(this.options.port);
     });
   }
 
@@ -76,7 +95,7 @@ export class ConfigServer {
       }
 
       if (req.method === 'GET' && url === '/api/config') {
-        const config = loadConfig(this.options.projectRoot);
+        const config = loadConfig();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(config));
         return;
@@ -109,7 +128,7 @@ export class ConfigServer {
           return;
         }
 
-        const filePath = configFilePath(this.options.projectRoot);
+        const filePath = configFilePath();
         saveConfig(filePath, newConfig);
         this.log('配置已保存');
 

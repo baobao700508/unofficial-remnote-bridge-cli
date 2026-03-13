@@ -1,27 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { healthCommand } from '../../src/cli/commands/health.js';
-import * as config from '../../src/cli/config.js';
-import * as pid from '../../src/cli/daemon/pid.js';
+import * as registry from '../../src/cli/daemon/registry.js';
 
-// Mock config 和 pid 模块
-vi.mock('../../src/cli/config', () => ({
-  findProjectRoot: vi.fn(() => '/tmp/test-project'),
-  loadConfig: vi.fn(() => ({
-    wsPort: 0, // 动态端口，测试中会覆盖
-    devServerPort: 8080,
-    daemonTimeoutMinutes: 30,
-  })),
-  pidFilePath: vi.fn(() => '/tmp/test-project/.remnote-bridge.pid'),
-  logFilePath: vi.fn(() => '/tmp/test-project/.remnote-bridge.log'),
+vi.mock('../../src/cli/daemon/registry', () => ({
+  resolveInstanceId: vi.fn(() => 'default'),
+  loadRegistry: vi.fn(() => ({ version: 1, slots: [null, null, null, null] })),
+  cleanStaleSlots: vi.fn(),
+  findSlotByInstance: vi.fn(),
 }));
 
-vi.mock('../../src/cli/daemon/pid', () => ({
-  checkDaemon: vi.fn(),
+// Mock send-request：用工厂函数控制返回值
+const mockSendDaemonRequest = vi.fn();
+
+vi.mock('../../src/cli/daemon/send-request', () => ({
+  sendDaemonRequest: (...args: unknown[]) => mockSendDaemonRequest(...args),
+  DaemonNotRunningError: class extends Error { constructor() { super('守护进程未运行'); } },
+  DaemonUnreachableError: class extends Error { constructor() { super('守护进程不可达'); } },
+}));
+
+vi.mock('../../src/cli/utils/output', () => ({
+  jsonOutput: vi.fn((data: unknown) => console.log(JSON.stringify(data))),
 }));
 
 describe('health 命令', () => {
-  let wss: WebSocketServer | null = null;
   let originalExitCode: number | undefined;
 
   beforeEach(() => {
@@ -29,21 +31,16 @@ describe('health 命令', () => {
     process.exitCode = undefined;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockSendDaemonRequest.mockReset();
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     process.exitCode = originalExitCode;
     vi.restoreAllMocks();
-    if (wss) {
-      await new Promise<void>((resolve) => {
-        wss!.close(() => resolve());
-      });
-      wss = null;
-    }
   });
 
   it('守护进程未运行时退出码 2', async () => {
-    vi.mocked(pid.checkDaemon).mockReturnValue({ running: false });
+    vi.mocked(registry.findSlotByInstance).mockReturnValue(null);
 
     await healthCommand();
 
@@ -52,32 +49,21 @@ describe('health 命令', () => {
   });
 
   it('守护进程运行且全部健康时退出码 0', async () => {
-    // 启动一个真实的 WS Server 模拟守护进程
-    wss = new WebSocketServer({ port: 0 });
-    const port = (wss.address() as { port: number }).port;
-
-    wss.on('connection', (ws) => {
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString());
-        if (msg.action === 'get_status') {
-          ws.send(JSON.stringify({
-            id: msg.id,
-            result: {
-              pluginConnected: true,
-              sdkReady: true,
-              uptime: 120,
-              timeoutRemaining: 1680,
-            },
-          }));
-        }
-      });
+    vi.mocked(registry.findSlotByInstance).mockReturnValue({
+      index: 0,
+      instance: 'default',
+      pid: 12345,
+      wsPort: 29100,
+      devServerPort: 29101,
+      configPort: 29102,
+      startedAt: new Date().toISOString(),
     });
 
-    vi.mocked(pid.checkDaemon).mockReturnValue({ running: true, pid: 12345 });
-    vi.mocked(config.loadConfig).mockReturnValue({
-      wsPort: port,
-      devServerPort: 8080,
-      daemonTimeoutMinutes: 30,
+    mockSendDaemonRequest.mockResolvedValue({
+      pluginConnected: true,
+      sdkReady: true,
+      uptime: 120,
+      timeoutRemaining: 1680,
     });
 
     await healthCommand();
@@ -89,31 +75,21 @@ describe('health 命令', () => {
   });
 
   it('Plugin 未连接时退出码 1', async () => {
-    wss = new WebSocketServer({ port: 0 });
-    const port = (wss.address() as { port: number }).port;
-
-    wss.on('connection', (ws) => {
-      ws.on('message', (data) => {
-        const msg = JSON.parse(data.toString());
-        if (msg.action === 'get_status') {
-          ws.send(JSON.stringify({
-            id: msg.id,
-            result: {
-              pluginConnected: false,
-              sdkReady: false,
-              uptime: 60,
-              timeoutRemaining: 1740,
-            },
-          }));
-        }
-      });
+    vi.mocked(registry.findSlotByInstance).mockReturnValue({
+      index: 0,
+      instance: 'default',
+      pid: 12345,
+      wsPort: 29100,
+      devServerPort: 29101,
+      configPort: 29102,
+      startedAt: new Date().toISOString(),
     });
 
-    vi.mocked(pid.checkDaemon).mockReturnValue({ running: true, pid: 12345 });
-    vi.mocked(config.loadConfig).mockReturnValue({
-      wsPort: port,
-      devServerPort: 8080,
-      daemonTimeoutMinutes: 30,
+    mockSendDaemonRequest.mockResolvedValue({
+      pluginConnected: false,
+      sdkReady: false,
+      uptime: 60,
+      timeoutRemaining: 1740,
     });
 
     await healthCommand();
@@ -125,13 +101,17 @@ describe('health 命令', () => {
   });
 
   it('WS 连接失败时退出码 2', async () => {
-    // 使用一个不存在的端口
-    vi.mocked(pid.checkDaemon).mockReturnValue({ running: true, pid: 12345 });
-    vi.mocked(config.loadConfig).mockReturnValue({
-      wsPort: 59999, // 极不可能被占用
-      devServerPort: 8080,
-      daemonTimeoutMinutes: 30,
+    vi.mocked(registry.findSlotByInstance).mockReturnValue({
+      index: 0,
+      instance: 'default',
+      pid: 12345,
+      wsPort: 59999,
+      devServerPort: 29101,
+      configPort: 29102,
+      startedAt: new Date().toISOString(),
     });
+
+    mockSendDaemonRequest.mockRejectedValue(new Error('连接超时'));
 
     await healthCommand();
 

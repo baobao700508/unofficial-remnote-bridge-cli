@@ -19,6 +19,8 @@ function BridgeWidget() {
   const plugin = usePlugin();
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [logs, setLogs] = useState<StoredLog[]>([]);
+  const [instanceName, setInstanceName] = useState<string>('');
+  const [configPort, setConfigPort] = useState<number>(29102);
 
   // 每秒轮询 plugin.storage 获取最新状态
   useEffect(() => {
@@ -28,9 +30,13 @@ function BridgeWidget() {
       if (!active) return;
       const s = await plugin.storage.getSession('bridge-status');
       const l = await plugin.storage.getSession('bridge-logs');
+      const inst = await plugin.storage.getSession('bridge-instance');
+      const cp = await plugin.storage.getSession('bridge-config-port');
       if (active) {
         setStatus((s as ConnectionStatus) ?? 'disconnected');
         setLogs((l as StoredLog[]) ?? []);
+        setInstanceName((inst as string) ?? '');
+        setConfigPort((cp as number) ?? 29102);
       }
     }
 
@@ -61,7 +67,9 @@ function BridgeWidget() {
           marginBottom: '12px',
         }}
       >
-        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>RemNote Bridge</h3>
+        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>
+          RemNote Bridge{instanceName ? ` (${instanceName})` : ''}
+        </h3>
         <div
           style={{
             display: 'flex',
@@ -143,7 +151,7 @@ function BridgeWidget() {
 
       {/* 配置按钮 */}
       <button
-        onClick={() => window.open('http://127.0.0.1:3003', '_blank')}
+        onClick={() => window.open(`http://127.0.0.1:${configPort}`, '_blank')}
         style={{
           display: 'flex',
           alignItems: 'center',
