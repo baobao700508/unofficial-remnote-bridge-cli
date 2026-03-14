@@ -48,7 +48,7 @@ export const ADDON_REGISTRY: ReadonlyMap<string, AddonDefinition> = new Map([
       installer: 'pip',
       packageName: 'remnote-rag',
       executableName: 'remnote-rag',
-      detectCommand: { bin: 'remnote-rag', args: ['status'] },
+      detectCommand: { bin: 'remnote-rag', args: ['--help'] },
       envMapping: {},
       requiredSettings: [],
       dataDirs: ['~/.remnote-rag'],

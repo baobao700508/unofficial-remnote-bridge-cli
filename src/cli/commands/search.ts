@@ -68,6 +68,19 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
         env: { ...process.env, ...ragEnv },
       }, (error, stdout) => {
         if (error) {
+          // execFile 的 error 对象包含 stdout，尝试从中提取 RAG 的诊断信息
+          const output = (stdout ?? '').trim();
+          if (output) {
+            try {
+              const errData = JSON.parse(output);
+              if (errData?.error) {
+                reject(new Error(`remnote-rag: ${errData.error}`));
+                return;
+              }
+            } catch {
+              // stdout 不是有效 JSON，忽略
+            }
+          }
           reject(error);
           return;
         }
@@ -84,7 +97,11 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
       return null;
     }
     return result;
-  } catch {
+  } catch (err) {
+    // 静默降级，但保留诊断信息到 stderr 供调试
+    if (err instanceof Error && err.message.startsWith('remnote-rag:')) {
+      process.stderr.write(`[search] RAG 降级: ${err.message}\n`);
+    }
     return null;
   }
 }
