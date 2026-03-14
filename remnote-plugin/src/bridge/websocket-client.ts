@@ -13,12 +13,23 @@
 
 // ── 协议类型（独立定义）──
 
+/** 已有其他 Plugin 连接（非孪生），拒绝 */
+const WS_CLOSE_OTHER_CONNECTED = 4000;
+/** 孪生已连，拒绝非孪生 */
+const WS_CLOSE_TWIN_EXISTS = 4003;
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 export interface HelloMessage {
   type: 'hello';
   version: string;
   sdkReady: boolean;
+  twinSlotIndex: number;  // Plugin 的孪生 daemon 槽位索引 (0-3)
+}
+
+export interface PreemptedMessage {
+  type: 'preempted';
+  reason: string;  // 'twin_plugin_connected'
 }
 
 export interface PingMessage {
@@ -47,11 +58,16 @@ export interface WebSocketClientConfig {
   url: string;
   pluginVersion: string;
   sdkReady: boolean;
+  twinSlotIndex: number;       // Plugin 的孪生槽位
+  isTwinConnection?: boolean;  // 本连接是否孪生连接
   maxReconnectAttempts?: number;
   initialReconnectDelay?: number;
   maxReconnectDelay?: number;
   onStatusChange?: (status: ConnectionStatus) => void;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+  onPreempted?: () => void;      // 被孪生 Plugin 抢占回调
+  onTwinOccupied?: () => void;   // 被拒绝：孪生 Plugin 已连（不可重试）
+  onOtherOccupied?: () => void;  // 被拒绝：已有其他非孪生 Plugin（可重试）
 }
 
 // ── WebSocket Client 实现 ──
@@ -63,11 +79,16 @@ export class WebSocketClient {
   private messageHandler: ((request: BridgeRequest) => Promise<unknown>) | null = null;
   private status: ConnectionStatus = 'disconnected';
   private isShuttingDown = false;
+  private isPreempted = false;
   private _sdkReady: boolean;
 
-  private config: Required<Omit<WebSocketClientConfig, 'onStatusChange' | 'onLog'>> & {
+  private config: Required<Omit<WebSocketClientConfig, 'onStatusChange' | 'onLog' | 'onPreempted' | 'onTwinOccupied' | 'onOtherOccupied' | 'isTwinConnection'>> & {
     onStatusChange?: (status: ConnectionStatus) => void;
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
+    onPreempted?: () => void;
+    onTwinOccupied?: () => void;
+    onOtherOccupied?: () => void;
+    isTwinConnection: boolean;
   };
 
   constructor(config: WebSocketClientConfig) {
@@ -76,11 +97,16 @@ export class WebSocketClient {
       url: config.url,
       pluginVersion: config.pluginVersion,
       sdkReady: config.sdkReady,
+      twinSlotIndex: config.twinSlotIndex,
+      isTwinConnection: config.isTwinConnection ?? false,
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       initialReconnectDelay: config.initialReconnectDelay ?? 1000,
       maxReconnectDelay: config.maxReconnectDelay ?? 30000,
       onStatusChange: config.onStatusChange,
       onLog: config.onLog,
+      onPreempted: config.onPreempted,
+      onTwinOccupied: config.onTwinOccupied,
+      onOtherOccupied: config.onOtherOccupied,
     };
   }
 
@@ -100,10 +126,11 @@ export class WebSocketClient {
       type: 'hello',
       version: this.config.pluginVersion,
       sdkReady: this._sdkReady,
+      twinSlotIndex: this.config.twinSlotIndex,
     };
     try {
       this.ws?.send(JSON.stringify(hello));
-      this.log(`发送 hello（v${this.config.pluginVersion}, sdkReady=${this._sdkReady}）`);
+      this.log(`发送 hello（v${this.config.pluginVersion}, sdkReady=${this._sdkReady}, twinSlot=${this.config.twinSlotIndex}）`);
     } catch (error) {
       this.log(`发送 hello 失败: ${error}`, 'warn');
     }
@@ -115,8 +142,8 @@ export class WebSocketClient {
     }
 
     this.isShuttingDown = false;
+    this.isPreempted = false;
     this.setStatus('connecting');
-    this.log(`正在连接 ${this.config.url}...`);
 
     try {
       this.ws = new WebSocket(this.config.url);
@@ -133,16 +160,26 @@ export class WebSocketClient {
       };
 
       this.ws.onclose = (event) => {
-        this.log(`连接断开: ${event.code} ${event.reason}`, 'warn');
+        // 1006 = 连接从未建立（daemon 未运行），不打日志
+        if (event.code !== 1006) {
+          this.log(`连接断开: ${event.code} ${event.reason}`, 'warn');
+        }
         this.setStatus('disconnected');
+
+        // 被 daemon 拒绝
+        if (event.code === WS_CLOSE_TWIN_EXISTS) {
+          this.config.onTwinOccupied?.();
+        } else if (event.code === WS_CLOSE_OTHER_CONNECTED) {
+          this.config.onOtherOccupied?.();
+        }
 
         if (!this.isShuttingDown) {
           this.scheduleReconnect();
         }
       };
 
-      this.ws.onerror = (error) => {
-        this.log(`WebSocket 错误: ${error}`, 'error');
+      this.ws.onerror = () => {
+        // 连接失败的错误由 onclose 处理，此处不重复打日志
       };
     } catch (error) {
       this.log(`连接失败: ${error}`, 'error');
@@ -154,6 +191,14 @@ export class WebSocketClient {
   private async handleMessage(data: string): Promise<void> {
     try {
       const message = JSON.parse(data);
+
+      // 抢占通知
+      if (message.type === 'preempted') {
+        this.isPreempted = true;
+        this.log(`被孪生 Plugin 抢占: ${message.reason}`, 'warn');
+        this.config.onPreempted?.();
+        return;
+      }
 
       // 心跳响应
       if (message.type === 'ping') {
@@ -186,6 +231,17 @@ export class WebSocketClient {
   private scheduleReconnect(): void {
     if (this.isShuttingDown) return;
 
+    // 被抢占 → 不在此处重连，由外部轮询驱动
+    if (this.isPreempted) {
+      return;
+    }
+
+    // 非孪生连接 → 不在此处重连，由外部轮询驱动
+    if (!this.config.isTwinConnection) {
+      return;
+    }
+
+    // 孪生连接保留指数退避重连
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
       this.log('已达最大重连次数', 'error');
       return;
@@ -213,10 +269,6 @@ export class WebSocketClient {
     this.messageHandler = handler;
   }
 
-  setSdkReady(ready: boolean): void {
-    this._sdkReady = ready;
-  }
-
   disconnect(): void {
     this.isShuttingDown = true;
 
@@ -231,12 +283,6 @@ export class WebSocketClient {
     }
 
     this.setStatus('disconnected');
-  }
-
-  reconnect(): void {
-    this.reconnectAttempts = 0;
-    this.disconnect();
-    this.connect();
   }
 
   getStatus(): ConnectionStatus {

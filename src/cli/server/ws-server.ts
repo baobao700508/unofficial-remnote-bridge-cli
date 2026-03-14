@@ -13,6 +13,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type {
   HelloMessage,
+  PreemptedMessage,
   BridgeRequest,
   BridgeResponse,
   StatusResult,
@@ -20,7 +21,10 @@ import type {
   DiagnoseResult,
   ReloadResult,
 } from '../protocol.js';
-import { isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse } from '../protocol.js';
+import {
+  isHelloMessage, isPongMessage, isBridgeRequest, isBridgeResponse,
+  WS_CLOSE_OTHER_CONNECTED, WS_CLOSE_PONG_TIMEOUT, WS_CLOSE_PREEMPTED, WS_CLOSE_TWIN_EXISTS,
+} from '../protocol.js';
 import type { DefaultsConfig } from '../config.js';
 import { DEFAULT_DEFAULTS } from '../config.js';
 import { RemCache } from '../handlers/rem-cache.js';
@@ -44,6 +48,8 @@ export interface BridgeServerConfig {
   getTimeoutRemaining?: () => number;
   /** 业务默认值（由 daemon 注入） */
   defaults?: DefaultsConfig;
+  /** 本 daemon 的槽位索引 (0-3) */
+  slotIndex: number;
   /** Headless Chrome 状态回调（由 daemon 注入） */
   getHeadlessStatus?: () => HeadlessDiagnostics | null;
   /** Headless Chrome 诊断回调（由 daemon 注入） */
@@ -58,6 +64,8 @@ export class BridgeServer {
   private pluginSocket: WebSocket | null = null;
   private pluginVersion: string | null = null;
   private pluginSdkReady = false;
+  private pluginIsTwin = false;
+  private slotIndex: number;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private startTime = Date.now();
@@ -76,7 +84,7 @@ export class BridgeServer {
   private contextReadHandler: ContextReadHandler;
   private defaults: DefaultsConfig;
 
-  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults' | 'getHeadlessStatus' | 'diagnoseHeadless' | 'reloadHeadless'>> & {
+  private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults' | 'slotIndex' | 'getHeadlessStatus' | 'diagnoseHeadless' | 'reloadHeadless'>> & {
     onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
     getTimeoutRemaining?: () => number;
     getHeadlessStatus?: () => HeadlessDiagnostics | null;
@@ -91,6 +99,7 @@ export class BridgeServer {
   public onCliRequest?: () => void;
 
   constructor(config: BridgeServerConfig) {
+    this.slotIndex = config.slotIndex;
     this.config = {
       port: config.port,
       host: config.host ?? '127.0.0.1',
@@ -239,20 +248,7 @@ export class BridgeServer {
     ws.on('close', () => {
       if (ws === this.pluginSocket) {
         this.log('Plugin 已断开', 'warn');
-        this.pluginSocket = null;
-        this.pluginVersion = null;
-        this.pluginSdkReady = false;
-        // 清理可能残留的 pong 超时定时器
-        if (this.pongTimer) {
-          clearTimeout(this.pongTimer);
-          this.pongTimer = null;
-        }
-        // 拒绝所有等待中的 Plugin 子请求
-        for (const [id, pending] of this.pendingPluginRequests) {
-          clearTimeout(pending.timer);
-          pending.reject(new Error('Plugin 已断开'));
-          this.pendingPluginRequests.delete(id);
-        }
+        this.clearPluginState();
       }
     });
 
@@ -261,18 +257,65 @@ export class BridgeServer {
     });
   }
 
+  /** 重置 Plugin 连接状态（onclose 和 pong 超时共用） */
+  private clearPluginState(): void {
+    this.pluginSocket = null;
+    this.pluginVersion = null;
+    this.pluginSdkReady = false;
+    this.pluginIsTwin = false;
+    if (this.pongTimer) {
+      clearTimeout(this.pongTimer);
+      this.pongTimer = null;
+    }
+    for (const [id, pending] of this.pendingPluginRequests) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('Plugin 已断开'));
+      this.pendingPluginRequests.delete(id);
+    }
+  }
+
   private handlePluginHello(ws: WebSocket, hello: HelloMessage): void {
-    if (this.pluginSocket && this.pluginSocket.readyState === WebSocket.OPEN) {
-      // 已有 Plugin 连接，拒绝新连接
-      this.log(`拒绝 Plugin 连接（已有连接）`, 'warn');
-      ws.close(4000, 'Another plugin is already connected');
+    const isTwin = (hello.twinSlotIndex === this.slotIndex);
+
+    if (!this.pluginSocket || this.pluginSocket.readyState !== WebSocket.OPEN) {
+      // 无现有连接 → 接受
+      this.pluginSocket = ws;
+      this.pluginVersion = hello.version;
+      this.pluginSdkReady = hello.sdkReady ?? false;
+      this.pluginIsTwin = isTwin;
+      this.log(`Plugin 已连接 (v${hello.version}, SDK: ${this.pluginSdkReady ? '就绪' : '未就绪'}, ${isTwin ? '孪生' : '非孪生'})`);
       return;
     }
 
-    this.pluginSocket = ws;
-    this.pluginVersion = hello.version;
-    this.pluginSdkReady = hello.sdkReady ?? false;
-    this.log(`Plugin 已连接 (v${hello.version}, SDK: ${this.pluginSdkReady ? '就绪' : '未就绪'})`);
+    // 有现有连接且存活
+    if (isTwin) {
+      // 孪生来了 → 抢占现有非孪生连接
+      this.log(`孪生 Plugin 连接，抢占当前${this.pluginIsTwin ? '孪生' : '非孪生'}连接`, 'warn');
+      const preempted: PreemptedMessage = { type: 'preempted', reason: 'twin_plugin_connected' };
+      try {
+        this.pluginSocket.send(JSON.stringify(preempted));
+      } catch { /* 发送失败无碍 */ }
+      this.pluginSocket.close(WS_CLOSE_PREEMPTED, 'Preempted by twin plugin');
+
+      // 接受新孪生连接
+      this.pluginSocket = ws;
+      this.pluginVersion = hello.version;
+      this.pluginSdkReady = hello.sdkReady ?? false;
+      this.pluginIsTwin = true;
+      this.log(`孪生 Plugin 已接管 (v${hello.version})`);
+      return;
+    }
+
+    // 非孪生来了
+    if (this.pluginIsTwin) {
+      // 已有孪生 → 拒绝
+      this.log(`拒绝非孪生 Plugin 连接（孪生 Plugin 已连接）`, 'warn');
+      ws.close(WS_CLOSE_TWIN_EXISTS, 'Twin plugin is connected');
+    } else {
+      // 已有非孪生 → 拒绝
+      this.log(`拒绝 Plugin 连接（已有连接）`, 'warn');
+      ws.close(WS_CLOSE_OTHER_CONNECTED, 'Another plugin is already connected');
+    }
   }
 
   private async handleCliRequest(ws: WebSocket, request: BridgeRequest): Promise<void> {
@@ -455,10 +498,8 @@ export class BridgeServer {
 
         this.pongTimer = setTimeout(() => {
           this.log('Plugin 心跳超时，断开连接', 'warn');
-          this.pluginSocket?.close(4001, 'Pong timeout');
-          this.pluginSocket = null;
-          this.pluginVersion = null;
-          this.pluginSdkReady = false;
+          this.pluginSocket?.close(WS_CLOSE_PONG_TIMEOUT, 'Pong timeout');
+          this.clearPluginState();
         }, this.config.pongTimeoutMs);
       }
     }, this.config.pingIntervalMs);

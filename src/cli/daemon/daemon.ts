@@ -81,6 +81,7 @@ async function main() {
     const srv = new BridgeServer({
       port: wsPort,
       host: '127.0.0.1',
+      slotIndex,
       onLog: log,
       getTimeoutRemaining,
       defaults: cfg.defaults,
@@ -302,8 +303,9 @@ async function main() {
       wsPort: actualWsPort,
       configPort: actualConfigPort,
       instance: instanceId,
+      slotIndex,
     });
-    log(`Discovery 端点已就绪 (wsPort=${actualWsPort}, configPort=${actualConfigPort}, instance=${instanceId})`);
+    log(`Discovery 端点已就绪 (wsPort=${actualWsPort}, configPort=${actualConfigPort}, instance=${instanceId}, slotIndex=${slotIndex})`);
   }
 
   // 写入 PID 文件（JSON 格式，使用实际端口）

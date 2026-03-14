@@ -2,9 +2,13 @@
  * Plugin 常量
  *
  * 定义默认值和版本号。
- * WS URL 通过 /api/discovery 端点自动发现，DEFAULT_WS_URL 仅作为兜底。
+ * 多 daemon 连接：Plugin 同时连接 ALL_WS_PORTS 对应的 4 个槽位。
  */
 
-// 默认值（discovery 失败时的兜底）
-export const DEFAULT_WS_URL = 'ws://127.0.0.1:29100';
-export const DEFAULT_PLUGIN_VERSION = '0.1.0';
+export const DEFAULT_PLUGIN_VERSION = '0.2.0';
+
+/** 4 个固定 WS 端口，对应 4 个 daemon 槽位 */
+export const ALL_WS_PORTS = [29100, 29110, 29120, 29130] as const;
+
+/** 非孪生槽位周期扫描间隔（ms） */
+export const SCAN_INTERVAL_MS = 18_000;

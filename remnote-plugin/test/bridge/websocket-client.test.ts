@@ -167,13 +167,4 @@ describe('WebSocketClient', () => {
     // disconnect 会调用 ws.close，之后不会有新实例
   });
 
-  it('reconnect 重置重连计数', () => {
-    client.connect();
-    const ws1 = getLastMockWebSocket()!;
-    ws1.simulateOpen();
-
-    client.reconnect();
-
-    expect(statusChanges.filter((s) => s === 'connecting').length).toBeGreaterThanOrEqual(2);
-  });
 });

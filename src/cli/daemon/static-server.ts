@@ -30,6 +30,7 @@ export interface DiscoveryData {
   wsPort: number;
   configPort: number;
   instance: string;
+  slotIndex: number;
 }
 
 export interface StaticServerOptions {
