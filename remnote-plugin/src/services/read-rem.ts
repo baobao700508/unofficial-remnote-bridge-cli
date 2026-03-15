@@ -16,6 +16,7 @@ import type {
   PropertyTypeValue,
 } from '../types';
 import { filterNoisyChildren, filterNoisyTags } from './powerup-filter';
+import { remTypeToString } from './rem-builder';
 
 /**
  * 读取单个 Rem，组装为完整 RemObject。
@@ -263,15 +264,6 @@ function sortRichTextKeys(rt: RichText): RichText {
   });
 }
 
-/** SDK RemType 枚举值 → 字符串 */
-function remTypeToString(type: number): RemTypeValue {
-  switch (type) {
-    case 1: return 'concept';
-    case 2: return 'descriptor';
-    case 6: return 'portal';
-    default: return 'default';
-  }
-}
 
 /** SDK PORTAL_TYPE 枚举值 → 字符串 */
 function portalTypeToString(pt: number): PortalType {

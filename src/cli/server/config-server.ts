@@ -9,19 +9,22 @@
  */
 
 import http from 'http';
-import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath, findProjectRoot } from '../config.js';
+import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath, loadAddonConfig, saveAddonConfig } from '../config.js';
 
 export interface ConfigServerOptions {
   port: number;
   host?: string;
-  projectRoot: string;
   onRestart: () => Promise<void>;
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
 }
 
 export class ConfigServer {
   private server: http.Server | null = null;
+  private _actualPort: number = 0;
   private options: ConfigServerOptions;
+
+  /** 实际监听的端口（可能与 options.port 不同，若原端口被占用则 OS 自动分配） */
+  get actualPort(): number { return this._actualPort; }
 
   constructor(options: ConfigServerOptions) {
     this.options = options;
@@ -33,17 +36,33 @@ export class ConfigServer {
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      const host = this.options.host ?? '127.0.0.1';
 
-      this.server.on('error', (err) => {
-        this.log(`ConfigServer 错误: ${err.message}`, 'error');
-        reject(err);
-      });
+      const tryListen = (port: number) => {
+        this.server = http.createServer((req, res) => this.handleRequest(req, res));
 
-      this.server.listen(this.options.port, this.options.host ?? '127.0.0.1', () => {
-        this.log(`ConfigServer 监听 ${this.options.host ?? '127.0.0.1'}:${this.options.port}`);
-        resolve();
-      });
+        this.server.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EADDRINUSE' && port !== 0) {
+            this.log(`端口 ${port} 被占用，尝试自动分配...`, 'warn');
+            this.server = null;
+            tryListen(0);
+          } else {
+            this.log(`ConfigServer 错误: ${err.message}`, 'error');
+            reject(err);
+          }
+        });
+
+        this.server.listen(port, host, () => {
+          this._actualPort = (this.server!.address() as { port: number }).port;
+          if (this._actualPort !== this.options.port) {
+            this.log(`端口 ${this.options.port} 被占用，ConfigServer 自动分配到 ${this._actualPort}`, 'warn');
+          }
+          this.log(`ConfigServer 监听 ${host}:${this._actualPort}`);
+          resolve();
+        });
+      };
+
+      tryListen(this.options.port);
     });
   }
 
@@ -63,6 +82,11 @@ export class ConfigServer {
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = req.url ?? '/';
 
+    // 安全响应头
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Cache-Control', 'no-store');
+
     try {
       if (req.method === 'GET' && url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -71,7 +95,7 @@ export class ConfigServer {
       }
 
       if (req.method === 'GET' && url === '/api/config') {
-        const config = loadConfig(this.options.projectRoot);
+        const config = loadConfig();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(config));
         return;
@@ -79,7 +103,22 @@ export class ConfigServer {
 
       if (req.method === 'POST' && url === '/api/config') {
         const body = await readBody(req);
-        const newConfig = JSON.parse(body) as BridgeConfig;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '无效的 JSON' }));
+          return;
+        }
+
+        const validation = validateConfigPayload(parsed);
+        if (!validation.ok) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: validation.error }));
+          return;
+        }
+        const newConfig = validation.config;
 
         // 端口冲突校验
         const ports = [newConfig.wsPort, newConfig.devServerPort, newConfig.configPort];
@@ -89,7 +128,7 @@ export class ConfigServer {
           return;
         }
 
-        const filePath = configFilePath(this.options.projectRoot);
+        const filePath = configFilePath();
         saveConfig(filePath, newConfig);
         this.log('配置已保存');
 
@@ -108,6 +147,45 @@ export class ConfigServer {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: String(err) }));
         }
+        return;
+      }
+
+      // Addon 配置读取
+      if (req.method === 'GET' && url.startsWith('/api/addon-config')) {
+        const params = new URL(url, 'http://localhost').searchParams;
+        const name = params.get('name');
+        if (!name) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '缺少 name 参数' }));
+          return;
+        }
+        const addonConfig = loadAddonConfig(name);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, name, config: addonConfig ?? {} }));
+        return;
+      }
+
+      // Addon 配置保存
+      if (req.method === 'POST' && url === '/api/addon-config') {
+        const body = await readBody(req);
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '无效的 JSON' }));
+          return;
+        }
+        const payload = parsed as Record<string, unknown>;
+        if (!payload.name || typeof payload.name !== 'string' || typeof payload.config !== 'object' || !payload.config) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '需要 name (string) 和 config (object) 字段' }));
+          return;
+        }
+        saveAddonConfig(payload.name, payload.config as Record<string, unknown>);
+        this.log(`addon ${payload.name} 配置已保存`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
 
@@ -255,6 +333,77 @@ export class ConfigServer {
     <button class="primary" onclick="saveConfig()">保存配置</button>
     <button onclick="resetDefaults()">恢复默认值</button>
   </div>
+
+  <h1 style="margin-top:40px;">增强项目配置</h1>
+  <p class="subtitle">配置存储于 ~/.remnote-bridge/addons/&lt;name&gt;/config.json</p>
+
+  <div class="card">
+    <h2>remnote-rag（语义搜索增强）</h2>
+    <h3 style="font-size:14px;margin-bottom:12px;color:#555;">Embedding 配置</h3>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="rag-embedding-api-key">
+    </div>
+    <div class="field">
+      <label>API Key 环境变量名</label>
+      <input type="text" id="rag-embedding-api-key-env" placeholder="留空则使用上方 api_key">
+    </div>
+    <div class="field">
+      <label>Base URL</label>
+      <input type="text" id="rag-embedding-base-url">
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <input type="text" id="rag-embedding-model">
+    </div>
+    <div class="field">
+      <label>Dimensions</label>
+      <input type="number" id="rag-embedding-dimensions" min="1">
+    </div>
+
+    <h3 style="font-size:14px;margin:16px 0 12px;color:#555;">Reranker 配置</h3>
+    <div class="field">
+      <label>启用 Reranker</label>
+      <select id="rag-reranker-enabled">
+        <option value="true">是</option>
+        <option value="false">否</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="rag-reranker-api-key">
+    </div>
+    <div class="field">
+      <label>API Key 环境变量名</label>
+      <input type="text" id="rag-reranker-api-key-env" placeholder="留空则使用 Embedding API Key">
+    </div>
+    <div class="field">
+      <label>Base URL</label>
+      <input type="text" id="rag-reranker-base-url">
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <input type="text" id="rag-reranker-model">
+    </div>
+    <div class="field">
+      <label>Top-K 倍数</label>
+      <input type="number" id="rag-reranker-top-k-multiplier" min="1">
+    </div>
+
+    <h3 style="font-size:14px;margin:16px 0 12px;color:#555;">通用配置</h3>
+    <div class="field">
+      <label>最小文本长度 (min_text_length)</label>
+      <input type="number" id="rag-min-text-length" min="1">
+    </div>
+    <div class="field">
+      <label>批量大小 (batch_size)</label>
+      <input type="number" id="rag-batch-size" min="1">
+    </div>
+
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" onclick="saveAddonConfigUI()">保存 addon 配置</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -370,18 +519,141 @@ function resetDefaults() {
   }
 }
 
+// ── Addon 配置 ──
+
+const RAG_FIELD_MAP = {
+  'rag-embedding-api-key': ['embedding', 'api_key'],
+  'rag-embedding-api-key-env': ['embedding', 'api_key_env'],
+  'rag-embedding-base-url': ['embedding', 'base_url'],
+  'rag-embedding-model': ['embedding', 'model'],
+  'rag-embedding-dimensions': ['embedding', 'dimensions'],
+  'rag-reranker-enabled': ['reranker', 'enabled'],
+  'rag-reranker-api-key': ['reranker', 'api_key'],
+  'rag-reranker-api-key-env': ['reranker', 'api_key_env'],
+  'rag-reranker-base-url': ['reranker', 'base_url'],
+  'rag-reranker-model': ['reranker', 'model'],
+  'rag-reranker-top-k-multiplier': ['reranker', 'top_k_multiplier'],
+  'rag-min-text-length': [null, 'min_text_length'],
+  'rag-batch-size': [null, 'batch_size'],
+};
+
+function fillAddonForm(config) {
+  for (const [elId, path] of Object.entries(RAG_FIELD_MAP)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    const val = path[0] ? (config[path[0]] || {})[path[1]] : config[path[1]];
+    if (val !== undefined && val !== null) {
+      el.value = el.tagName === 'SELECT' ? String(val) : val;
+    }
+  }
+}
+
+function readAddonForm() {
+  const config = { embedding: {}, reranker: {} };
+  for (const [elId, path] of Object.entries(RAG_FIELD_MAP)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    let val = el.value;
+    if (elId.includes('dimensions') || elId.includes('multiplier') || elId.includes('text-length') || elId.includes('batch-size')) {
+      val = Number(val);
+    } else if (elId.includes('enabled')) {
+      val = val === 'true';
+    }
+    if (path[0]) {
+      config[path[0]][path[1]] = val;
+    } else {
+      config[path[1]] = val;
+    }
+  }
+  return config;
+}
+
+async function loadAddonConfigUI() {
+  try {
+    const res = await fetch('/api/addon-config?name=remnote-rag');
+    const data = await res.json();
+    if (data.ok) fillAddonForm(data.config);
+  } catch (e) { /* addon 可能未配置 */ }
+}
+
+async function saveAddonConfigUI() {
+  const config = readAddonForm();
+  try {
+    const res = await fetch('/api/addon-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'remnote-rag', config }),
+    });
+    const result = await res.json();
+    if (result.ok) showToast('addon 配置已保存', 'success');
+    else showToast('保存失败: ' + result.error, 'error');
+  } catch (e) {
+    showToast('保存请求失败: ' + e, 'error');
+  }
+}
+
 loadConfig();
+loadAddonConfigUI();
 </script>
 </body>
 </html>`;
   }
 }
 
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
+
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk) => chunks.push(chunk));
+    let totalSize = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalSize += chunk.length;
+      if (totalSize > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error('请求体超过大小限制 (1 MB)'));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
     req.on('error', reject);
   });
+}
+
+function isValidPort(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535;
+}
+
+function validateConfigPayload(raw: unknown): { ok: true; config: BridgeConfig } | { ok: false; error: string } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { ok: false, error: '配置必须是对象' };
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (!isValidPort(obj.wsPort)) return { ok: false, error: 'wsPort 必须为有效端口号 (1-65535)' };
+  if (!isValidPort(obj.devServerPort)) return { ok: false, error: 'devServerPort 必须为有效端口号 (1-65535)' };
+  if (!isValidPort(obj.configPort)) return { ok: false, error: 'configPort 必须为有效端口号 (1-65535)' };
+  if (typeof obj.daemonTimeoutMinutes !== 'number' || obj.daemonTimeoutMinutes <= 0) {
+    return { ok: false, error: 'daemonTimeoutMinutes 必须为正数' };
+  }
+
+  if (obj.defaults !== undefined) {
+    if (typeof obj.defaults !== 'object' || obj.defaults === null || Array.isArray(obj.defaults)) {
+      return { ok: false, error: 'defaults 必须是对象' };
+    }
+  }
+
+  return {
+    ok: true,
+    config: {
+      wsPort: obj.wsPort as number,
+      devServerPort: obj.devServerPort as number,
+      configPort: obj.configPort as number,
+      daemonTimeoutMinutes: obj.daemonTimeoutMinutes as number,
+      defaults: obj.defaults
+        ? { ...DEFAULT_DEFAULTS, ...(obj.defaults as Partial<DefaultsConfig>) }
+        : { ...DEFAULT_DEFAULTS },
+      addons: obj.addons as BridgeConfig['addons'],  // 仅保留 enabled 状态
+    },
+  };
 }

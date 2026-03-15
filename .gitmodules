@@ -1,0 +1,6 @@
+[submodule "remnote-rag"]
+	path = remnote-rag
+	url = git@github.com:baobao700508/remnote-rag.git
+[submodule "remnote-chat"]
+	path = remnote-chat
+	url = git@github.com:baobao700508/remnote-chat.git

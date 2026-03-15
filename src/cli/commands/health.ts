@@ -7,8 +7,12 @@
  * - 守护进程不可达 → 退出码 2
  */
 
-import { findProjectRoot, pidFilePath } from '../config.js';
-import { checkDaemon } from '../daemon/pid.js';
+import {
+  resolveInstanceId,
+  loadRegistry,
+  cleanStaleSlots,
+  findSlotByInstance,
+} from '../daemon/registry.js';
 import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
 import type { StatusResult, DiagnoseResult, ReloadResult } from '../protocol.js';
 import { jsonOutput } from '../utils/output.js';
@@ -17,10 +21,12 @@ export interface HealthOptions {
   json?: boolean;
   diagnose?: boolean;
   reload?: boolean;
+  instance?: string;
 }
 
 export async function healthCommand(options: HealthOptions = {}): Promise<void> {
   const { json, diagnose, reload } = options;
+  const instanceId = resolveInstanceId(options.instance);
 
   // --diagnose 和 --reload 不能同时使用
   if (diagnose && reload) {
@@ -34,21 +40,22 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
     return;
   }
 
-  const projectRoot = findProjectRoot();
-  const pidPath = pidFilePath(projectRoot);
+  // 通过注册表检查 daemon 是否运行
+  const registry = loadRegistry();
+  cleanStaleSlots(registry);
+  const entry = findSlotByInstance(registry, instanceId);
 
-  // 先检查 PID 文件
-  const daemonStatus = checkDaemon(pidPath);
-  if (!daemonStatus.running) {
+  if (!entry) {
     if (json) {
       jsonOutput({
         ok: false, command: 'health', exitCode: 2,
+        instance: instanceId,
         daemon: { running: false },
         plugin: { connected: false },
         sdk: { ready: false },
       });
     } else {
-      console.log('❌ 守护进程  未运行');
+      console.log(`❌ 守护进程  未运行（实例: ${instanceId}）`);
       console.log('❌ Plugin    未连接');
       console.log('❌ SDK       不可用');
       console.log('\n提示: 执行 `remnote-bridge connect` 启动守护进程');
@@ -60,7 +67,7 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   // --diagnose 模式
   if (diagnose) {
     try {
-      const result = await sendDaemonRequest('diagnose') as DiagnoseResult | null;
+      const result = await sendDaemonRequest('diagnose', {}, { instance: options.instance }) as DiagnoseResult | null;
       if (!result) {
         const error = '非 headless 模式，不支持 --diagnose';
         if (json) {
@@ -72,7 +79,7 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
         return;
       }
       if (json) {
-        jsonOutput({ ok: true, command: 'health', mode: 'diagnose', ...result });
+        jsonOutput({ ok: true, command: 'health', mode: 'diagnose', instance: instanceId, ...result });
       } else {
         console.log('=== Headless Chrome 诊断 ===');
         console.log(`状态: ${result.headless.status}`);
@@ -93,7 +100,6 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
             console.log(`  ${err}`);
           }
         }
-        // 排查建议
         if (!result.headless.chromeConnected) {
           console.log('\n排查建议: Chrome 已断开，尝试 `health --reload` 重载');
         } else if (!result.pluginConnected) {
@@ -117,9 +123,9 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   // --reload 模式
   if (reload) {
     try {
-      const result = await sendDaemonRequest('headless_reload') as ReloadResult;
+      const result = await sendDaemonRequest('headless_reload', {}, { instance: options.instance }) as ReloadResult;
       if (json) {
-        jsonOutput({ ok: result.ok, command: 'health', mode: 'reload', error: result.error });
+        jsonOutput({ ok: result.ok, command: 'health', mode: 'reload', instance: instanceId, error: result.error });
       } else {
         if (result.ok) {
           console.log('Headless Chrome 页面已重载');
@@ -143,13 +149,14 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   // 通过 WS 连接守护进程获取状态
   let status: StatusResult;
   try {
-    status = await sendDaemonRequest('get_status') as StatusResult;
+    status = await sendDaemonRequest('get_status', {}, { instance: options.instance }) as StatusResult;
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     if (json) {
       jsonOutput({
         ok: false, command: 'health', exitCode: 2,
-        daemon: { running: true, pid: daemonStatus.pid, reachable: false },
+        instance: instanceId,
+        daemon: { running: true, pid: entry.pid, reachable: false },
         plugin: { connected: false },
         sdk: { ready: false },
         error: errorMsg,
@@ -171,14 +178,15 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
   if (json) {
     jsonOutput({
       ok: allHealthy, command: 'health', exitCode,
-      daemon: { running: true, pid: daemonStatus.pid, reachable: true, uptime: status.uptime },
+      instance: instanceId, slotIndex: entry.index,
+      daemon: { running: true, pid: entry.pid, reachable: true, uptime: status.uptime },
       plugin: { connected: status.pluginConnected },
       sdk: { ready: status.sdkReady },
       timeoutRemaining: status.timeoutRemaining,
       ...(status.headless ? { headless: status.headless } : {}),
     });
   } else {
-    console.log(`✅ 守护进程  运行中（PID: ${daemonStatus.pid}，已运行 ${formatUptime(status.uptime)}）`);
+    console.log(`✅ 守护进程  运行中（PID: ${entry.pid}，实例: ${instanceId}，槽位: ${entry.index}，已运行 ${formatUptime(status.uptime)}）`);
 
     if (status.pluginConnected) {
       console.log('✅ Plugin    已连接');
@@ -192,7 +200,6 @@ export async function healthCommand(options: HealthOptions = {}): Promise<void> 
       console.log('❌ SDK       未就绪');
     }
 
-    // Headless Chrome 状态行
     if (status.headless) {
       const h = status.headless;
       const icon = h.status === 'running' ? '✅' : '❌';

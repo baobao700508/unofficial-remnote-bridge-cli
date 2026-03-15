@@ -268,15 +268,22 @@ export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
   }
 
   // 尾部箭头（无 backText，multiline）
+  // 支持有空格 ` ↓` 和无空格 `）↓` 两种写法（模型常漏空格）
   if (backText === undefined) {
-    const tailArrows: Array<[string, string]> = [
-      [' ↕', 'both'],
-      [' ↓', 'forward'],
-      [' ↑', 'backward'],
+    const tailArrowChars: Array<[string, string]> = [
+      ['↕', 'both'],
+      ['↓', 'forward'],
+      ['↑', 'backward'],
     ];
-    for (const [arrow, dir] of tailArrows) {
-      if (content.endsWith(arrow)) {
-        content = content.slice(0, -arrow.length);
+    for (const [ch, dir] of tailArrowChars) {
+      if (content.endsWith(` ${ch}`)) {
+        content = content.slice(0, -(ch.length + 1)); // 去掉 ` ↓`
+        practiceDirection = dir;
+        isMultiline = true;
+        break;
+      }
+      if (content.endsWith(ch)) {
+        content = content.slice(0, -ch.length); // 去掉 `↓`（无空格）
         practiceDirection = dir;
         isMultiline = true;
         break;
@@ -299,9 +306,9 @@ export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
 
 // ────────────────────────── Multiline 检测 ──────────────────────────
 
-/** multiline 箭头正则：中间箭头 ↓↑↕ 或尾部箭头 ↓↑↕ */
+/** multiline 箭头正则：中间箭头 ↓↑↕ 或尾部箭头 ↓↑↕（允许有无空格） */
 const MULTILINE_MID_RE = / [↓↑↕] /;
-const MULTILINE_TAIL_RE = / [↓↑↕]$/;
+const MULTILINE_TAIL_RE = /[↓↑↕]$/;
 
 /** 从行内容判断是否为 multiline 父节点（内容包含 ↓↑↕ 箭头） */
 export function isContentMultiline(rawContent: string): boolean {

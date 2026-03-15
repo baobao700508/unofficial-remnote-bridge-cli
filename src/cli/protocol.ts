@@ -15,6 +15,14 @@ export interface HelloMessage {
   type: 'hello';
   version: string;
   sdkReady: boolean;
+  twinSlotIndex: number;  // Plugin 的孪生 daemon 槽位索引 (0-3)
+}
+
+// ── Daemon → Plugin（抢占通知）──
+
+export interface PreemptedMessage {
+  type: 'preempted';
+  reason: string;  // 'twin_plugin_connected'
 }
 
 // ── 心跳 ──
@@ -79,11 +87,15 @@ export interface StatusResult {
 // ── 消息类型判断辅助 ──
 
 export function isHelloMessage(msg: unknown): msg is HelloMessage {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const obj = msg as Record<string, unknown>;
   return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as Record<string, unknown>).type === 'hello' &&
-    typeof (msg as Record<string, unknown>).version === 'string'
+    obj.type === 'hello' &&
+    typeof obj.version === 'string' &&
+    typeof obj.twinSlotIndex === 'number' &&
+    Number.isInteger(obj.twinSlotIndex) &&
+    obj.twinSlotIndex >= 0 &&
+    obj.twinSlotIndex <= 3
   );
 }
 
@@ -120,3 +132,14 @@ export function isBridgeResponse(msg: unknown): msg is BridgeResponse {
     !('action' in (msg as Record<string, unknown>))
   );
 }
+
+// ── WS Close Codes ──
+
+/** 已有其他 Plugin 连接（非孪生），拒绝 */
+export const WS_CLOSE_OTHER_CONNECTED = 4000;
+/** 心跳超时，断开连接 */
+export const WS_CLOSE_PONG_TIMEOUT = 4001;
+/** 被孪生 Plugin 抢占（daemon 主动断开非孪生连接） */
+export const WS_CLOSE_PREEMPTED = 4002;
+/** 孪生已连，拒绝非孪生 */
+export const WS_CLOSE_TWIN_EXISTS = 4003;

@@ -5,12 +5,4 @@
  * 由 bridge 层调用，不直接暴露给 widgets。
  *
  * 依赖方向：services → utils（单向）
- *
- * 待实现：
- * - read-note.ts    → readNote()
- * - create-note.ts  → createNote()
- * - update-note.ts  → updateNote()
- * - search.ts       → search()
- * - search-by-tag.ts → searchByTag()
- * - append-journal.ts → appendJournal()
  */

@@ -13,7 +13,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'search',
     description:
-      '在 RemNote 知识库中按关键词全文搜索 Rem，返回匹配结果的摘要列表。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text（Markdown 单行）、isDocument，以及 totalFound。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n中文搜索限制：SDK 分词基于空格，中文多字词可能搜不到，建议用单字重试或改用 read_globe + read_tree 按结构定位。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
+      '在 RemNote 知识库中搜索 Rem，返回匹配结果列表。\n\n搜索来源（配置驱动）：在 ~/.remnote-bridge/config.json 中启用 addons.remnote-rag 后，优先使用语义向量搜索（source:"rag"，中文支持更好）；未启用或不可用时降级到 SDK 全文搜索（source:"sdk"）。\nRAG 模式额外返回：backText、ancestorPath、type、tags、score。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text、isDocument，以及 totalFound 和 source。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
     parameters: z.object({
       query: z.string().describe('搜索关键词'),
       numResults: z
@@ -35,7 +35,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'read_rem',
     description:
-      '通过 Rem ID 读取单个 Rem 的完整属性，返回标准化的 RemObject（JSON 格式）。\n\n适用场景：\n- 查看 Rem 的详细属性（文本、类型、标签、父子关系、练习方向等）\n- 作为 edit_rem 的前置步骤——必须先 read_rem 建立缓存\n- 不适合查看子树结构（那是 read_tree）\n\n输出：RemObject JSON，默认 34 个常用字段，full=true 返回 51 个，fields 可指定子集。\n关键字段：id, text, backText, type, parent, children, tags, isDocument, practiceDirection。\n结果自动缓存供 edit_rem 使用。默认过滤 Powerup 噪音。\n完整字段列表见 resource://rem-object-fields。\n关联工具：search（定位 remId）→ read_rem → edit_rem（编辑属性）\n区别：read_tree 返回子树大纲，read_rem 返回单个 Rem 的 JSON',
+      '通过 Rem ID 读取单个 Rem 的完整属性，返回标准化的 RemObject（JSON 格式）。\n\n适用场景：\n- 查看 Rem 的详细属性（文本、类型、标签、父子关系、练习方向等）\n- 作为 edit_rem 的前置步骤——必须先 read_rem 建立缓存\n- 不适合查看子树结构（那是 read_tree）\n\n输出：RemObject JSON，默认 33 个常用字段，full=true 返回 51 个，fields 可指定子集。\n关键字段：id, text, backText, type, parent, children, tags, isDocument, practiceDirection。\n结果自动缓存供 edit_rem 使用。默认过滤 Powerup 噪音。\n完整字段列表见 resource://rem-object-fields。\n关联工具：search（定位 remId）→ read_rem → edit_rem（编辑属性）\n区别：read_tree 返回子树大纲，read_rem 返回单个 Rem 的 JSON',
     parameters: z.object({
       remId: z.string().describe('目标 Rem 的 ID'),
       fields: z
@@ -58,6 +58,15 @@ export function registerReadTools(server: FastMCP): void {
       if (args.includePowerup !== undefined)
         payload.includePowerup = args.includePowerup;
       const response = await callCli('read-rem', payload);
+      // 直接返回 data（RemObject）——缩进与 edit_rem 的 str_replace 目标格式一致。
+      // 附加提示让模型直接复制而非重新构造 oldStr。
+      if (response.ok && response.data) {
+        const json = JSON.stringify(response.data, null, 2);
+        return (
+          '以下是 edit_rem 的 str_replace 操作对象，构造 oldStr 时直接从中复制（含缩进空格）：\n\n' +
+          json
+        );
+      }
       return JSON.stringify(response, null, 2);
     },
   });
@@ -154,7 +163,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'read_context',
     description:
-      '读取用户在 RemNote 中的当前上下文视图，生成带面包屑路径的 Markdown 大纲。\n无需指定 remId，自动获取用户当前焦点位置或打开的页面。\n\n适用场景：\n- 用户说"我现在在看什么"、"当前页面是什么"\n- 需要了解用户焦点位置以提供上下文帮助\n- 不适合查看特定 Rem（已知 remId 用 read_tree）\n\n两种模式：\n- focus（默认）：以焦点 Rem 为中心的鱼眼视图。焦点完全展开（depth=3），siblings 浅层预览（depth=1），叔伯不展开。焦点行以 * 前缀标记。\n- page：以当前页面为根均匀展开子树。\n\n输出：Markdown 大纲 + 面包屑路径。不缓存。\n前提：focus 模式需用户有焦点 Rem，page 模式需有打开的页面。\n典型工作流：read_context 了解位置 → read_tree/read_rem 深入。',
+      '读取用户在 RemNote 中的当前上下文视图，生成带面包屑路径的 Markdown 大纲。\n无需指定 remId，自动获取用户当前焦点位置或打开的页面。\n\n适用场景：\n- 用户说"我现在在看什么"、"当前页面是什么"\n- 需要了解用户焦点位置以提供上下文帮助\n- 不适合查看特定 Rem（已知 remId 用 read_tree）\n\n两种模式：\n- focus（默认）：以焦点 Rem 为中心的鱼眼视图。焦点完全展开（depth=3），siblings 浅层预览（depth=1），叔伯不展开。焦点行以 * 前缀标记。可通过 focusRemId 指定任意 Rem 作为鱼眼中心，此时不依赖用户焦点。\n- page：以当前页面为根均匀展开子树。\n\n输出：Markdown 大纲 + 面包屑路径。不缓存。\n前提：focus 模式需用户有焦点 Rem 或指定 focusRemId，page 模式需有打开的页面。\n典型工作流：read_context 了解位置 → read_tree/read_rem 深入。',
     parameters: z.object({
       mode: z
         .enum(['focus', 'page'])
@@ -176,6 +185,10 @@ export function registerReadTools(server: FastMCP): void {
         .number()
         .optional()
         .describe('同级节点显示上限'),
+      focusRemId: z
+        .string()
+        .optional()
+        .describe('指定鱼眼中心 Rem ID（仅 focus 模式，默认使用当前焦点）'),
     }),
     execute: async (args) => {
       const payload: Record<string, unknown> = {};
@@ -186,6 +199,8 @@ export function registerReadTools(server: FastMCP): void {
       if (args.maxNodes !== undefined) payload.maxNodes = args.maxNodes;
       if (args.maxSiblings !== undefined)
         payload.maxSiblings = args.maxSiblings;
+      if (args.focusRemId !== undefined)
+        payload.focusRemId = args.focusRemId;
       const response = await callCli('read-context', payload);
       const data = response.data as Record<string, unknown> | undefined;
       if (data?.outline && typeof data.outline === 'string') {

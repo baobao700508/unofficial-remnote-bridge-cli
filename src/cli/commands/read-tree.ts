@@ -7,8 +7,8 @@
  * - 退出码：0 成功 / 1 业务错误 / 2 守护进程不可达
  */
 
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
-import { jsonOutput } from '../utils/output.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface ReadTreeOptions {
   json?: boolean;
@@ -44,22 +44,7 @@ export async function readTreeCommand(remId: string, options: ReadTreeOptions = 
       includePowerup: options.includePowerup,
     });
   } catch (err) {
-    if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'read-tree', error: (err as Error).message });
-      } else {
-        console.error(`错误: ${(err as Error).message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'read-tree', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'read-tree', json);
     return;
   }
 

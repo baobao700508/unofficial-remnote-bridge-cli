@@ -1,12 +1,26 @@
 # search
 
-> 在知识库中按文本搜索 Rem，返回匹配结果列表。
+> 在知识库中搜索 Rem，返回匹配结果列表。支持 SDK 全文搜索和 RAG 语义搜索。
 
 ---
 
 ## 功能
 
-`search` 调用 RemNote SDK 的全文搜索 API（`plugin.search.search()`），在当前知识库中搜索包含关键词的 Rem，返回匹配结果的 ID、文本和文档标记。
+`search` 在当前知识库中搜索包含关键词的 Rem。搜索方式由配置驱动：
+
+- **RAG 语义搜索**：在 `~/.remnote-bridge/config.json` 中启用 `addons.remnote-rag`（`enabled: true`），并在 `~/.remnote-bridge/addons/remnote-rag/config.json` 中配置 API Key，系统自动使用语义向量搜索（中文支持更好）
+- **SDK 全文搜索**：addon 未启用、未安装、或调用失败时自动降级
+
+安装与管理 addon：`remnote-bridge addon install remnote-rag` / `remnote-bridge addon list`。
+
+### 搜索来源（source 字段）
+
+| source | 说明 | 返回字段 |
+|--------|------|----------|
+| `"rag"` | 语义向量搜索（remnote-rag 已启用且可用） | remId, text, backText, ancestorPath, type, isDocument, tags, score |
+| `"sdk"` | SDK 全文搜索（默认降级） | remId, text, isDocument |
+
+降级场景：addon 未启用、remnote-rag 未安装、向量库未索引、子进程超时（10s）、返回异常。
 
 ---
 
@@ -58,7 +72,33 @@ remnote-bridge search --json '{"query":"机器学习","numResults":10}'
 
 ## JSON 输出
 
-### 成功
+### 成功（RAG 模式）
+
+```json
+{
+  "ok": true,
+  "command": "search",
+  "data": {
+    "query": "机器学习",
+    "results": [
+      {
+        "remId": "kLrIOHJLyMd8Y2lyA",
+        "text": "支持向量机的核心思想",
+        "backText": "最大化分类间隔",
+        "ancestorPath": ["机器学习", "监督学习"],
+        "type": "concept",
+        "isDocument": false,
+        "tags": ["统计学习"],
+        "score": 0.87
+      }
+    ],
+    "totalFound": 1,
+    "source": "rag"
+  }
+}
+```
+
+### 成功（SDK 降级模式）
 
 ```json
 {
@@ -70,7 +110,8 @@ remnote-bridge search --json '{"query":"机器学习","numResults":10}'
       { "remId": "kLrIOHJLyMd8Y2lyA", "text": "机器学习笔记", "isDocument": true },
       { "remId": "abc123def456", "text": "监督学习与机器学习的关系", "isDocument": false }
     ],
-    "totalFound": 2
+    "totalFound": 2,
+    "source": "sdk"
   },
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
@@ -119,29 +160,47 @@ remnote-bridge search --json '{"query":"机器学习","numResults":10}'
 
 ```
 1. CLI 解析参数（query, numResults）
-2. sendRequest → WS → daemon → forwardToPlugin('search', { query, numResults })
-3. Plugin 端：
-   ├─ plugin.search.search([query], undefined, { numResults })
-   ├─ 遍历结果 Rem：
-   │   ├─ plugin.richText.toMarkdown(rem.text) → 转 Markdown 文本
-   │   ├─ 换行符替换为空格（保持单行）
-   │   └─ rem.isDocument() → 是否文档
-   └─ 返回 { query, results, totalFound }
-4. CLI 格式化输出
+2. 检查配置：addons.remnote-rag.enabled
+   ├─ 未启用 → 跳到步骤 4
+   └─ 已启用 → 继续步骤 3
+3. 尝试 RAG 搜索：
+   ├─ execFile('remnote-rag', ['search', '--json', payload])
+   ├─ remnote-rag 从 ~/.remnote-bridge/addons/remnote-rag/config.json 读取配置
+   ├─ 超时 10s
+   ├─ 成功 → 返回 RAG 结果（source: "rag"）
+   └─ 失败 → 继续到步骤 4（静默降级）
+4. 降级到 SDK 搜索：
+   ├─ sendRequest → WS → daemon → forwardToPlugin('search', ...)
+   ├─ Plugin 端调用 plugin.search.search()
+   └─ 返回 SDK 结果（source: "sdk"）
+5. CLI 格式化输出
 ```
 
 ---
 
 ## 结果字段说明
 
+### 通用字段（两种模式都有）
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `query` | string | 原始搜索关键词 |
 | `results` | array | 结果数组 |
 | `results[].remId` | string | 匹配 Rem 的 ID |
-| `results[].text` | string | Rem 正面文本（Markdown 格式，单行） |
+| `results[].text` | string | Rem 正面文本 |
 | `results[].isDocument` | boolean | 是否为文档页面 |
 | `totalFound` | number | 返回的结果数量 |
+| `source` | string | 搜索来源：`"rag"` 或 `"sdk"` |
+
+### RAG 模式额外字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `results[].backText` | string \| null | Rem 背面文本 |
+| `results[].ancestorPath` | string[] | 祖先路径名称数组（从根到父级） |
+| `results[].type` | string | Rem 类型：`"concept"` / `"descriptor"` / `"default"` |
+| `results[].tags` | string[] | 标签名称数组 |
+| `results[].score` | number | 语义相关性分数（0-1，越高越相关） |
 
 ---
 

@@ -11,6 +11,56 @@ import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
 import type { SerializableRem } from '../utils/tree-serializer';
 import { filterNoisyTags } from './powerup-filter';
 
+/**
+ * SDK richText.toMarkdown 的安全包装。
+ * SDK 不认识某些 RichText 类型（如 "i":"u" URL 链接），会抛 Invalid input。
+ * 失败时回退到本地解析。
+ */
+export async function safeToMarkdown(
+  plugin: ReactRNPlugin,
+  richText: unknown[],
+): Promise<string> {
+  try {
+    return await plugin.richText.toMarkdown(richText);
+  } catch {
+    return richTextFallback(richText);
+  }
+}
+
+/**
+ * 本地 RichText → 纯文本回退，处理 SDK 不支持的类型。
+ *
+ * 覆盖 RICH_TEXT_ELEMENT_TYPE 枚举全部 12 种类型 + 遗留 "u" 类型：
+ *   m=TEXT, q=REM, i=IMAGE, a=AUDIO, x=LATEX, p=PLUGIN,
+ *   g=GLOBAL_NAME, s=CARD_DELIMITER, n=ANNOTATION,
+ *   fi=FLASHCARD_ICON, ai=ADD_ICON, o=DEPRECATED_CODE, u=URL(遗留)
+ */
+function richTextFallback(richText: unknown[]): string {
+  return richText.map(item => {
+    if (typeof item === 'string') return item;
+    if (typeof item !== 'object' || item === null) return '';
+    const obj = item as Record<string, unknown>;
+    switch (obj.i) {
+      case 'm': return String(obj.text ?? '');
+      case 'q': return `[[${String(obj._id ?? '')}]]`;
+      case 'u': return obj.title
+        ? `[${String(obj.title)}](${String(obj.url)})`
+        : String(obj.url ?? '');
+      case 'x': return `$${String(obj.text ?? '')}$`;
+      case 'i': return `![image](${String(obj.url ?? '')})`;
+      case 'a': return `[audio](${String(obj.url ?? '')})`;
+      case 'p': return String(obj.text ?? '');           // PLUGIN
+      case 'g': return String(obj.text ?? '');           // GLOBAL_NAME
+      case 'n': return String(obj.text ?? '');           // ANNOTATION
+      case 'o': return String(obj.text ?? '');           // DEPRECATED_CODE
+      case 's':                                          // CARD_DELIMITER
+      case 'fi':                                         // FLASHCARD_ICON
+      case 'ai': return '';                              // ADD_ICON（纯视觉标记）
+      default: return String(obj.text ?? obj.url ?? '');
+    }
+  }).join('');
+}
+
 export interface BuildFullRemOptions {
   /** 是否保留 Powerup 系统 Tag（默认 false = 过滤掉） */
   includePowerup?: boolean;
@@ -46,8 +96,8 @@ export async function buildFullSerializableRem(
     hasDvPowerup,
     portalIncludedRems,
   ] = await Promise.all([
-    plugin.richText.toMarkdown(rem.text ?? []),
-    rem.backText ? plugin.richText.toMarkdown(rem.backText) : Promise.resolve(null),
+    safeToMarkdown(plugin, rem.text ?? []),
+    rem.backText ? safeToMarkdown(plugin, rem.backText) : Promise.resolve(null),
     rem.getType(),
     rem.isCardItem(),
     rem.isDocument(),
@@ -80,7 +130,7 @@ export async function buildFullSerializableRem(
   const tags = await Promise.all(
     tagRems.map(async (t) => ({
       id: t._id,
-      name: sanitizeNewlines(await plugin.richText.toMarkdown(t.text ?? [])),
+      name: sanitizeNewlines(await safeToMarkdown(plugin, t.text ?? [])),
     })),
   );
 

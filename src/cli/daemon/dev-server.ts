@@ -82,7 +82,15 @@ export class DevServerManager implements PluginServer {
     // shell: true 确保 Windows 上能找到 npm.cmd
     this.child = spawn('npm', ['run', 'dev'], {
       cwd: pluginDir,
-      env: { ...process.env, PORT: String(port) },
+      env: {
+        ...process.env,
+        PORT: String(port),
+        // 供 webpack devServer.setupMiddlewares 劫持 /api/discovery
+        DISCOVERY_WS_PORT: process.env.SLOT_WS_PORT ?? '',
+        DISCOVERY_CONFIG_PORT: process.env.SLOT_CONFIG_PORT ?? '',
+        DISCOVERY_INSTANCE: process.env.REMNOTE_BRIDGE_INSTANCE ?? '',
+        DISCOVERY_SLOT_INDEX: process.env.SLOT_INDEX ?? '',
+      },
       stdio: 'pipe',
       shell: true,
     });

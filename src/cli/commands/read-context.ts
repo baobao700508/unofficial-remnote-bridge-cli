@@ -7,11 +7,12 @@
  * - --depth N 展开深度（默认 3，仅 page 模式）
  * - --max-nodes N 全局节点上限（默认 200）
  * - --max-siblings N 每个父节点下展示的 children 上限（默认 20）
+ * - --focus-rem-id <remId> 指定鱼眼中心 Rem ID（仅 focus 模式，默认使用当前焦点）
  * - --json 结构化 JSON 输出
  */
 
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
-import { jsonOutput } from '../utils/output.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface ReadContextOptions {
   json?: boolean;
@@ -20,6 +21,7 @@ export interface ReadContextOptions {
   depth?: string;
   maxNodes?: string;
   maxSiblings?: string;
+  focusRemId?: string;
 }
 
 export async function readContextCommand(options: ReadContextOptions = {}): Promise<void> {
@@ -55,26 +57,11 @@ export async function readContextCommand(options: ReadContextOptions = {}): Prom
 
   let result: unknown;
   try {
-    result = await sendDaemonRequest('read_context', {
-      mode, ancestorLevels, depth, maxNodes, maxSiblings,
-    });
+    const reqPayload: Record<string, unknown> = { mode, ancestorLevels, depth, maxNodes, maxSiblings };
+    if (options.focusRemId) reqPayload.focusRemId = options.focusRemId;
+    result = await sendDaemonRequest('read_context', reqPayload);
   } catch (err) {
-    if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'read-context', error: (err as Error).message });
-      } else {
-        console.error(`错误: ${(err as Error).message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'read-context', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'read-context', json);
     return;
   }
 

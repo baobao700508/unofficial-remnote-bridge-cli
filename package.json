@@ -1,6 +1,6 @@
 {
   "name": "remnote-bridge",
-  "version": "0.1.9",
+  "version": "0.1.12",
   "description": "RemNote 自动化桥接工具集：CLI + MCP Server + Plugin",
   "type": "module",
   "bin": {
@@ -38,7 +38,7 @@
     "commander": "^12.1.0",
     "puppeteer-core": "^24.0.0",
     "ws": "^8.16.0",
-    "fastmcp": "latest",
+    "fastmcp": "^3.34.0",
     "zod": "^3.23.0"
   },
   "license": "MIT",

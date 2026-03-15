@@ -8,8 +8,8 @@
  * - 退出码：0 成功 / 1 业务错误 / 2 守护进程不可达
  */
 
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
-import { jsonOutput } from '../utils/output.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface ReadRemOptions {
   json?: boolean;
@@ -36,32 +36,7 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
   try {
     result = await sendDaemonRequest('read_rem', payload);
   } catch (err) {
-    if (err instanceof DaemonNotRunningError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'read-rem', error: err.message });
-      } else {
-        console.error(`错误: ${err.message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    if (err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'read-rem', error: err.message });
-      } else {
-        console.error(`错误: ${err.message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    // 业务错误（Rem not found, Plugin 未连接等）
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'read-rem', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'read-rem', json);
     return;
   }
 

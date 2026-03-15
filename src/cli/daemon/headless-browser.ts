@@ -80,6 +80,90 @@ export function getSetupDonePath(): string {
   return path.join(getDefaultProfileDir(), '.setup-done');
 }
 
+// ── Chrome PID 文件管理（孤儿进程清理） ──
+
+const HEADLESS_PID_FILENAME = '.headless-pid';
+
+function getHeadlessPidPath(): string {
+  return path.join(os.homedir(), '.remnote-bridge', HEADLESS_PID_FILENAME);
+}
+
+/**
+ * 将 Chrome 进程 PID 写入文件，供孤儿清理使用。
+ */
+function writeHeadlessPid(pid: number): void {
+  const filePath = getHeadlessPidPath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, String(pid), 'utf-8');
+}
+
+/**
+ * 删除 Chrome PID 文件。
+ */
+function removeHeadlessPid(): void {
+  try {
+    fs.unlinkSync(getHeadlessPidPath());
+  } catch {
+    // 文件不存在则忽略
+  }
+}
+
+/**
+ * 清理孤儿 headless Chrome 进程。
+ * 读取 PID 文件，如果对应进程仍在运行则 kill，最后删除 PID 文件。
+ * 在 disconnect 和 connect --headless 启动前调用。
+ */
+export function cleanupOrphanChrome(onLog?: (msg: string) => void): void {
+  const pidPath = getHeadlessPidPath();
+  let pidStr: string;
+  try {
+    pidStr = fs.readFileSync(pidPath, 'utf-8').trim();
+  } catch {
+    return; // 无 PID 文件，无需清理
+  }
+
+  const pid = parseInt(pidStr, 10);
+  if (isNaN(pid)) {
+    removeHeadlessPid();
+    return;
+  }
+
+  // 检查进程是否仍在运行
+  try {
+    process.kill(pid, 0); // 不发信号，仅检查存在性
+  } catch {
+    // 进程已不存在，清理 PID 文件即可
+    removeHeadlessPid();
+    return;
+  }
+
+  // 进程仍在运行 → kill 它
+  onLog?.(`发现孤儿 headless Chrome 进程 (PID: ${pid})，正在清理...`);
+  try {
+    process.kill(pid, 'SIGTERM');
+    // 给 Chrome 1 秒优雅退出
+    const start = Date.now();
+    while (Date.now() - start < 1000) {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        break; // 已退出
+      }
+    }
+    // 如果还没退出，强杀
+    try {
+      process.kill(pid, 0);
+      process.kill(pid, 'SIGKILL');
+      onLog?.(`孤儿 Chrome 进程 (PID: ${pid}) 已强制终止`);
+    } catch {
+      onLog?.(`孤儿 Chrome 进程 (PID: ${pid}) 已清理`);
+    }
+  } catch {
+    // kill 失败，可能已退出
+  }
+  removeHeadlessPid();
+}
+
 // ── HeadlessBrowserManager ──
 
 export interface HeadlessBrowserOptions {
@@ -191,6 +275,14 @@ export class HeadlessBrowserManager {
       });
 
       this.status = 'running';
+
+      // 记录 Chrome PID 供孤儿清理使用
+      const chromePid = this.browser.process()?.pid;
+      if (chromePid) {
+        writeHeadlessPid(chromePid);
+        this.log(`[headless] Chrome PID: ${chromePid}`);
+      }
+
       this.log(`[headless] Chrome 已启动，页面: ${this.options.remNoteUrl}`);
     } catch (err) {
       this.status = 'crashed';
@@ -229,6 +321,7 @@ export class HeadlessBrowserManager {
       this.log(`[headless] 关闭时出错: ${err}`, 'warn');
     }
 
+    removeHeadlessPid();
     this.log('[headless] Chrome 已关闭');
   }
 

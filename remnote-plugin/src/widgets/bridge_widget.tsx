@@ -1,13 +1,13 @@
 /**
- * Bridge Widget — 显示守护进程连接状态（纯展示）
+ * Bridge Widget — 显示多 daemon 连接状态（纯展示）
  *
- * WebSocket 连接在 index.tsx 的 onActivate 中建立，
- * 此 widget 每秒从 plugin.storage 读取并显示状态和日志。
+ * 多连接管理在 index.tsx 的 onActivate 中建立，
+ * 此 widget 每秒从 plugin.storage 读取并显示所有槽位状态和日志。
  */
 
 import { renderWidget, usePlugin } from '@remnote/plugin-sdk';
 import React, { useEffect, useState } from 'react';
-import type { ConnectionStatus } from '../bridge/websocket-client';
+import type { SlotState, DisconnectReason } from '../bridge/multi-connection-manager';
 
 interface StoredLog {
   time: number;
@@ -15,10 +15,27 @@ interface StoredLog {
   level: string;
 }
 
+/** 未连接时的提示文案 */
+function getDisconnectHint(reason: DisconnectReason): string {
+  switch (reason) {
+    case 'preempted':
+      return '被孪生 Plugin 抢占，已断开';
+    case 'twin_occupied':
+      return '孪生 Plugin 已连接，当前无法连接';
+    case 'other_occupied':
+      return '已有其他 Plugin 连接，等待重试';
+    case 'not_started':
+    default:
+      return '该实例未启动，或端口被占用';
+  }
+}
+
 function BridgeWidget() {
   const plugin = usePlugin();
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [slots, setSlots] = useState<SlotState[]>([]);
   const [logs, setLogs] = useState<StoredLog[]>([]);
+  const [instanceName, setInstanceName] = useState<string>('');
+  const [configPort, setConfigPort] = useState<number>(29102);
 
   // 每秒轮询 plugin.storage 获取最新状态
   useEffect(() => {
@@ -26,11 +43,15 @@ function BridgeWidget() {
 
     async function poll() {
       if (!active) return;
-      const s = await plugin.storage.getSession('bridge-status');
+      const s = await plugin.storage.getSession('bridge-slots');
       const l = await plugin.storage.getSession('bridge-logs');
+      const inst = await plugin.storage.getSession('bridge-instance');
+      const cp = await plugin.storage.getSession('bridge-config-port');
       if (active) {
-        setStatus((s as ConnectionStatus) ?? 'disconnected');
+        setSlots((s as SlotState[]) ?? []);
         setLogs((l as StoredLog[]) ?? []);
+        setInstanceName((inst as string) ?? '');
+        setConfigPort((cp as number) ?? 29102);
       }
     }
 
@@ -42,13 +63,7 @@ function BridgeWidget() {
     };
   }, [plugin]);
 
-  const statusConfig = {
-    connected: { color: '#22c55e', bg: '#dcfce7', icon: '\u25cf', text: '已连接' },
-    connecting: { color: '#f59e0b', bg: '#fef3c7', icon: '\u25d0', text: '连接中...' },
-    disconnected: { color: '#ef4444', bg: '#fee2e2', icon: '\u25cb', text: '未连接' },
-  };
-
-  const currentStatus = statusConfig[status];
+  const connectedCount = slots.filter(s => s.status === 'connected').length;
 
   return (
     <div style={{ padding: '12px', fontFamily: 'system-ui, sans-serif', fontSize: '13px' }}>
@@ -61,7 +76,9 @@ function BridgeWidget() {
           marginBottom: '12px',
         }}
       >
-        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>RemNote Bridge</h3>
+        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>
+          RemNote Bridge{instanceName ? ` (${instanceName})` : ''}
+        </h3>
         <div
           style={{
             display: 'flex',
@@ -69,15 +86,83 @@ function BridgeWidget() {
             gap: '6px',
             padding: '4px 8px',
             borderRadius: '12px',
-            backgroundColor: currentStatus.bg,
-            color: currentStatus.color,
+            backgroundColor: connectedCount > 0 ? '#dcfce7' : '#fee2e2',
+            color: connectedCount > 0 ? '#22c55e' : '#ef4444',
             fontSize: '12px',
             fontWeight: 500,
           }}
         >
-          <span>{currentStatus.icon}</span>
-          <span>{currentStatus.text}</span>
+          <span>{connectedCount > 0 ? '\u25cf' : '\u25cb'}</span>
+          <span>{connectedCount}</span>
         </div>
+      </div>
+
+      {/* 连接状态 */}
+      <div
+        style={{
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          backgroundColor: '#f9fafb',
+          marginBottom: '12px',
+        }}
+      >
+        <div
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            padding: '8px 10px',
+            borderBottom: '1px solid #e5e7eb',
+            color: '#6b7280',
+          }}
+        >
+          连接状态
+        </div>
+        {slots.map((slot) => (
+          <div key={slot.slotIndex}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 10px',
+                borderBottom: '1px solid #f3f4f6',
+              }}
+            >
+              <span style={{ fontSize: '12px' }}>
+                {slot.isTwin ? '\u2605 ' : '  '}
+                槽位 {slot.slotIndex} ({slot.wsPort})
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color:
+                    slot.status === 'connected'
+                      ? '#22c55e'
+                      : slot.status === 'connecting'
+                        ? '#f59e0b'
+                        : '#9ca3af',
+                }}
+              >
+                {slot.status === 'connected'
+                  ? '\u25cf 已连接'
+                  : slot.status === 'connecting'
+                    ? '\u25d0 连接中...'
+                    : '\u25cb 未连接'}
+              </span>
+            </div>
+            {slot.status === 'disconnected' && (
+              <div
+                style={{
+                  padding: '2px 10px 6px 26px',
+                  fontSize: '10px',
+                  color: '#9ca3af',
+                }}
+              >
+                {getDisconnectHint(slot.disconnectReason)}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* 日志 */}
@@ -143,7 +228,7 @@ function BridgeWidget() {
 
       {/* 配置按钮 */}
       <button
-        onClick={() => window.open('http://127.0.0.1:3003', '_blank')}
+        onClick={() => window.open(`http://127.0.0.1:${configPort}`, '_blank')}
         style={{
           display: 'flex',
           alignItems: 'center',

@@ -9,7 +9,7 @@
 `read-rem` 通过 Rem ID 读取一个 Rem 的所有可获取属性，返回标准化的 RemObject。读取结果会被缓存在 daemon 内存中，供后续 `edit-rem` 使用。
 
 核心能力：
-- 返回 51 个字段的完整 Rem 数据（默认 34 个，Portal 简化 9 个，`--full` 时 51 个）
+- 返回 51 个字段的完整 Rem 数据（默认 33 个，Portal 简化 8 个，`--full` 时 51 个）
 - 支持 `--fields` 指定字段子集
 - 支持 Powerup 噪音过滤（默认过滤）
 - 自动缓存，为 `edit-rem` 建立编辑基础
@@ -76,12 +76,11 @@ remnote-bridge read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
     "type": "concept",
     "isDocument": false,
     "parent": "parentRemId",
-    "children": ["childId1", "childId2"],
     "fontSize": null,
     "highlightColor": null,
     "isTodo": false,
     "todoStatus": null,
-    "...": "（共 34 个字段，--full 时 51 个）"
+    "...": "（共 33 个字段，--full 时 51 个）"
   },
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
@@ -159,8 +158,8 @@ remnote-bridge read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
    ├─ 字段过滤：
    │   ├─ --full → 返回全部 51 字段
    │   ├─ --fields → 返回指定字段 + id
-   │   ├─ type=portal → Portal 简化模式（返回 9 个关键字段）
-   │   └─ 默认 → 排除 R-F 字段（返回 34 字段）
+   │   ├─ type=portal → Portal 简化模式（返回 8 个关键字段）
+   │   └─ 默认 → 排除 R-F 字段（返回 33 字段）
    └─ 附加 _cacheOverridden 元数据（若之前有缓存）
 4. CLI 格式化输出（人类模式 pretty-print / JSON 模式单行）
 ```
@@ -172,8 +171,8 @@ remnote-bridge read-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA"}'
 RemObject 共 51 个字段，按读写权限分为三类：
 
 - **RW**（20 个）：可读可写，SDK 有对应的 setter
-- **R**（14 个）：只读，默认输出
-- **R-F**（17 个）：只读，仅 `--full` 模式输出（低频 / 可由其他字段推导）
+- **R**（13 个）：只读，默认输出
+- **R-F**（18 个）：只读，仅 `--full` 模式输出（低频 / 可由其他字段推导）
 
 ### 核心标识
 
@@ -200,7 +199,7 @@ RemObject 共 51 个字段，按读写权限分为三类：
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
 | `parent` | `string \| null` | RW | 父 Rem ID。null=顶级。UI：Rem 从原位置消失，出现在新父级下 |
-| `children` | `string[]` | R | 子 Rem ID 有序数组 |
+| `children` | `string[]` | R-F | 子 Rem ID 有序数组 |
 
 ### 格式 / 显示
 
@@ -377,14 +376,15 @@ text | number | date | checkbox | single_select | multi_select | url | image | t
 
 | 模式 | 输出字段数 | 说明 |
 |------|:----------:|------|
-| 默认 | 34 | RW + R 字段，覆盖常用场景 |
-| Portal 简化 | 9 | type=portal 时自动使用（id、type、portalType、portalDirectlyIncludedRem、parent、positionAmongstSiblings、children、createdAt、updatedAt）。`--full` / `--fields` 可覆盖 |
+| 默认 | 33 | RW + R 字段，覆盖常用场景 |
+| Portal 简化 | 8 | type=portal 时自动使用（id、type、portalType、portalDirectlyIncludedRem、parent、positionAmongstSiblings、createdAt、updatedAt）。`--full` / `--fields` 可覆盖 |
 | `--full` | 51 | 全部字段（含 R-F 低频字段） |
 | `--fields` | 自选 + id | 仅返回指定字段（始终包含 id） |
 
 ### R-F 字段列表（默认不输出，`--full` 时输出）
 
 ```
+children,
 isPowerup, isPowerupEnum, isPowerupProperty, isPowerupPropertyListItem, isPowerupSlot,
 deepRemsBeingReferenced,
 ancestorTagRem, descendantTagRem,
