@@ -196,7 +196,7 @@ export async function readRem(
     portalType: remTypeToString(rem.type as number) === 'portal'
       ? portalTypeToString(portalType as number)
       : null,
-    portalDirectlyIncludedRem: portalDirectlyIncludedRems.map(r => r._id),
+    portalDirectlyIncludedRem: portalDirectlyIncludedRems.map(r => r._id).sort(),
 
     // 属性类型
     propertyType: (propertyType as PropertyTypeValue | undefined) ?? null,
@@ -205,27 +205,27 @@ export async function readRem(
     enablePractice,
     practiceDirection: practiceDirection as RemObject['practiceDirection'],
 
-    // 关联 — 直接关系
-    tags: filteredTagRems.map(r => r._id),
-    sources: sourceRems.map(r => r._id),
-    aliases: aliasRems.map(r => r._id),
+    // 关联 — 直接关系（排序保证确定性序列化）
+    tags: filteredTagRems.map(r => r._id).sort(),
+    sources: sourceRems.map(r => r._id).sort(),
+    aliases: aliasRems.map(r => r._id).sort(),
 
     // 关联 — 引用关系
-    remsBeingReferenced: refsBeingReferenced.map(r => r._id),
-    deepRemsBeingReferenced: deepRefsBeingReferenced.map(r => r._id),
-    remsReferencingThis: refsReferencingThis.map(r => r._id),
+    remsBeingReferenced: refsBeingReferenced.map(r => r._id).sort(),
+    deepRemsBeingReferenced: deepRefsBeingReferenced.map(r => r._id).sort(),
+    remsReferencingThis: refsReferencingThis.map(r => r._id).sort(),
 
     // 关联 — 标签体系
-    taggedRem: taggedRems.map(r => r._id),
-    ancestorTagRem: ancestorTagRems.map(r => r._id),
-    descendantTagRem: descendantTagRems.map(r => r._id),
+    taggedRem: taggedRems.map(r => r._id).sort(),
+    ancestorTagRem: ancestorTagRems.map(r => r._id).sort(),
+    descendantTagRem: descendantTagRems.map(r => r._id).sort(),
 
     // 关联 — 层级遍历
-    descendants: descendantRems.map(r => r._id),
-    siblingRem: siblingRems.map(r => r._id),
-    portalsAndDocumentsIn: portalsAndDocsIn.map(r => r._id),
-    allRemInDocumentOrPortal: allRemInDocOrPortal.map(r => r._id),
-    allRemInFolderQueue: allRemInFolderQ.map(r => r._id),
+    descendants: descendantRems.map(r => r._id).sort(),
+    siblingRem: siblingRems.map(r => r._id).sort(),
+    portalsAndDocumentsIn: portalsAndDocsIn.map(r => r._id).sort(),
+    allRemInDocumentOrPortal: allRemInDocOrPortal.map(r => r._id).sort(),
+    allRemInFolderQueue: allRemInFolderQ.map(r => r._id).sort(),
 
     // 位置 / 统计
     positionAmongstSiblings: position ?? null,

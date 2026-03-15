@@ -87,6 +87,14 @@ export class EditHandler {
     const currentJson = JSON.stringify(currentRemObject, null, 2);
     const cachedJson = JSON.stringify(cachedObj, null, 2);
     if (currentJson !== cachedJson) {
+      // 诊断日志：打出具体哪些字段不同，帮助定位并发误判
+      const diff = diffFields(
+        cachedObj as Record<string, unknown>,
+        currentRemObject as Record<string, unknown>,
+      );
+      console.error(
+        `[defense-2] Rem ${remId} conflict detected. Changed fields: ${diff.join(', ') || '(JSON differs but no top-level field diff — possible nested change)'}`,
+      );
       // 不更新缓存 — 迫使 AI re-read
       throw new Error(
         `Rem ${remId} has been modified since last read. Please read it again before editing.`,
@@ -162,4 +170,19 @@ export class EditHandler {
       warnings,
     };
   }
+}
+
+/** 比较两个 RemObject 的顶层字段，返回值不同的 key 列表 */
+function diffFields(
+  cached: Record<string, unknown>,
+  current: Record<string, unknown>,
+): string[] {
+  const allKeys = new Set([...Object.keys(cached), ...Object.keys(current)]);
+  const changed: string[] = [];
+  for (const key of allKeys) {
+    if (JSON.stringify(cached[key]) !== JSON.stringify(current[key])) {
+      changed.push(key);
+    }
+  }
+  return changed;
 }
