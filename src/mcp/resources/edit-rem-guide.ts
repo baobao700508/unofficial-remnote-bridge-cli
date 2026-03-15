@@ -1,7 +1,7 @@
 export const EDIT_REM_GUIDE_CONTENT = `
 # edit_rem 操作指南
 
-edit_rem 通过 str_replace 语义修改单个 Rem 的属性。操作对象是 \\\`JSON.stringify(remObject, null, 2)\\\` 的格式化文本。
+edit_rem 直接修改单个 Rem 的属性字段。通过 changes 对象指定要修改的字段及新值。
 
 ---
 
@@ -9,149 +9,70 @@ edit_rem 通过 str_replace 语义修改单个 Rem 的属性。操作对象是 \
 
 必须先 \\\`read_rem\\\` 同一个 remId，建立缓存后才能 \\\`edit_rem\\\`。跳过会触发防线 1 错误。
 
-工作流：\\\`read_rem\\\` → 查看 JSON → \\\`edit_rem\\\`（oldStr/newStr）。
+工作流：\\\`read_rem\\\` → 查看属性 → \\\`edit_rem\\\`（changes 对象）。
 
 ---
 
-## str_replace 语义
+## changes 对象
 
-### 操作对象
+传入 {字段名: 新值} 格式的对象。支持 21 个可写字段，只读和未知字段会产生警告但不阻断。
 
-格式化缩进 2 空格的 JSON 文本。示例片段：
-
-\\\`\\\`\\\`json
-{
-  "id": "kLrIOHJLyMd8Y2lyA",
-  "text": [
-    "Hello World"
-  ],
-  "backText": null,
-  "type": "concept",
-  "highlightColor": null,
-  "isTodo": false
-}
-\\\`\\\`\\\`
-
-### 匹配规则
-
-- oldStr 必须在 JSON 文本中**恰好匹配 1 次**（0 次=未找到，>1 次=多匹配，均报错）
-- 大小写敏感，精确匹配
-- oldStr 建议包含字段名 + 值，避免匹配到 text 内容中的同名字符串
-
-### 替换后校验
-
-替换后的文本必须是合法 JSON，否则报 "invalid JSON" 错误。
+示例：
+- 修改类型：\\\`{type: "concept"}\\\`
+- 设置高亮：\\\`{highlightColor: "Yellow"}\\\`
+- 批量修改：\\\`{type: "concept", highlightColor: "Yellow", fontSize: "H1"}\\\`
 
 ---
 
-## 三道防线
+## 两道防线
 
 | 防线 | 检查内容 | 失败时 |
 |:-----|:---------|:-------|
 | 1. 缓存存在 | 是否已 read_rem | 报 "has not been read yet" → 先 read_rem |
 | 2. 并发检测 | 当前 Rem 是否被外部修改 | 报 "has been modified since last read" → 重新 read_rem |
-| 3. 精确匹配 | oldStr 匹配次数 | 0 次或多次 → 调整 oldStr 使其唯一 |
 
-防线 2 的关键：edit 时会从 Plugin 重新读取最新数据与缓存比较。如果不一致（含空白和格式），拒绝编辑并**不更新缓存**，迫使你重新 read_rem。
+防线 2 的关键：edit 时会从 Plugin 重新读取最新数据与缓存比较。如果不一致，拒绝编辑并**不更新缓存**，迫使你重新 read_rem。
 
 ---
 
-## RichText 编辑实战
+## RichText 编辑
 
-\\\`text\\\` 和 \\\`backText\\\` 字段使用 RichText 格式。在格式化 JSON 中，RichText 数组内的对象展开为多行，key 按**字母序**排列。
+\\\`text\\\` 和 \\\`backText\\\` 字段使用 RichText 格式。传入完整的 RichText 数组作为新值。
 
 ### 关键排序规则
 
 - \\\`_id\\\`（U+005F）排在所有小写字母之前，所以 \\\`_id\\\` 总是第一个 key
 - 示例排序：\\\`_id\\\` < \\\`b\\\` < \\\`cId\\\` < \\\`h\\\` < \\\`i\\\` < \\\`iUrl\\\` < \\\`text\\\`
 
-### 示例 1：纯文本 → 粗体
-
-read_rem 返回：
-
-\\\`\\\`\\\`json
-  "text": [
-    "普通标题"
-  ],
-\\\`\\\`\\\`
-
-edit_rem 调用：
+### 示例 1：设置纯文本
 
 \\\`\\\`\\\`
-oldStr:  "text": [\\n    "普通标题"\\n  ]
-newStr:  "text": [\\n    {\\n      "b": true,\\n      "i": "m",\\n      "text": "粗体标题"\\n    }\\n  ]
+changes: {text: ["新标题"]}
 \\\`\\\`\\\`
 
-替换后变为：
-
-\\\`\\\`\\\`json
-  "text": [
-    {
-      "b": true,
-      "i": "m",
-      "text": "粗体标题"
-    }
-  ],
-\\\`\\\`\\\`
-
-### 示例 2：纯文本 → 部分超链接
+### 示例 2：设置粗体
 
 \\\`\\\`\\\`
-oldStr:  "text": [\\n    "点击访问官网"\\n  ]
-newStr:  "text": [\\n    "点击",\\n    {\\n      "i": "m",\\n      "iUrl": "https://remnote.com",\\n      "text": "访问官网"\\n    }\\n  ]
+changes: {text: [{"b": true, "i": "m", "text": "粗体标题"}]}
 \\\`\\\`\\\`
 
-### 示例 3：修改引用旁的文本
-
-read_rem 返回：
-
-\\\`\\\`\\\`json
-  "text": [
-    "参考 ",
-    {
-      "_id": "abc123",
-      "i": "q"
-    },
-    " 的内容"
-  ],
-\\\`\\\`\\\`
-
-只改文字部分（纯字符串可直接匹配）：
+### 示例 3：设置超链接
 
 \\\`\\\`\\\`
-oldStr:  " 的内容"
-newStr:  " 的详细说明"
-\\\`\\\`\\\`
-
-如果 " 的内容" 出现多次导致多匹配，加上下文：
-
-\\\`\\\`\\\`
-oldStr:  "q"\\n    },\\n    " 的内容"
-newStr:  "q"\\n    },\\n    " 的详细说明"
+changes: {text: ["点击", {"i": "m", "iUrl": "https://remnote.com", "text": "访问官网"}]}
 \\\`\\\`\\\`
 
 ### 示例 4：添加完形填空
 
 \\\`\\\`\\\`
-oldStr:  "text": [\\n    "光合作用需要阳光"\\n  ]
-newStr:  "text": [\\n    "光合作用需要",\\n    {\\n      "cId": "cloze1",\\n      "i": "m",\\n      "text": "阳光"\\n    }\\n  ]
+changes: {text: ["光合作用需要", {"cId": "cloze1", "i": "m", "text": "阳光"}]}
 \\\`\\\`\\\`
 
-### 示例 5：修改简单属性
+### 示例 5：设置 backText
 
 \\\`\\\`\\\`
-oldStr:  "type": "default"
-newStr:  "type": "concept"
-\\\`\\\`\\\`
-
-\\\`\\\`\\\`
-oldStr:  "highlightColor": null
-newStr:  "highlightColor": "Red"
-\\\`\\\`\\\`
-
-\\\`\\\`\\\`
-oldStr:  "practiceDirection": "forward"
-newStr:  "practiceDirection": "both"
+changes: {backText: ["背面答案"]}
+changes: {backText: null}  // 清除背面
 \\\`\\\`\\\`
 
 ---
@@ -167,67 +88,15 @@ newStr:  "practiceDirection": "both"
 
 ---
 
-## 常见错误
-
-| 错误 | 原因 | 解决 |
-|:-----|:-----|:-----|
-| key 顺序错 | 写 \\\`{"text":"xx","i":"m"}\\\` 但实际是 \\\`{"i":"m","text":"xx"}\\\` | 按字母序排列 key |
-| 缩进不匹配 | 空格数不对 | 仔细对照 read_rem 返回的缩进 |
-| 混淆 highlightColor 和 h | 前者字符串 \\\`"Red"\\\`，后者数字 \\\`1\\\` | 参考上方对比表 |
-| 漏 onlyAudio | \\\`i:"a"\\\` 的 \\\`onlyAudio\\\` 是必填 | true=音频，false=视频 |
-| JSON 语法错 | 引号、逗号、括号不完整 | 检查替换边界 |
-| Portal oldStr 不匹配 | Portal 编辑在简化 JSON 上匹配，不是完整 JSON | 检查 oldStr 是否匹配 8 字段简化 JSON |
-
----
-
 ## Portal 编辑
 
-当被编辑的 Rem 是 Portal（type === 'portal'）时，edit_rem 自动切换到 Portal 专用路径。
-
-**edit_rem 只能修改 Portal 的引用列表和位置属性。创建 Portal 和删除 Portal 请使用 \\\`edit_tree\\\`。**
-
-### 操作目标：简化 JSON
-
-Portal 的 str_replace 在 **8 字段简化 JSON** 上执行（而非完整 51 字段）：
-
-\\\`\\\`\\\`json
-{
-  "id": "abc123",
-  "type": "portal",
-  "portalType": "portal",
-  "portalDirectlyIncludedRem": ["remId1", "remId2"],
-  "parent": "parentId",
-  "positionAmongstSiblings": 3,
-  "createdAt": 1709000000000,
-  "updatedAt": 1709000000000
-}
-\\\`\\\`\\\`
-
-### 可写字段
-
-| 字段 | 写入方式 |
-|:-----|:---------|
-| \\\`portalDirectlyIncludedRem\\\` | diff 数组 → addToPortal / removeFromPortal |
-| \\\`parent\\\` | setParent() |
-| \\\`positionAmongstSiblings\\\` | setParent(parent, position) |
-
-其余字段（id、type、portalType、createdAt、updatedAt）为只读，修改只产生警告。
-
-### 示例
-
-添加引用：
+Portal（type=portal）的引用列表通过 \\\`portalDirectlyIncludedRem\\\` 字段修改：
 
 \\\`\\\`\\\`
-oldStr:  "portalDirectlyIncludedRem": ["remId1", "remId2"]
-newStr:  "portalDirectlyIncludedRem": ["remId1", "remId2", "remId3"]
+changes: {portalDirectlyIncludedRem: ["remId1", "remId2", "newRemId3"]}
 \\\`\\\`\\\`
 
-移除引用：
-
-\\\`\\\`\\\`
-oldStr:  "portalDirectlyIncludedRem": ["remId1", "remId2"]
-newStr:  "portalDirectlyIncludedRem": ["remId1"]
-\\\`\\\`\\\`
+创建和删除 Portal 请使用 \\\`edit_tree\\\`。
 
 ---
 
@@ -237,8 +106,19 @@ newStr:  "portalDirectlyIncludedRem": ["remId1"]
 |:-----|:-----|
 | 写入成功 | 从 Plugin 重新读取最新状态 → 覆盖缓存 |
 | 防线 2 拒绝 | **不更新**缓存（迫使重新 read_rem） |
-| 防线 3 拒绝 | 缓存不变（可调整 oldStr 重试） |
 | 部分写入失败 | **不更新**缓存（迫使重新 read_rem） |
 
 写入成功后**永远从 Plugin 重新读取**，不做本地推导，保证缓存与 SDK 状态完全同步。
+
+---
+
+## 常见错误
+
+| 错误 | 原因 | 解决 |
+|:-----|:-----|:-----|
+| 字段值类型错误 | 如 type 传了无效值 | 检查枚举类型速查表 |
+| 混淆 highlightColor 和 h | 前者字符串 \\\`"Red"\\\`，后者数字 \\\`1\\\` | 参考上方对比表 |
+| 漏 onlyAudio | \\\`i:"a"\\\` 的 \\\`onlyAudio\\\` 是必填 | true=音频，false=视频 |
+| 只读字段被忽略 | 修改了只读字段 | 产生警告但不阻断，检查字段权限 |
+| Portal 字段修改无效 | 非 Portal 类型的 Rem 修改 portalDirectlyIncludedRem | 仅 type=portal 的 Rem 支持该字段 |
 `;

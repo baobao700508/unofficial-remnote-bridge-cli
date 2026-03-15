@@ -34,13 +34,11 @@ export const ERROR_REFERENCE_CONTENT = `
 
 **关键**：防线 2 失败时**不会自动更新缓存**，必须手动重新 read。
 
-### 防线 3：str_replace 精确匹配
+### 防线 3：str_replace 精确匹配（仅 edit_tree）
 
 | 错误信息 | 触发命令 | 恢复操作 |
 |:---------|:---------|:---------|
-| old_str not found in the serialized JSON of rem {remId} | edit_rem | 检查 oldStr 是否精确匹配（含引号、空格、换行） |
 | old_str not found in the tree outline of {remId} | edit_tree | 检查 oldStr 是否精确匹配缓存大纲 |
-| old_str matches {N} locations in rem {remId}. Make old_str more specific to match exactly once. | edit_rem | 扩大 oldStr 范围，包含更多上下文以唯一定位 |
 | old_str matches {N} locations in the tree outline of {remId}. Make old_str more specific to match exactly once. | edit_tree | 扩大 oldStr 范围 |
 
 ---
@@ -49,13 +47,12 @@ export const ERROR_REFERENCE_CONTENT = `
 
 | 错误信息 | 原因 | 恢复操作 |
 |:---------|:-----|:---------|
-| The replacement produced invalid JSON. Check your new_str for syntax errors. | 替换后文本不是合法 JSON | 检查 newStr 的引号、逗号、括号完整性 |
 | Failed to update field 'type': Portal 不可通过 setType() 设置 | 尝试将 type 设为 portal | Portal 只能通过 SDK 专用 API 创建，不可通过 edit_rem 设置 |
 | Failed to update field '{field}': ... | SDK setter 调用失败 | 检查字段值是否在允许范围内 |
+| Invalid value for '{field}': ... | 字段值不符合约束 | 检查字段值类型和允许范围（参考枚举类型速查表） |
 | Field '{fieldName}' is read-only and was ignored | 修改了只读字段 | **警告**（非阻断），该字段不可修改 |
+| Field '{fieldName}' is unknown and was ignored | changes 中包含不存在的字段名 | **警告**（非阻断），检查字段名拼写 |
 | Setting 'todoStatus' without 'isTodo: true' may have no effect | todoStatus 非 null 但 isTodo=false | 先将 isTodo 设为 true |
-| old_str not found in the simplified Portal JSON of rem {remId} | Portal 编辑时 oldStr 在 8 字段简化 JSON 中不匹配 | 检查 oldStr 是否匹配 Portal 简化 JSON 格式（8 字段：id、type、portalType、portalDirectlyIncludedRem、parent、positionAmongstSiblings、createdAt、updatedAt） |
-| old_str matches {N} locations in Portal rem {remId}. Make old_str more specific to match exactly once. | Portal 编辑时 oldStr 在简化 JSON 中匹配多处 | 扩大 oldStr 范围以唯一定位 |
 
 ---
 
@@ -109,16 +106,15 @@ export const ERROR_REFERENCE_CONTENT = `
 ├─ "has been modified since last read"
 │   └─ 重新执行 read → 然后重试 edit
 │
-├─ "old_str not found"
-│   ├─ 检查空格、换行、引号是否精确匹配
-│   ├─ Portal Rem？检查是否匹配 8 字段简化 JSON（非完整 JSON）
-│   └─ 重新 read 确认当前内容
+├─ "old_str not found"（edit_tree）
+│   ├─ 检查空格、换行是否精确匹配
+│   └─ 重新 read_tree 确认当前内容
 │
-├─ "old_str matches N locations"
+├─ "old_str matches N locations"（edit_tree）
 │   └─ 扩大 oldStr，包含更多上下文
 │
-├─ "invalid JSON"
-│   └─ 检查 newStr 的 JSON 语法
+├─ "Invalid value for" / "Field ... is unknown"（edit_rem）
+│   └─ 检查字段名拼写和值类型
 │
 ├─ "Content modification not allowed"
 │   └─ 改用 edit_rem 修改内容

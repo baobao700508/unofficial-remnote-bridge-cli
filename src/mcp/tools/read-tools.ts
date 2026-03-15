@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
 import { callCli } from '../daemon-client.js';
+import { formatFrontmatter, formatDataJson } from '../format.js';
 
 export function registerReadTools(server: FastMCP): void {
   // -------------------------------------------------------------------------
@@ -16,16 +17,19 @@ export function registerReadTools(server: FastMCP): void {
       '在 RemNote 知识库中搜索 Rem，返回匹配结果列表。\n\n搜索来源（配置驱动）：在 ~/.remnote-bridge/config.json 中启用 addons.remnote-rag 后，优先使用语义向量搜索（source:"rag"，中文支持更好）；未启用或不可用时降级到 SDK 全文搜索（source:"sdk"）。\nRAG 模式额外返回：backText、ancestorPath、type、tags、score。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text、isDocument，以及 totalFound 和 source。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
     parameters: z.object({
       query: z.string().describe('搜索关键词'),
-      numResults: z
+      limit: z
         .number()
         .optional()
         .describe('结果数量上限，默认 20'),
     }),
     execute: async (args) => {
       const payload: Record<string, unknown> = { query: args.query };
-      if (args.numResults !== undefined) payload.numResults = args.numResults;
+      if (args.limit !== undefined) payload.numResults = args.limit;
       const response = await callCli('search', payload);
-      return JSON.stringify(response, null, 2);
+      if (!response.data) {
+        return 'search 返回了空结果，请检查 query 参数或 daemon 状态。';
+      }
+      return formatDataJson(response);
     },
   });
 
@@ -58,16 +62,10 @@ export function registerReadTools(server: FastMCP): void {
       if (args.includePowerup !== undefined)
         payload.includePowerup = args.includePowerup;
       const response = await callCli('read-rem', payload);
-      // 直接返回 data（RemObject）——缩进与 edit_rem 的 str_replace 目标格式一致。
-      // 附加提示让模型直接复制而非重新构造 oldStr。
-      if (response.ok && response.data) {
-        const json = JSON.stringify(response.data, null, 2);
-        return (
-          '以下是 edit_rem 的 str_replace 操作对象，构造 oldStr 时直接从中复制（含缩进空格）：\n\n' +
-          json
-        );
+      if (!response.data) {
+        return `read_rem 返回了空的 data，remId: ${args.remId}。请检查该 Rem 是否存在。`;
       }
-      return JSON.stringify(response, null, 2);
+      return formatDataJson(response);
     },
   });
 
@@ -112,12 +110,21 @@ export function registerReadTools(server: FastMCP): void {
       if (args.includePowerup !== undefined)
         payload.includePowerup = args.includePowerup;
       const response = await callCli('read-tree', payload);
-      // read-tree 返回的大纲在 response.data.outline 中
       const data = response.data as Record<string, unknown> | undefined;
-      if (data?.outline && typeof data.outline === 'string') {
-        return data.outline;
+      if (!data?.outline || typeof data.outline !== 'string') {
+        return `read_tree 返回了空的大纲，remId: ${args.remId}。请检查该 Rem 是否存在或是否有子节点。`;
       }
-      return JSON.stringify(response, null, 2);
+      return formatFrontmatter(
+        {
+          rootId: data.rootId,
+          depth: data.depth,
+          nodeCount: data.nodeCount,
+          ancestors: response.ancestors,
+          cacheOverridden: response.cacheOverridden,
+          powerupFiltered: response.powerupFiltered,
+        },
+        data.outline,
+      );
     },
   });
 
@@ -150,10 +157,13 @@ export function registerReadTools(server: FastMCP): void {
         payload.maxSiblings = args.maxSiblings;
       const response = await callCli('read-globe', payload);
       const data = response.data as Record<string, unknown> | undefined;
-      if (data?.outline && typeof data.outline === 'string') {
-        return data.outline;
+      if (!data?.outline || typeof data.outline !== 'string') {
+        return 'read_globe 返回了空的大纲。请检查知识库中是否有 Document。';
       }
-      return JSON.stringify(response, null, 2);
+      return formatFrontmatter(
+        { nodeCount: data.nodeCount },
+        data.outline,
+      );
     },
   });
 
@@ -203,10 +213,17 @@ export function registerReadTools(server: FastMCP): void {
         payload.focusRemId = args.focusRemId;
       const response = await callCli('read-context', payload);
       const data = response.data as Record<string, unknown> | undefined;
-      if (data?.outline && typeof data.outline === 'string') {
-        return data.outline;
+      if (!data?.outline || typeof data.outline !== 'string') {
+        return 'read_context 返回了空的大纲。请检查用户是否有焦点 Rem 或已打开的页面。';
       }
-      return JSON.stringify(response, null, 2);
+      return formatFrontmatter(
+        {
+          mode: data.mode,
+          nodeCount: data.nodeCount,
+          breadcrumb: data.breadcrumb,
+        },
+        data.outline,
+      );
     },
   });
 }

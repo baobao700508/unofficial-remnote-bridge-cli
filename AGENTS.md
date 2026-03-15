@@ -210,6 +210,57 @@ Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（`src
 - **对齐检查时**：必须逐一比对两侧文档，确认描述、参数、示例一致
 - **禁止**：只更新一侧文档就认为完成
 
+### 2.6 MCP 返回值标准（红线）
+
+MCP 工具的 `execute` 函数返回值必须遵循以下两种模式之一。格式化函数在 `src/mcp/format.ts`。
+
+#### 模式 A — Frontmatter + Body（read 类工具）
+
+当工具的核心输出是 **Markdown 文本**且存在**文本之外的结构化元数据**时使用。仅适用于 outline 类工具。
+
+```
+---
+<元数据 key>: <value>
+---
+
+<核心内容：Markdown 或 JSON>
+```
+
+**规则：**
+- 使用 `formatFrontmatter(meta, body)` 生成
+- Frontmatter key 使用 camelCase（与 CLI 字段名一致）
+- 数字/布尔裸值，字符串/数组/对象使用 JSON 表示
+- `ok`、`command`、`timestamp` **禁止**放入 frontmatter（冗余）
+- null/undefined 的值自动跳过
+- 无元数据时省略 `---` 分隔符，直接返回 body
+
+**当前适用工具：**
+
+| 工具 | Frontmatter 字段 | Body |
+|:-----|:-----------------|:-----|
+| `read_tree` | rootId, depth, nodeCount, ancestors?, cacheOverridden?, powerupFiltered? | Markdown 大纲 |
+| `read_globe` | nodeCount | Markdown 大纲 |
+| `read_context` | mode, nodeCount, breadcrumb | Markdown 大纲 |
+
+#### 模式 B — Data JSON（action / infra 工具）
+
+当工具返回的是**操作报告或系统状态**（所有字段都是报告内容，无内容/元数据之分）时使用。
+
+**规则：**
+- 使用 `formatDataJson(response)` 生成
+- 自动剥离 `ok`、`command`、`timestamp` wrapper 字段
+- 剩余字段原样 JSON 序列化（2 空格缩进）
+- `callCli` 在 `ok===false` 时已抛出 `CliError`，成功路径 `ok` 始终为 true
+
+**当前适用工具：** `search`, `read_rem`, `edit_rem`, `edit_tree`, `setup`, `connect`, `disconnect`, `health`, `addon`, `clean`
+
+#### 判断标准（新增工具时使用）
+
+| 问题 | 选 A | 选 B |
+|:-----|:-----|:-----|
+| 核心输出是什么？ | Markdown 文本（大纲） | JSON 数据或操作报告 |
+| 有「文本之外的结构化元数据」吗？ | 有（nodeCount, ancestors 等） | 没有，或元数据和数据自然在同一个 JSON 中 |
+
 ---
 
 ## 3. 经验

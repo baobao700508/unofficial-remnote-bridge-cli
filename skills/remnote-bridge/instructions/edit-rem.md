@@ -1,16 +1,17 @@
 # edit-rem
 
-> 通过 str_replace 语义修改单个 Rem 的属性。三道防线确保编辑安全。
+> 直接修改单个 Rem 的属性字段。两道防线确保编辑安全。
 
 ---
 
 ## 功能
 
-`edit-rem` 使用 str_replace 语义修改 Rem 属性——在 Rem 的序列化 JSON 文本中，将 `oldStr` 替换为 `newStr`，然后推导出变更字段并写入 SDK。
+`edit-rem` 直接修改 Rem 的属性字段——通过 `changes` 对象指定要修改的字段及其新值，无需构造 str_replace。
 
 核心特性：
-- **str_replace 语义**：操作对象是 `JSON.stringify(remObject, null, 2)` 的文本
-- **三道防线**：缓存存在性 → 乐观并发检测 → 精确匹配校验
+- **直接字段修改**：传入 `{字段名: 新值}` 的 changes 对象
+- **两道防线**：缓存存在性 → 乐观并发检测
+- **字段白名单校验**：21 个可写字段通过，只读和未知字段产生警告
 - **前置条件**：必须先 `read-rem` 建立缓存，否则防线 1 拒绝
 
 ---
@@ -33,14 +34,13 @@
 ### 人类模式
 
 ```bash
-remnote-bridge edit-rem <remId> --old-str <oldStr> --new-str <newStr>
+remnote-bridge edit-rem <remId> --changes '{"type":"concept"}'
 ```
 
 | 参数/选项 | 类型 | 必需 | 说明 |
 |-----------|------|:----:|------|
 | `remId` | string（位置参数） | 是 | Rem ID |
-| `--old-str <oldStr>` | string | 是 | 要替换的原始文本片段 |
-| `--new-str <newStr>` | string | 是 | 替换后的新文本片段 |
+| `--changes <changesJson>` | string | 是 | 要修改的字段及新值（JSON 字符串） |
 
 输出示例（成功）：
 
@@ -51,13 +51,13 @@ remnote-bridge edit-rem <remId> --old-str <oldStr> --new-str <newStr>
 输出示例（无变更）：
 
 ```
-无变更（old_str 和 new_str 产生相同结果）
+无变更（未发现可写入的变更字段）
 ```
 
 ### JSON 模式
 
 ```bash
-remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept\"","newStr":"\"descriptor\""}'
+remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","changes":{"type":"concept"}}'
 ```
 
 ---
@@ -67,8 +67,7 @@ remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept
 | 字段 | 类型 | 必需 | 说明 |
 |------|------|:----:|------|
 | `remId` | string | 是 | Rem ID |
-| `oldStr` | string | 是 | 要替换的原始文本片段（在序列化 JSON 中精确匹配） |
-| `newStr` | string | 是 | 替换后的新文本片段 |
+| `changes` | object | 是 | 要修改的字段及新值（键=字段名，值=新值） |
 
 ---
 
@@ -120,35 +119,13 @@ remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept
 }
 ```
 
-### 防线 3 拒绝：old_str 未找到
+### 枚举值非法
 
 ```json
 {
   "ok": false,
   "command": "edit-rem",
-  "error": "old_str not found in the serialized JSON of rem kLrIOHJLyMd8Y2lyA",
-  "timestamp": "2026-03-06T10:00:00.000Z"
-}
-```
-
-### 防线 3 拒绝：old_str 多次匹配
-
-```json
-{
-  "ok": false,
-  "command": "edit-rem",
-  "error": "old_str matches 3 locations in rem kLrIOHJLyMd8Y2lyA. Make old_str more specific to match exactly once.",
-  "timestamp": "2026-03-06T10:00:00.000Z"
-}
-```
-
-### 后处理：替换产生非法 JSON
-
-```json
-{
-  "ok": false,
-  "command": "edit-rem",
-  "error": "The replacement produced invalid JSON. Check your new_str for syntax errors.",
+  "error": "Invalid value for 'type': \"invalid\". Allowed: \"concept\", \"descriptor\", \"default\"",
   "timestamp": "2026-03-06T10:00:00.000Z"
 }
 ```
@@ -180,12 +157,24 @@ remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept
 }
 ```
 
+### 含未知字段警告
+
+```json
+{
+  "ok": true,
+  "command": "edit-rem",
+  "changes": ["text"],
+  "warnings": ["Field 'fooBar' is unknown and was ignored"],
+  "timestamp": "2026-03-06T10:00:00.000Z"
+}
+```
+
 ---
 
 ## 内部流程
 
 ```
-1. CLI 解析参数（remId, oldStr, newStr）
+1. CLI 解析参数（remId, changes）
 2. sendRequest → WS → daemon
 3. daemon EditHandler:
    │
@@ -194,40 +183,32 @@ remnote-bridge edit-rem --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"\"concept
    │
    ├─ 防线 2: 乐观并发检测
    │   ├─ forwardToPlugin('read_rem', { remId }) → 获取当前 RemObject
-   │   ├─ JSON.stringify(currentRemObject, null, 2)
-   │   ├─ 与缓存 JSON 严格比较
-   │   └─ 不匹配 → 抛出错误（不更新缓存，迫使 AI re-read）
+   │   ├─ JSON.stringify 比较当前 vs 缓存
+   │   └─ 不匹配 → 抛出错误（不更新缓存）
    │
-   ├─ Portal 检测：type === 'portal'？
-   │   ├─ 是 → 进入 Portal 专用路径（简化 JSON 上执行 str_replace）
-   │   └─ 否 → 继续普通 Rem 路径
+   ├─ 遍历 changes keys
+   │   ├─ READ_ONLY_FIELDS → warnings
+   │   ├─ 不在 WRITABLE_FIELDS 中 → warnings
+   │   └─ 通过 → writableChanges
    │
-   ├─ 防线 3: str_replace 精确匹配
-   │   ├─ countOccurrences(cachedJson, oldStr)
-   │   ├─ 0 次 → 抛出"未找到"错误
-   │   ├─ >1 次 → 抛出"多次匹配"错误
-   │   └─ 恰好 1 次 → cachedJson.replace(oldStr, newStr)
+   ├─ 枚举值范围校验（type, practiceDirection, highlightColor, fontSize, todoStatus）
    │
-   ├─ 后处理校验
-   │   ├─ JSON.parse(modifiedJson) → 失败则抛"非法 JSON"错误
-   │   ├─ 逐字段对比 original vs modified
-   │   ├─ READ_ONLY_FIELDS → 产生警告，不执行写入
-   │   ├─ 语义校验：todoStatus 非 null 但 isTodo=false → 警告
-   │   └─ 无变更 → 返回 ok=true, changes=[]
+   ├─ 语义校验：todoStatus 非 null 但 isTodo=false → 警告
+   │
+   ├─ 空变更检查 → 直接返回 ok
    │
    ├─ 发送到 Plugin
    │   ├─ forwardToPlugin('write_rem_fields', { remId, changes })
-   │   ├─ Plugin 逐字段调用 SDK setter
    │   └─ 首个失败即终止 → 返回 applied + failed
    │
    └─ 缓存更新
-       ├─ 写入成功 → 从 Plugin re-read 最新状态 → 更新缓存
-       └─ 写入失败 → 不更新缓存（迫使 AI re-read）
+       ├─ 写入成功 → 从 Plugin re-read → 更新缓存
+       └─ 写入失败 → 不更新缓存
 ```
 
 ---
 
-## 三道防线详解
+## 两道防线详解
 
 ### 防线 1：缓存存在性检查
 
@@ -251,6 +232,7 @@ if cache.get('rem:' + remId) === null:
 ```
 currentRemObject = forwardToPlugin('read_rem', { remId })
 currentJson = JSON.stringify(currentRemObject, null, 2)
+cachedJson = JSON.stringify(cachedObj, null, 2)
 
 if currentJson !== cachedJson:
     // 不更新缓存 — 迫使 AI 重新 read 获取最新状态
@@ -258,61 +240,16 @@ if currentJson !== cachedJson:
 ```
 
 **关键设计**：
-- 比较方式：**整个 JSON 文本严格二进制比较**（包括格式化空白）
+- 比较方式：**将当前 RemObject 和缓存 RemObject 分别 JSON.stringify 后做文本比较**
 - 失败时**不更新缓存**：防止 AI 跳过 re-read 直接重试
 - RichText key 排序保证序列化确定性（`sortRichTextKeys()`）
 
 **恢复方式**：执行 `read-rem <remId>` 获取最新状态后重试。
 
-### 防线 3：str_replace 精确匹配
-
-**目的**：确保替换精确定位到唯一位置，避免意外修改。
+### 两道防线判断树
 
 ```
-function countOccurrences(haystack, needle):
-    count = 0, pos = 0
-    while true:
-        pos = haystack.indexOf(needle, pos)
-        if pos === -1: break
-        count++
-        pos += needle.length    // 非重叠匹配
-    return count
-
-matchCount = countOccurrences(cachedJson, oldStr)
-
-switch matchCount:
-    case 0:  throw "old_str not found in the serialized JSON of rem {remId}"
-    case 1:  modifiedJson = cachedJson.replace(oldStr, newStr)    // 执行替换
-    default: throw "old_str matches {matchCount} locations in rem {remId}. Make old_str more specific to match exactly once."
-```
-
-**后处理校验**：
-
-```
-// 1. JSON 语法检查
-modified = JSON.parse(modifiedJson)
-// 失败 → throw "The replacement produced invalid JSON. Check your new_str for syntax errors."
-
-// 2. 推导变更字段
-for key in modified:
-    if modified[key] !== original[key]:
-        if key in READ_ONLY_FIELDS:
-            warnings.push("Field '{key}' is read-only and was ignored")
-        else:
-            changes[key] = modified[key]
-
-// 3. 语义校验
-if 'todoStatus' in changes && todoStatus !== null && !isTodo:
-    warnings.push("Setting 'todoStatus' without 'isTodo: true' may have no effect")
-
-// 4. 空变更
-if changes is empty: return { ok: true, changes: [], warnings }
-```
-
-### 三道防线判断树
-
-```
-edit-rem(remId, oldStr, newStr)
+edit-rem(remId, changes)
 │
 ├─ 防线 1: 缓存存在？
 │   ├─ 否 → ERROR: "has not been read yet"
@@ -322,79 +259,22 @@ edit-rem(remId, oldStr, newStr)
 │   ├─ 否 → ERROR: "has been modified since last read"
 │   └─ 是 → 继续
 │
-├─ 防线 3: old_str 匹配次数？
-│   ├─ 0 次 → ERROR: "old_str not found"
-│   ├─ >1 次 → ERROR: "old_str matches N locations"
-│   └─ 1 次 → 执行替换
+├─ 字段分类
+│   ├─ 只读字段 → 警告
+│   ├─ 未知字段 → 警告
+│   └─ 可写字段 → 继续
 │
-├─ 后处理: JSON 合法？
-│   ├─ 否 → ERROR: "invalid JSON"
-│   └─ 是 → 推导变更字段
+├─ 枚举校验通过？
+│   ├─ 否 → ERROR: "Invalid value for..."
+│   └─ 是 → 继续
 │
-├─ 有变更？
+├─ 有可写变更？
 │   ├─ 否 → OK: changes=[]
 │   └─ 是 → 发送到 Plugin
 │
 └─ Plugin 写入结果？
     ├─ 全部成功 → 更新缓存 → OK: changes=[...]
-    └─ 部分失败 → 不更新缓存 → ERROR: failed field info
-```
-
----
-
-## Portal 编辑专用路径
-
-当 edit-rem 检测到被编辑的 Rem 是 Portal（`type === 'portal'`）时，自动切换到 Portal 专用编辑路径。
-
-### 简化 JSON 作为操作目标
-
-**问题**：缓存中存储完整 51 字段 JSON，但 AI 看到的是 8 字段简化 JSON。oldStr 来自简化输出，在完整 JSON 上匹配不到。
-
-**方案**：Portal 路径在**简化 JSON**（8 字段）上执行 str_replace：
-
-1. 防线 1 + 2：不变（完整 JSON 对比）
-2. **str_replace**：将缓存的完整 JSON 转换为简化 JSON，在简化 JSON 上执行 str_replace
-3. 解析 str_replace 后的简化 JSON，推导变更字段
-4. 调用写入
-
-### Portal 简化 JSON 格式
-
-```json
-{
-  "id": "abc123",
-  "type": "portal",
-  "portalType": "portal",
-  "portalDirectlyIncludedRem": ["remId1", "remId2"],
-  "parent": "parentId",
-  "positionAmongstSiblings": 3,
-  "children": ["remId1", "remId2"],
-  "createdAt": 1709000000000,
-  "updatedAt": 1709000000000
-}
-```
-
-### Portal 可写字段
-
-| 字段 | 写入方式 |
-|:-----|:---------|
-| `portalDirectlyIncludedRem` | diff 数组，新增调 `addToPortal()`，移除调 `removeFromPortal()` |
-| `parent` | 调 `setParent()` |
-| `positionAmongstSiblings` | 调 `setParent(parent, position)` |
-
-### Portal 只读字段
-
-id、type、portalType、children、createdAt、updatedAt — 修改只产生警告。
-
-### Portal 编辑示例
-
-```bash
-# 添加一个引用
-edit-rem abc123 --old-str '"portalDirectlyIncludedRem": ["remId1", "remId2"]' \
-                --new-str '"portalDirectlyIncludedRem": ["remId1", "remId2", "remId3"]'
-
-# 移除一个引用
-edit-rem abc123 --old-str '"portalDirectlyIncludedRem": ["remId1", "remId2"]' \
-                --new-str '"portalDirectlyIncludedRem": ["remId1"]'
+    └─ 部分失败 → 不更新缓存 → ERROR
 ```
 
 ---
@@ -462,7 +342,7 @@ for id in currentSet:
 
 ## 只读字段列表
 
-以下 30 个字段在 str_replace 中被修改时，**只产生警告，不执行写入**：
+以下 30 个字段在 changes 中出现时，**只产生警告，不执行写入**：
 
 ```
 id,
@@ -486,163 +366,74 @@ isPowerupPropertyListItem, isPowerupSlot
 
 ---
 
-## str_replace 语义详解
+## changes 对象使用指南
 
-### 操作对象
+### 简单属性修改
 
-str_replace 操作的对象是 `JSON.stringify(remObject, null, 2)` 的文本——格式化缩进 2 空格的 JSON。
+```json
+{"type": "concept"}
+{"highlightColor": "Yellow"}
+{"fontSize": "H1"}
+{"isTodo": true, "todoStatus": "Unfinished"}
+```
 
-示例（部分）：
+### 多字段批量修改
 
 ```json
 {
-  "id": "kLrIOHJLyMd8Y2lyA",
-  "text": [
-    "Hello World"
-  ],
   "type": "concept",
-  "fontSize": null,
-  "isTodo": false
+  "highlightColor": "Yellow",
+  "fontSize": "H1",
+  "isTodo": true,
+  "todoStatus": "Unfinished"
 }
 ```
 
-### 匹配规则
+### RichText 修改（text / backText）
 
-- **非重叠匹配**：与 `String.prototype.replace()` 行为一致
-- **必须恰好匹配一次**：0 次=未找到错误，>1 次=多匹配错误
-- **大小写敏感**：精确匹配，无模糊匹配
+传入完整的 RichText 数组作为 text 或 backText 的新值：
 
-### 使用技巧
+```json
+{"text": ["新文本内容"]}
+{"text": [{"b": true, "i": "m", "text": "粗体文本"}]}
+{"text": ["普通文本", {"i": "m", "iUrl": "https://example.com", "text": "超链接"}]}
+{"backText": ["背面答案"]}
+{"backText": null}
+```
 
-1. **包含足够上下文**：oldStr 应包含字段名和前后结构，避免模糊匹配
+**RichText 编辑要点**：
+- RichText 是 JSON 数组，元素为纯字符串或格式化对象
+- 格式化对象的 key 按**字母序**排列（`_id` < `b` < `i` < `text`）
+- 修改 text/backText 时，传入的是**完整的新数组**，不是部分替换
 
-   ```
-   正确: "\"type\": \"concept\""  → 匹配字段名+值
-   错误: "concept"                → 可能匹配到 text 内容中的 "concept"
-   ```
+### Tags Diff 操作
 
-2. **替换后必须是合法 JSON**：检查引号、逗号、括号的完整性
+传入完整的目标 tags 数组，系统自动计算差异并执行增删：
 
-3. **修改 RichText 字段**：直接操作 JSON 数组结构（见下方完整示例）
+```json
+{"tags": ["tagId1", "tagId2", "newTagId3"]}
+```
+
+### Portal 引用列表修改
+
+仅 type=portal 的 Rem 可修改此字段：
+
+```json
+{"portalDirectlyIncludedRem": ["remId1", "remId2", "newRemId3"]}
+```
 
 ---
 
-## RichText 编辑实战指南
+## highlightColor vs h
 
-### 理解格式化 JSON 中的 RichText
-
-`edit-rem` 的 str_replace 操作对象是 `JSON.stringify(remObject, null, 2)` 的格式化文本。RichText 数组在格式化后是多行缩进结构，**不是**紧凑的单行 JSON。
-
-以下是一个包含 RichText 的 RemObject **实际输出片段**：
-
-```json
-{
-  "id": "kLrIOHJLyMd8Y2lyA",
-  "text": [
-    "这是",
-    {
-      "b": true,
-      "i": "m",
-      "text": "粗体"
-    },
-    "普通文本"
-  ],
-  "backText": null,
-  "type": "concept",
-  "highlightColor": null,
-  "isTodo": false
-}
-```
-
-**关键要点**：
-- RichText 对象内部的 key 按**字母序**排列（`b` < `i` < `text`），由 Plugin 端 `sortRichTextKeys()` 保证
-- `_id` 中的 `_` 在 Unicode 中排在小写字母之前，所以 `_id` 排在所有小写 key 的最前面
-- 每个 key-value 对占一行，缩进 4 空格（对象在数组中时嵌套 2+2）
-- 纯字符串元素直接是 `"字符串"`，对象元素展开为多行
-
-### 示例 1：将纯文本改为粗体
-
-**read-rem 返回**（部分）：
-
-```json
-  "text": [
-    "普通标题"
-  ],
-```
-
-**edit-rem 调用**：
-
-```
-oldStr:  "\"text\": [\n    \"普通标题\"\n  ]"
-
-newStr:  "\"text\": [\n    {\n      \"b\": true,\n      \"i\": \"m\",\n      \"text\": \"粗体标题\"\n    }\n  ]"
-```
-
-替换后 JSON 变为：
-
-```json
-  "text": [
-    {
-      "b": true,
-      "i": "m",
-      "text": "粗体标题"
-    }
-  ],
-```
-
-### 示例 2：修改 Rem 引用旁的文本
-
-**read-rem 返回**（部分）：
-
-```json
-  "text": [
-    "参考 ",
-    {
-      "_id": "abc123",
-      "i": "q"
-    },
-    " 的内容"
-  ],
-```
-
-将 " 的内容" 替换为 " 的详细说明"：
-
-```
-oldStr:  " 的内容"
-newStr:  " 的详细说明"
-```
-
-> 注意：纯字符串可以直接匹配，不需要包含数组结构。但如果 " 的内容" 在 JSON 中出现多次，需要加上下文：
-> `oldStr: "    \" 的内容\"\n  ]"`
-
-### 示例 3：给文本添加超链接
-
-**read-rem 返回**（部分）：
-
-```json
-  "text": [
-    "点击访问官网"
-  ],
-```
-
-**edit-rem 调用**：
-
-```
-oldStr:  "\"text\": [\n    \"点击访问官网\"\n  ]"
-
-newStr:  "\"text\": [\n    \"点击\",\n    {\n      \"i\": \"m\",\n      \"iUrl\": \"https://remnote.com\",\n      \"text\": \"访问官网\"\n    }\n  ]"
-```
-
-### 示例 4：修改高亮颜色（Rem 级别 vs RichText 级别）
-
-#### ⚠️ highlightColor vs h — 两种完全不同的高亮
+两种完全不同的高亮机制，不可混淆：
 
 | 属性 | 位置 | 值类型 | 效果 | 修改方式 |
 |:-----|:-----|:-------|:-----|:---------|
-| `highlightColor` | RemObject 顶层字段 | 字符串 `"Red"`/`"Yellow"` 等，或 `null` | 整行背景色（左侧彩色竖条） | str_replace 顶层字段 |
-| `h` | RichText 元素内部 | 数字 0-9 | 文字片段的荧光底色 | str_replace text 数组内的对象 |
+| `highlightColor` | RemObject 顶层字段 | 字符串 `"Red"`/`"Yellow"` 等，或 `null` | 整行背景色（左侧彩色竖条） | changes 中直接设置 |
+| `h` | RichText 元素内部 | 数字 0-9 | 文字片段的荧光底色 | 在 text 数组的 RichText 对象中设置 |
 
-#### RichText `h` 颜色值对照表（必须用数字，不是字符串）
+### RichText `h` 颜色值对照表（必须用数字，不是字符串）
 
 | 值 | 颜色 | 值 | 颜色 | 值 | 颜色 |
 |:---|:-----|:---|:-----|:---|:-----|
@@ -651,58 +442,28 @@ newStr:  "\"text\": [\n    \"点击\",\n    {\n      \"i\": \"m\",\n      \"iUrl
 | 2 | Orange | 6 | Blue | 9 | Pink |
 | 3 | Yellow | — | — | — | — |
 
-#### 4a. 设置/清除整行背景色（highlightColor）
-
-```
-// 设置为黄色背景
-oldStr:  "\"highlightColor\": null"
-newStr:  "\"highlightColor\": \"Yellow\""
-
-// 清除背景色
-oldStr:  "\"highlightColor\": \"Yellow\""
-newStr:  "\"highlightColor\": null"
-```
-
-#### 4b. 给文字加/去荧光底色（RichText h 字段）
-
-先 read_rem 找到 text 数组中目标文字对象的精确 JSON。用 `h` 值旁边的 `"i"` 和 `"text"` 字段一起匹配，确保唯一。
-
-```
-// "Todo List" 文字加黄色荧光（h: 0 → 3）
-oldStr:  "\"h\": 0,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
-newStr:  "\"h\": 3,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
-
-// 去掉荧光（h: 3 → 0）
-oldStr:  "\"h\": 3,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
-newStr:  "\"h\": 0,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
-```
-
-⚠️ **关键**：oldStr 中必须包含足够的上下文（如 `"i": "m"` 和 `"text": "..."`）来唯一定位。不能只写 `"h": 0` — 可能匹配到多处。
-
-### 示例 5：添加完形填空
-
-**read-rem 返回**（部分）：
+### 设置/清除整行背景色（highlightColor）
 
 ```json
+{"highlightColor": "Yellow"}
+{"highlightColor": null}
+```
+
+### 给文字加/去荧光底色（RichText h 字段）
+
+通过修改 text 数组中 RichText 对象的 `h` 值实现。需要传入包含完整 text 数组的 changes：
+
+```json
+{
   "text": [
-    "光合作用需要阳光"
-  ],
+    {
+      "h": 3,
+      "i": "m",
+      "text": "黄色荧光文字"
+    }
+  ]
+}
 ```
-
-将 "阳光" 变成完形填空：
-
-```
-oldStr:  "\"text\": [\n    \"光合作用需要阳光\"\n  ]"
-
-newStr:  "\"text\": [\n    \"光合作用需要\",\n    {\n      \"cId\": \"cloze1\",\n      \"i\": \"m\",\n      \"text\": \"阳光\"\n    }\n  ]"
-```
-
-### 常见错误
-
-1. **忘记 key 字母序**：写 `{"text":"xx","i":"m","b":true}` 不会被匹配——实际存储为 `{"b":true,"i":"m","text":"xx"}`
-2. **缩进不匹配**：格式化 JSON 使用 2 空格缩进，数组内对象的 key 缩进 6 空格（顶层 2 + 数组 2 + 对象 2），但在 `JSON.stringify(obj, null, 2)` 中数组元素的对象缩进 4 空格（数组 2 + 对象内 2）
-3. **混淆 highlightColor 和 h**：前者是字符串 `"Red"`，后者是数字 `1`
-4. **忘记 `i:"a"` 的 `onlyAudio` 必填**：缺少此字段 SDK 拒绝写入
 
 ---
 
@@ -713,11 +474,10 @@ newStr:  "\"text\": [\n    \"光合作用需要\",\n    {\n      \"cId\": \"cloz
 | 写入成功 | 从 Plugin re-read 最新状态 → 覆盖缓存 | 确保缓存与 SDK 状态同步 |
 | 防线 1 拒绝 | 无缓存，不操作 | — |
 | 防线 2 拒绝 | **不更新缓存** | 迫使 AI 执行 read-rem 获取最新状态 |
-| 防线 3 拒绝 | 缓存保持不变 | AI 可调整 oldStr 后重试 |
-| JSON 语法错误 | 缓存保持不变 | AI 可调整 newStr 后重试 |
+| 枚举值非法 | 缓存保持不变 | AI 可调整值后重试 |
 | 部分写入失败 | **不更新缓存** | 迫使 AI 执行 read-rem 重新评估状态 |
 
-**关键设计**：写入成功后**永远从 Plugin 重新读取**最新状态，而非本地推导修改后的 JSON。这保证缓存与实际 SDK 状态完全同步。
+**关键设计**：写入成功后**永远从 Plugin 重新读取**最新状态，而非本地推导修改后的值。这保证缓存与实际 SDK 状态完全同步。
 
 ---
 
@@ -737,10 +497,8 @@ newStr:  "\"text\": [\n    \"光合作用需要\",\n    {\n      \"cId\": \"cloz
 |----------|------|----------|
 | `has not been read yet` | 未先执行 read-rem | 执行 `read-rem <remId>` 后重试 |
 | `has been modified since last read` | Rem 在 read 和 edit 之间被外部修改 | 执行 `read-rem <remId>` 获取最新状态后重试 |
-| `old_str not found` | oldStr 在序列化 JSON 中不存在 | 检查 oldStr 是否精确匹配（含引号、空格、换行） |
-| `old_str matches N locations` | oldStr 匹配到多个位置 | 扩大 oldStr 范围，包含更多上下文以唯一定位 |
-| `invalid JSON` | 替换后的文本不是合法 JSON | 检查 newStr 的引号、逗号、括号完整性 |
+| `Invalid value for '...'` | 枚举字段的值不在允许范围内 | 检查允许的枚举值（见可编辑字段约束表） |
 | `Failed to update field` | SDK setter 调用失败 | 检查字段值是否在允许范围内（如 type 不能设为 portal） |
-| `Field '...' is read-only and was ignored` | 修改了只读字段 | 该字段只能读取，不可通过 edit-rem 修改 |
-| `old_str not found in the simplified Portal JSON` | Portal 编辑时 oldStr 在简化 JSON 中不匹配 | 检查 oldStr 是否匹配 8 字段简化 JSON 格式（而非完整 51 字段 JSON） |
+| `Field '...' is read-only and was ignored` | changes 中包含只读字段 | 该字段只能读取，不可通过 edit-rem 修改 |
+| `Field '...' is unknown and was ignored` | changes 中包含不存在的字段名 | 检查字段名拼写，确认在 21 个可写字段或 30 个只读字段中 |
 | `守护进程未运行` | daemon 未启动 | 执行 `remnote-bridge connect` |

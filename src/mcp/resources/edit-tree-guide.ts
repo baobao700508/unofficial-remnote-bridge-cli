@@ -253,5 +253,5 @@ Portal 新增行与已有 Portal 行的区别：
 
 删除 Portal 与删除普通行相同——从 newStr 中移除该 Portal 行即可。
 
-**注意**：修改已有 Portal 的引用列表（增删引用的 Rem）请使用 \\\`edit_rem\\\`，通过 str_replace 修改简化 JSON 中的 \\\`portalDirectlyIncludedRem\\\` 数组。
+**注意**：修改已有 Portal 的引用列表（增删引用的 Rem）请使用 \\\`edit_rem\\\`，通过 changes 传入新的 \\\`portalDirectlyIncludedRem\\\` 数组。
 `;

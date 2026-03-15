@@ -422,7 +422,7 @@ localUpdatedAt, lastPracticed
 | `tags` | `rem.addTag()` / `rem.removeTag()` | **Diff 机制**：对比当前 vs 目标，增删差异项。必须列出完整目标数组，缺少的会被删除 |
 | `sources` | `rem.addSource()` / `rem.removeSource()` | **Diff 机制**：同 tags |
 | `positionAmongstSiblings` | `rem.setParent(parent, position)` | 与 `parent` 联动（见下方说明） |
-| `portalDirectlyIncludedRem` | `rem.addToPortal()` / `rem.removeFromPortal()` | string[] | **Portal-W Diff 机制**：仅 type=portal 时可修改。对比当前 vs 目标数组，逐项增删。调用方向：在被引用 Rem 上调用，参数是 Portal Rem |
+| `portalDirectlyIncludedRem` | `rem.addToPortal()` / `rem.removeFromPortal()` | **Portal-W Diff 机制**：仅 type=portal 时可修改。对比当前 vs 目标数组，逐项增删 |
 
 ### parent + positionAmongstSiblings 联动
 
@@ -434,7 +434,7 @@ localUpdatedAt, lastPracticed
 | 只有 `parent` 变更 | `setParent(newParent)` 不带 position（保持末尾） |
 | 只有 `positionAmongstSiblings` 变更 | 获取当前 parent → `setParent(currentParent, newPosition)` |
 
-**应在同一次 str_replace 中同时修改这两个字段。**
+**应在同一次 edit-rem 的 changes 中同时传入这两个字段。**
 
 ---
 
@@ -561,7 +561,7 @@ RemObject 中的 `text` 和 `backText` 字段使用 RichText 格式——一个 
 
 ### 序列化确定性
 
-RichText 对象元素内部按 **key 字母序排列**（Plugin 端 `sortRichTextKeys()` 处理），确保同一内容的序列化 JSON 始终一致。这对 `edit-rem` 的 str_replace 和乐观并发检测至关重要。
+RichText 对象元素内部按 **key 字母序排列**（Plugin 端 `sortRichTextKeys()` 处理），确保同一内容的序列化 JSON 始终一致。这对乐观并发检测至关重要。
 
 - `_`（下划线）在 Unicode 中排在所有小写字母之前（`_` = U+005F，`a` = U+0061），所以 `_id` 总是排在第一位
 - 排序由 `Object.keys().sort()` 决定，即 JavaScript 默认的 Unicode 字典序
@@ -589,11 +589,11 @@ RichText 对象元素内部按 **key 字母序排列**（Plugin 端 `sortRichTex
 |------|------|
 | 读取成功 | 完整 JSON 写入缓存 `cache.set('rem:' + remId, fullJson)` |
 | 已有缓存 | 覆盖旧缓存，返回 `cacheOverridden` 元数据 |
-| 缓存用途 | 供 `edit-rem` 的三道防线使用（存在性检查 + 乐观并发检测 + str_replace） |
+| 缓存用途 | 供 `edit-rem` 的防线检查使用（存在性检查 + 乐观并发检测） |
 | 缓存存储 | daemon 内存中的 LRU 缓存（最大 200 条目） |
 | 缓存清空 | daemon 关闭时自动消失 |
 
-**重要**：缓存存储的是 **完整 RemObject**（含 R-F 字段），不受 `--fields` / `--full` 选项影响。字段过滤仅作用于返回给 CLI 的输出。
+**重要**：缓存存储的是 **完整 RemObject 对象**（含 R-F 字段），不受 `--fields` / `--full` 选项影响。字段过滤仅作用于返回给 CLI 的输出。
 
 ---
 

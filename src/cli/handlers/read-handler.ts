@@ -51,10 +51,9 @@ export class ReadHandler {
     // 转发到 Plugin
     const remObject = await this.forwardToPlugin('read_rem', { remId, includePowerup });
 
-    // 缓存完整 JSON
-    const fullJson = JSON.stringify(remObject, null, 2);
-    this.cache.set(cacheKey, fullJson);
-    this.onLog?.(`缓存 Rem ${remId.slice(0, 8)}... (${fullJson.length} bytes)`, 'info');
+    // 缓存完整 RemObject 对象
+    this.cache.set(cacheKey, remObject);
+    this.onLog?.(`缓存 Rem ${remId.slice(0, 8)}...`, 'info');
 
     // 字段过滤
     const fields = payload.fields as string[] | undefined;
@@ -63,8 +62,8 @@ export class ReadHandler {
     let result: Record<string, unknown>;
 
     if (full) {
-      // --full → 返回完整对象（含 R-F 字段）
-      result = remObject as Record<string, unknown>;
+      // --full → 返回完整对象（含 R-F 字段）。浅拷贝避免污染缓存对象。
+      result = { ...(remObject as Record<string, unknown>) };
     } else if (fields) {
       // --fields 过滤：只返回指定字段 + id
       const obj = remObject as Record<string, unknown>;

@@ -13,7 +13,8 @@ import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface ReadRemOptions {
   json?: boolean;
-  fields?: string;
+  /** 逗号分隔字符串（人类模式）或字符串数组（JSON 模式） */
+  fields?: string | string[];
   full?: boolean;
   includePowerup?: boolean;
 }
@@ -29,7 +30,9 @@ export async function readRemCommand(remId: string, options: ReadRemOptions = {}
   if (full) {
     payload.full = true;
   } else if (fields) {
-    payload.fields = fields.split(',').map(f => f.trim()).filter(Boolean);
+    payload.fields = Array.isArray(fields)
+      ? fields
+      : fields.split(',').map(f => f.trim()).filter(Boolean);
   }
 
   let result: unknown;
