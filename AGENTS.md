@@ -204,11 +204,64 @@ edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"xxx","newStr":"yyy"}'
 
 ### 2.5 接入层文档同步（红线）
 
-Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（`src/mcp/resources/*.ts`、`src/mcp/instructions.ts`）**必须保持同步**，不可遗漏。
+Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（tool descriptions in `src/mcp/tools/*.ts`、`src/mcp/instructions.ts`）**必须保持同步**，不可遗漏。
 
-- **新增功能时**：必须同时更新 Skill 和 MCP 两侧的文档，缺一不可
+MCP 不再使用 resources（AI 基本不加载）。所有工具文档直接写在 tool 的 `description` 字段中（AI 必定可见），跨工具领域知识写在 `SERVER_INSTRUCTIONS` 中。
+
+- **新增功能时**：必须同时更新 Skill 文档和 MCP tool description + instructions，缺一不可
 - **对齐检查时**：必须逐一比对两侧文档，确认描述、参数、示例一致
 - **禁止**：只更新一侧文档就认为完成
+
+### 2.6 MCP 返回值标准（红线）
+
+MCP 工具的 `execute` 函数返回值必须遵循以下两种模式之一。格式化函数在 `src/mcp/format.ts`。
+
+#### 模式 A — Frontmatter + Body（read 类工具）
+
+当工具的核心输出是 **Markdown 文本**且存在**文本之外的结构化元数据**时使用。仅适用于 outline 类工具。
+
+```
+---
+<元数据 key>: <value>
+---
+
+<核心内容：Markdown 或 JSON>
+```
+
+**规则：**
+- 使用 `formatFrontmatter(meta, body)` 生成
+- Frontmatter key 使用 camelCase（与 CLI 字段名一致）
+- 数字/布尔裸值，字符串/数组/对象使用 JSON 表示
+- `ok`、`command`、`timestamp` **禁止**放入 frontmatter（冗余）
+- null/undefined 的值自动跳过
+- 无元数据时省略 `---` 分隔符，直接返回 body
+
+**当前适用工具：**
+
+| 工具 | Frontmatter 字段 | Body |
+|:-----|:-----------------|:-----|
+| `read_tree` | rootId, depth, nodeCount, ancestors?, cacheOverridden?, powerupFiltered? | Markdown 大纲 |
+| `read_globe` | nodeCount | Markdown 大纲 |
+| `read_context` | mode, nodeCount, breadcrumb | Markdown 大纲 |
+
+#### 模式 B — Data JSON（action / infra 工具）
+
+当工具返回的是**操作报告或系统状态**（所有字段都是报告内容，无内容/元数据之分）时使用。
+
+**规则：**
+- 使用 `formatDataJson(response)` 生成
+- 自动剥离 `ok`、`command`、`timestamp` wrapper 字段
+- 剩余字段原样 JSON 序列化（2 空格缩进）
+- `callCli` 在 `ok===false` 时已抛出 `CliError`，成功路径 `ok` 始终为 true
+
+**当前适用工具：** `search`, `read_rem`, `edit_rem`, `edit_tree`, `setup`, `connect`, `disconnect`, `health`, `addon`, `clean`
+
+#### 判断标准（新增工具时使用）
+
+| 问题 | 选 A | 选 B |
+|:-----|:-----|:-----|
+| 核心输出是什么？ | Markdown 文本（大纲） | JSON 数据或操作报告 |
+| 有「文本之外的结构化元数据」吗？ | 有（nodeCount, ancestors 等） | 没有，或元数据和数据自然在同一个 JSON 中 |
 
 ---
 
@@ -245,7 +298,7 @@ remnote-bridge-cli/                    (repo root = npm 包根)
 │       ├── instructions.ts            # MCP Server 说明
 │       ├── types.ts                   # 共享类型
 │       ├── tools/                     # MCP 工具注册
-│       └── resources/                 # MCP 资源（文档）
+│       └── format.ts                  # MCP 返回值格式化（formatFrontmatter / formatDataJson）
 ├── remnote-plugin/                    # 桥接层（不动，随包发布）
 │   └── src/
 │       ├── widgets/                   # 宿主层：插件入口 + 状态展示

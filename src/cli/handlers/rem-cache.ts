@@ -1,23 +1,28 @@
 /**
- * RemCache — LRU 缓存，存储 Rem 的序列化 JSON
+ * RemCache — LRU 缓存，存储 Rem 数据
  *
  * 缓存存储在 daemon 内存中，生命周期与 daemon 一致。
  * disconnect 关闭 daemon → 缓存自然消失。
+ *
+ * 泛化值类型：不同 key 前缀存储不同类型的数据：
+ * - rem:{remId} → RemObject 对象
+ * - tree:{remId} → Markdown outline 字符串
+ * - tree-depth:{remId} 等 → 参数值字符串
  */
 
 export class RemCache {
-  private cache = new Map<string, { json: string; lastAccess: number; createdAt: string }>();
+  private cache = new Map<string, { data: unknown; lastAccess: number; createdAt: string }>();
   private maxSize: number;
 
   constructor(maxSize = 200) {
     this.maxSize = maxSize;
   }
 
-  get(remId: string): string | null {
+  get(remId: string): unknown {
     const entry = this.cache.get(remId);
     if (!entry) return null;
     entry.lastAccess = Date.now();
-    return entry.json;
+    return entry.data;
   }
 
   /** 获取缓存条目的创建时间（ISO 8601），不存在返回 null */
@@ -26,13 +31,13 @@ export class RemCache {
     return entry ? entry.createdAt : null;
   }
 
-  set(remId: string, json: string): void {
+  set(remId: string, data: unknown): void {
     const now = Date.now();
     const createdAt = new Date(now).toISOString();
 
     if (this.cache.has(remId)) {
       const entry = this.cache.get(remId)!;
-      entry.json = json;
+      entry.data = data;
       entry.lastAccess = now;
       entry.createdAt = createdAt;
       return;
@@ -53,7 +58,7 @@ export class RemCache {
       }
     }
 
-    this.cache.set(remId, { json, lastAccess: now, createdAt });
+    this.cache.set(remId, { data, lastAccess: now, createdAt });
   }
 
   has(remId: string): boolean {

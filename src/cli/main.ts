@@ -130,7 +130,7 @@ program
     if (json) {
       const input = parseJsonInput('read-rem', remIdOrJson);
       if (!input) return;
-      await readRemCommand(input.remId, { json, fields: input.fields?.join(','), full: input.full, includePowerup: input.includePowerup });
+      await readRemCommand(input.remId, { json, fields: input.fields, full: input.full, includePowerup: input.includePowerup });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readRemCommand(remIdOrJson, { json, ...cmdOpts });
@@ -264,7 +264,7 @@ program
         process.exitCode = 1;
         return;
       }
-      await searchCommand(input.query as string, { json, limit: input.numResults?.toString() });
+      await searchCommand(input.query as string, { json, limit: (input.limit ?? input.numResults)?.toString() });
     } else {
       if (!queryOrJson) { console.error('错误: 缺少搜索关键词'); process.exitCode = 1; return; }
       await searchCommand(queryOrJson, { json, ...cmdOpts });
@@ -273,19 +273,26 @@ program
 
 program
   .command('edit-rem [remIdOrJson]')
-  .description('通过 str_replace 编辑 Rem 的 JSON 字段')
-  .option('--old-str <oldStr>', '要替换的原始文本片段')
-  .option('--new-str <newStr>', '替换后的新文本片段')
-  .action(async (remIdOrJson: string | undefined, cmdOpts: { oldStr?: string; newStr?: string }) => {
+  .description('直接修改 Rem 的属性字段')
+  .option('--changes <changesJson>', '要修改的字段及新值（JSON 字符串）')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { changes?: string }) => {
     const { json } = program.opts();
     if (json) {
-      const input = parseJsonInput('edit-rem', remIdOrJson, ['oldStr', 'newStr']);
+      const input = parseJsonInput('edit-rem', remIdOrJson, ['changes']);
       if (!input) return;
-      await editRemCommand(input.remId, { json, oldStr: input.oldStr, newStr: input.newStr });
+      await editRemCommand(input.remId, { json, changes: input.changes });
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
-      if (!cmdOpts.oldStr || cmdOpts.newStr === undefined) { console.error('错误: --old-str 和 --new-str 是必需的'); process.exitCode = 1; return; }
-      await editRemCommand(remIdOrJson, { json, oldStr: cmdOpts.oldStr, newStr: cmdOpts.newStr });
+      if (!cmdOpts.changes) { console.error('错误: --changes 是必需的'); process.exitCode = 1; return; }
+      let changes: Record<string, unknown>;
+      try {
+        changes = JSON.parse(cmdOpts.changes);
+      } catch {
+        console.error('错误: --changes 不是合法的 JSON');
+        process.exitCode = 1;
+        return;
+      }
+      await editRemCommand(remIdOrJson, { json, changes });
     }
   });
 

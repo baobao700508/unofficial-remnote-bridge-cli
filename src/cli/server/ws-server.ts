@@ -411,7 +411,7 @@ export class BridgeServer {
         result = await this.contextReadHandler.handleReadContext(request.payload);
       } else if (request.action === 'edit_rem') {
         result = await this.editHandler.handleEditRem(
-          request.payload as { remId: string; oldStr: string; newStr: string },
+          request.payload as { remId: string; changes: Record<string, unknown> },
         );
       } else if (request.action === 'search') {
         // search：注入默认 numResults 后转发给 Plugin

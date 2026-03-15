@@ -46,7 +46,7 @@ export class TreeEditHandler {
     }
 
     // ── 防线 1: 缓存存在性检查 ──
-    const cachedOutline = this.cache.get('tree:' + remId);
+    const cachedOutline = this.cache.get('tree:' + remId) as string | null;
     if (!cachedOutline) {
       throw new Error(
         `Tree rooted at ${remId} has not been read yet. Use read-tree first.`,
@@ -55,9 +55,9 @@ export class TreeEditHandler {
 
     // ── 防线 2: 乐观并发检测 ──
     // 用与 read-tree 相同的参数重新获取最新大纲
-    const cachedDepthStr = this.cache.get('tree-depth:' + remId);
-    const cachedMaxNodesStr = this.cache.get('tree-maxNodes:' + remId);
-    const cachedMaxSiblingsStr = this.cache.get('tree-maxSiblings:' + remId);
+    const cachedDepthStr = this.cache.get('tree-depth:' + remId) as string | null;
+    const cachedMaxNodesStr = this.cache.get('tree-maxNodes:' + remId) as string | null;
+    const cachedMaxSiblingsStr = this.cache.get('tree-maxSiblings:' + remId) as string | null;
     const depth = cachedDepthStr ? Number(cachedDepthStr) : this.defaults.readTreeDepth;
     const maxNodes = cachedMaxNodesStr ? Number(cachedMaxNodesStr) : this.defaults.maxNodes;
     const maxSiblings = cachedMaxSiblingsStr ? Number(cachedMaxSiblingsStr) : this.defaults.maxSiblings;

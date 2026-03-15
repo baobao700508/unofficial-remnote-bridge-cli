@@ -83,22 +83,21 @@ remnote-bridge --json setup
 
 ## AI Agent 使用流程
 
-setup 会弹出 Chrome 窗口，用户需要完成两件事：登录 RemNote + 配置 dev plugin。
+setup 会弹出 Chrome 窗口，用户只需**登录 RemNote**，然后彻底退出 Chrome。
+
+setup 只负责保存登录凭证——配置 dev plugin 是 connect 之后的事（见 `connect.md` 标准模式说明）。
 
 ### 交互步骤
 
 1. 调用 `setup`
 2. **立即告知用户**：
-   > 已打开 Chrome 浏览器。请完成以下操作：
-   > 1. 登录 RemNote
-   > 2. 在 RemNote 中配置开发插件：点击左下角插件图标 → 开发你的插件 → 输入 connect 输出的 Plugin 服务地址（如 `http://localhost:29101`）
-   > 3. 完成后彻底退出 Chrome（macOS 请按 Cmd+Q，仅关窗口不够）
+   > 已打开 Chrome 浏览器。请登录 RemNote，完成后彻底退出 Chrome（macOS 请按 Cmd+Q，仅关窗口不够）
 3. 等待 `setup` 命令返回（阻塞式，超时 600 秒）
 4. 收到成功 → 继续执行 `connect --headless`
 
 ### setup 之后
 
-`setup` 只需执行一次。登录凭证和 plugin 配置都已保存，之后每次只需 `connect --headless` 即可自动连接，无需用户操作。
+`setup` 只需执行一次。登录凭证已保存，之后每次只需 `connect --headless` 即可自动连接，无需用户操作。
 
 如果后续 headless 模式下 Plugin 始终不连接，可能是 RemNote 登录 session 过期，需重新 setup（删除 `~/.remnote-bridge/chrome-profile/.setup-done` 后重新执行）。
 

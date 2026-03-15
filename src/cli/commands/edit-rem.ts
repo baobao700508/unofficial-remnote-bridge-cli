@@ -1,8 +1,8 @@
 /**
  * edit-rem 命令
  *
- * 通过 str_replace 编辑 Rem 的 JSON 序列化。
- * 三道防线保证安全：缓存存在性、并发检测、精确匹配。
+ * 直接修改 Rem 的属性字段。
+ * 两道防线保证安全：缓存存在性、并发检测。
  * - 退出码：0 成功 / 1 业务错误 / 2 守护进程不可达
  */
 
@@ -11,8 +11,7 @@ import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface EditRemOptions {
   json?: boolean;
-  oldStr: string;
-  newStr: string;
+  changes: Record<string, unknown>;
 }
 
 interface EditRemResult {
@@ -25,11 +24,11 @@ interface EditRemResult {
 }
 
 export async function editRemCommand(remId: string, options: EditRemOptions): Promise<void> {
-  const { json, oldStr, newStr } = options;
+  const { json, changes } = options;
 
   let result: unknown;
   try {
-    result = await sendDaemonRequest('edit_rem', { remId, oldStr, newStr });
+    result = await sendDaemonRequest('edit_rem', { remId, changes });
   } catch (err) {
     handleCommandError(err, 'edit-rem', json);
     return;
@@ -50,7 +49,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
   } else {
     if (editResult.ok) {
       if (editResult.changes.length === 0) {
-        console.log('无变更（old_str 和 new_str 产生相同结果）');
+        console.log('无变更（未发现可写入的变更字段）');
       } else {
         console.log(`已更新字段: ${editResult.changes.join(', ')}`);
       }
