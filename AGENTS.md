@@ -204,9 +204,11 @@ edit-tree --json '{"remId":"kLrIOHJLyMd8Y2lyA","oldStr":"xxx","newStr":"yyy"}'
 
 ### 2.5 接入层文档同步（红线）
 
-Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（`src/mcp/resources/*.ts`、`src/mcp/instructions.ts`）**必须保持同步**，不可遗漏。
+Skill 文档（`skills/remnote-bridge/instructions/*.md`）与 MCP 文档（tool descriptions in `src/mcp/tools/*.ts`、`src/mcp/instructions.ts`）**必须保持同步**，不可遗漏。
 
-- **新增功能时**：必须同时更新 Skill 和 MCP 两侧的文档，缺一不可
+MCP 不再使用 resources（AI 基本不加载）。所有工具文档直接写在 tool 的 `description` 字段中（AI 必定可见），跨工具领域知识写在 `SERVER_INSTRUCTIONS` 中。
+
+- **新增功能时**：必须同时更新 Skill 文档和 MCP tool description + instructions，缺一不可
 - **对齐检查时**：必须逐一比对两侧文档，确认描述、参数、示例一致
 - **禁止**：只更新一侧文档就认为完成
 
@@ -296,7 +298,7 @@ remnote-bridge-cli/                    (repo root = npm 包根)
 │       ├── instructions.ts            # MCP Server 说明
 │       ├── types.ts                   # 共享类型
 │       ├── tools/                     # MCP 工具注册
-│       └── resources/                 # MCP 资源（文档）
+│       └── format.ts                  # MCP 返回值格式化（formatFrontmatter / formatDataJson）
 ├── remnote-plugin/                    # 桥接层（不动，随包发布）
 │   └── src/
 │       ├── widgets/                   # 宿主层：插件入口 + 状态展示
