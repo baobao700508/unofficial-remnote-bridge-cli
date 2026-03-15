@@ -10,9 +10,9 @@
  */
 
 import { execFile } from 'node:child_process';
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
 import { loadConfig } from '../config.js';
-import { jsonOutput } from '../utils/output.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 const RAG_TIMEOUT_MS = 10_000;
 
@@ -41,7 +41,7 @@ interface RagSearchResult {
  * 尝试通过 remnote-rag 子进程进行语义搜索（配置驱动）。
  *
  * 1. 检查 addons.remnote-rag.enabled — 未启用则跳过
- * 2. 通过 REMNOTE_RAG_CONFIG 环境变量注入 embedding/reranker 配置
+ * 2. remnote-rag 从 ~/.remnote-bridge/addons/remnote-rag/config.json 读取配置
  * 3. 未安装（ENOENT）、超时、JSON 解析失败、ok:false 均返回 null（静默降级）
  */
 async function tryRagSearch(query: string, numResults: number): Promise<RagSearchResult | null> {
@@ -49,12 +49,6 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
   const ragConfig = config.addons?.['remnote-rag'];
   if (!ragConfig?.enabled) {
     return null;
-  }
-
-  // 将 settings 中的 embedding/reranker 配置通过 REMNOTE_RAG_CONFIG 环境变量传递给子进程
-  const ragEnv: Record<string, string> = {};
-  if (ragConfig.settings && Object.keys(ragConfig.settings).length > 0) {
-    ragEnv.REMNOTE_RAG_CONFIG = JSON.stringify(ragConfig.settings);
   }
 
   const jsonPayload = JSON.stringify({ query, numResults });
@@ -65,7 +59,6 @@ async function tryRagSearch(query: string, numResults: number): Promise<RagSearc
       execFile('remnote-rag', args, {
         timeout: RAG_TIMEOUT_MS,
         maxBuffer: 5 * 1024 * 1024,
-        env: { ...process.env, ...ragEnv },
       }, (error, stdout) => {
         if (error) {
           // execFile 的 error 对象包含 stdout，尝试从中提取 RAG 的诊断信息
@@ -151,22 +144,7 @@ export async function searchCommand(query: string, options: SearchOptions = {}):
   try {
     result = await sendDaemonRequest('search', { query, numResults });
   } catch (err) {
-    if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'search', error: (err as Error).message });
-      } else {
-        console.error(`错误: ${(err as Error).message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'search', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'search', json);
     return;
   }
 

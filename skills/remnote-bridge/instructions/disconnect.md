@@ -6,13 +6,25 @@
 
 ## 功能
 
-`disconnect` 向守护进程发送 SIGTERM 信号，触发优雅关闭：
+`disconnect` 向指定实例的守护进程发送 SIGTERM 信号，触发优雅关闭：
 
 1. 关闭 WS Server（断开所有连接）
 2. 关闭 ConfigServer
 3. 停止 Plugin 服务（静态文件服务器 或 webpack-dev-server）
-4. 删除 PID 文件
+4. 删除 PID 文件，释放注册表槽位
 5. 内存缓存随进程退出自动消失
+
+### 多实例支持
+
+通过 `--instance <name>` 指定要停止的实例。不指定时停止 `default` 实例。
+
+```bash
+# 停止默认实例
+remnote-bridge disconnect
+
+# 停止指定实例
+remnote-bridge disconnect --instance work
+```
 
 ---
 
@@ -48,9 +60,9 @@ remnote-bridge --json disconnect
   "ok": true,
   "command": "disconnect",
   "wasRunning": true,
+  "instance": "default",
   "pid": 12345,
-  "forced": false,
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "forced": false
 }
 ```
 
@@ -61,9 +73,9 @@ remnote-bridge --json disconnect
   "ok": true,
   "command": "disconnect",
   "wasRunning": true,
+  "instance": "work",
   "pid": 12345,
-  "forced": true,
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "forced": true
 }
 ```
 
@@ -74,7 +86,7 @@ remnote-bridge --json disconnect
   "ok": true,
   "command": "disconnect",
   "wasRunning": false,
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "instance": "default"
 }
 ```
 
@@ -116,8 +128,9 @@ daemon 收到 SIGTERM 后依次执行：
 | **缓存清空** | 所有 `rem:*` 和 `tree:*` 缓存随 daemon 进程退出消失 |
 | **Plugin 断开** | WS 连接关闭，Plugin 进入重连循环（指数退避） |
 | **端口释放** | wsPort / devServerPort / configPort 全部释放 |
-| **PID 文件删除** | `.remnote-bridge.pid` 被删除 |
-| **日志保留** | `.remnote-bridge.log` 保留（追加写入，不删除） |
+| **PID 文件删除** | `~/.remnote-bridge/instances/{slotIndex}.pid` 被删除 |
+| **注册表释放** | 实例对应的槽位在 `registry.json` 中释放 |
+| **日志保留** | `~/.remnote-bridge/instances/{slotIndex}.log` 保留 |
 
 ---
 

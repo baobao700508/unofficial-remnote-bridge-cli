@@ -9,7 +9,7 @@
  */
 
 import http from 'http';
-import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath } from '../config.js';
+import { BridgeConfig, DefaultsConfig, DEFAULT_CONFIG, DEFAULT_DEFAULTS, loadConfig, saveConfig, configFilePath, loadAddonConfig, saveAddonConfig } from '../config.js';
 
 export interface ConfigServerOptions {
   port: number;
@@ -147,6 +147,45 @@ export class ConfigServer {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: String(err) }));
         }
+        return;
+      }
+
+      // Addon 配置读取
+      if (req.method === 'GET' && url.startsWith('/api/addon-config')) {
+        const params = new URL(url, 'http://localhost').searchParams;
+        const name = params.get('name');
+        if (!name) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '缺少 name 参数' }));
+          return;
+        }
+        const addonConfig = loadAddonConfig(name);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, name, config: addonConfig ?? {} }));
+        return;
+      }
+
+      // Addon 配置保存
+      if (req.method === 'POST' && url === '/api/addon-config') {
+        const body = await readBody(req);
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '无效的 JSON' }));
+          return;
+        }
+        const payload = parsed as Record<string, unknown>;
+        if (!payload.name || typeof payload.name !== 'string' || typeof payload.config !== 'object' || !payload.config) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: '需要 name (string) 和 config (object) 字段' }));
+          return;
+        }
+        saveAddonConfig(payload.name, payload.config as Record<string, unknown>);
+        this.log(`addon ${payload.name} 配置已保存`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
 
@@ -294,6 +333,77 @@ export class ConfigServer {
     <button class="primary" onclick="saveConfig()">保存配置</button>
     <button onclick="resetDefaults()">恢复默认值</button>
   </div>
+
+  <h1 style="margin-top:40px;">增强项目配置</h1>
+  <p class="subtitle">配置存储于 ~/.remnote-bridge/addons/&lt;name&gt;/config.json</p>
+
+  <div class="card">
+    <h2>remnote-rag（语义搜索增强）</h2>
+    <h3 style="font-size:14px;margin-bottom:12px;color:#555;">Embedding 配置</h3>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="rag-embedding-api-key">
+    </div>
+    <div class="field">
+      <label>API Key 环境变量名</label>
+      <input type="text" id="rag-embedding-api-key-env" placeholder="留空则使用上方 api_key">
+    </div>
+    <div class="field">
+      <label>Base URL</label>
+      <input type="text" id="rag-embedding-base-url">
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <input type="text" id="rag-embedding-model">
+    </div>
+    <div class="field">
+      <label>Dimensions</label>
+      <input type="number" id="rag-embedding-dimensions" min="1">
+    </div>
+
+    <h3 style="font-size:14px;margin:16px 0 12px;color:#555;">Reranker 配置</h3>
+    <div class="field">
+      <label>启用 Reranker</label>
+      <select id="rag-reranker-enabled">
+        <option value="true">是</option>
+        <option value="false">否</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <input type="password" id="rag-reranker-api-key">
+    </div>
+    <div class="field">
+      <label>API Key 环境变量名</label>
+      <input type="text" id="rag-reranker-api-key-env" placeholder="留空则使用 Embedding API Key">
+    </div>
+    <div class="field">
+      <label>Base URL</label>
+      <input type="text" id="rag-reranker-base-url">
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <input type="text" id="rag-reranker-model">
+    </div>
+    <div class="field">
+      <label>Top-K 倍数</label>
+      <input type="number" id="rag-reranker-top-k-multiplier" min="1">
+    </div>
+
+    <h3 style="font-size:14px;margin:16px 0 12px;color:#555;">通用配置</h3>
+    <div class="field">
+      <label>最小文本长度 (min_text_length)</label>
+      <input type="number" id="rag-min-text-length" min="1">
+    </div>
+    <div class="field">
+      <label>批量大小 (batch_size)</label>
+      <input type="number" id="rag-batch-size" min="1">
+    </div>
+
+    <div class="actions" style="margin-top:16px;">
+      <button class="primary" onclick="saveAddonConfigUI()">保存 addon 配置</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -409,7 +519,81 @@ function resetDefaults() {
   }
 }
 
+// ── Addon 配置 ──
+
+const RAG_FIELD_MAP = {
+  'rag-embedding-api-key': ['embedding', 'api_key'],
+  'rag-embedding-api-key-env': ['embedding', 'api_key_env'],
+  'rag-embedding-base-url': ['embedding', 'base_url'],
+  'rag-embedding-model': ['embedding', 'model'],
+  'rag-embedding-dimensions': ['embedding', 'dimensions'],
+  'rag-reranker-enabled': ['reranker', 'enabled'],
+  'rag-reranker-api-key': ['reranker', 'api_key'],
+  'rag-reranker-api-key-env': ['reranker', 'api_key_env'],
+  'rag-reranker-base-url': ['reranker', 'base_url'],
+  'rag-reranker-model': ['reranker', 'model'],
+  'rag-reranker-top-k-multiplier': ['reranker', 'top_k_multiplier'],
+  'rag-min-text-length': [null, 'min_text_length'],
+  'rag-batch-size': [null, 'batch_size'],
+};
+
+function fillAddonForm(config) {
+  for (const [elId, path] of Object.entries(RAG_FIELD_MAP)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    const val = path[0] ? (config[path[0]] || {})[path[1]] : config[path[1]];
+    if (val !== undefined && val !== null) {
+      el.value = el.tagName === 'SELECT' ? String(val) : val;
+    }
+  }
+}
+
+function readAddonForm() {
+  const config = { embedding: {}, reranker: {} };
+  for (const [elId, path] of Object.entries(RAG_FIELD_MAP)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    let val = el.value;
+    if (elId.includes('dimensions') || elId.includes('multiplier') || elId.includes('text-length') || elId.includes('batch-size')) {
+      val = Number(val);
+    } else if (elId.includes('enabled')) {
+      val = val === 'true';
+    }
+    if (path[0]) {
+      config[path[0]][path[1]] = val;
+    } else {
+      config[path[1]] = val;
+    }
+  }
+  return config;
+}
+
+async function loadAddonConfigUI() {
+  try {
+    const res = await fetch('/api/addon-config?name=remnote-rag');
+    const data = await res.json();
+    if (data.ok) fillAddonForm(data.config);
+  } catch (e) { /* addon 可能未配置 */ }
+}
+
+async function saveAddonConfigUI() {
+  const config = readAddonForm();
+  try {
+    const res = await fetch('/api/addon-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'remnote-rag', config }),
+    });
+    const result = await res.json();
+    if (result.ok) showToast('addon 配置已保存', 'success');
+    else showToast('保存失败: ' + result.error, 'error');
+  } catch (e) {
+    showToast('保存请求失败: ' + e, 'error');
+  }
+}
+
 loadConfig();
+loadAddonConfigUI();
 </script>
 </body>
 </html>`;
@@ -469,7 +653,7 @@ function validateConfigPayload(raw: unknown): { ok: true; config: BridgeConfig }
       defaults: obj.defaults
         ? { ...DEFAULT_DEFAULTS, ...(obj.defaults as Partial<DefaultsConfig>) }
         : { ...DEFAULT_DEFAULTS },
-      addons: obj.addons as BridgeConfig['addons'],
+      addons: obj.addons as BridgeConfig['addons'],  // 仅保留 enabled 状态
     },
   };
 }

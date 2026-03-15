@@ -6,8 +6,8 @@
  * - 退出码：0 成功 / 1 业务错误 / 2 守护进程不可达
  */
 
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
-import { jsonOutput } from '../utils/output.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface EditRemOptions {
   json?: boolean;
@@ -31,32 +31,7 @@ export async function editRemCommand(remId: string, options: EditRemOptions): Pr
   try {
     result = await sendDaemonRequest('edit_rem', { remId, oldStr, newStr });
   } catch (err) {
-    if (err instanceof DaemonNotRunningError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'edit-rem', error: err.message });
-      } else {
-        console.error(`错误: ${err.message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    if (err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'edit-rem', error: err.message });
-      } else {
-        console.error(`错误: ${err.message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    // 业务错误（防线拒绝、Plugin 未连接等）
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'edit-rem', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'edit-rem', json);
     return;
   }
 

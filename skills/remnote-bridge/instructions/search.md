@@ -8,7 +8,7 @@
 
 `search` 在当前知识库中搜索包含关键词的 Rem。搜索方式由配置驱动：
 
-- **RAG 语义搜索**：在 `.remnote-bridge.json` 中启用 `addons.remnote-rag`（`enabled: true` + 配置 `dashscopeApiKey`），系统自动使用语义向量搜索（中文支持更好）
+- **RAG 语义搜索**：在 `~/.remnote-bridge/config.json` 中启用 `addons.remnote-rag`（`enabled: true`），并在 `~/.remnote-bridge/addons/remnote-rag/config.json` 中配置 API Key，系统自动使用语义向量搜索（中文支持更好）
 - **SDK 全文搜索**：addon 未启用、未安装、或调用失败时自动降级
 
 安装与管理 addon：`remnote-bridge addon install remnote-rag` / `remnote-bridge addon list`。
@@ -164,8 +164,8 @@ remnote-bridge search --json '{"query":"机器学习","numResults":10}'
    ├─ 未启用 → 跳到步骤 4
    └─ 已启用 → 继续步骤 3
 3. 尝试 RAG 搜索：
-   ├─ 从配置注入环境变量（DASHSCOPE_API_KEY 等）
    ├─ execFile('remnote-rag', ['search', '--json', payload])
+   ├─ remnote-rag 从 ~/.remnote-bridge/addons/remnote-rag/config.json 读取配置
    ├─ 超时 10s
    ├─ 成功 → 返回 RAG 结果（source: "rag"）
    └─ 失败 → 继续到步骤 4（静默降级）

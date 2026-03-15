@@ -86,7 +86,7 @@ export async function addonInstallCommand(name: string, options: AddonOptions = 
       const validation = manager.validateSettings(name);
       if (!validation.valid) {
         console.log(`\n注意：以下配置项尚未设置: ${validation.missing.join(', ')}`);
-        console.log(`请在 .remnote-bridge.json 的 addons.${name}.settings 中配置`);
+        console.log(`请在配置页面或 ~/.remnote-bridge/addons/${name}/config.json 中配置`);
       }
     }
   } catch (err) {

@@ -13,7 +13,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'search',
     description:
-      '在 RemNote 知识库中搜索 Rem，返回匹配结果列表。\n\n搜索来源（配置驱动）：在 .remnote-bridge.json 中启用 addons.remnote-rag 后，优先使用语义向量搜索（source:"rag"，中文支持更好）；未启用或不可用时降级到 SDK 全文搜索（source:"sdk"）。\nRAG 模式额外返回：backText、ancestorPath、type、tags、score。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text、isDocument，以及 totalFound 和 source。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
+      '在 RemNote 知识库中搜索 Rem，返回匹配结果列表。\n\n搜索来源（配置驱动）：在 ~/.remnote-bridge/config.json 中启用 addons.remnote-rag 后，优先使用语义向量搜索（source:"rag"，中文支持更好）；未启用或不可用时降级到 SDK 全文搜索（source:"sdk"）。\nRAG 模式额外返回：backText、ancestorPath、type、tags、score。\n\n适用场景：知道关键词但不知道位置时使用；按结构浏览应使用 read_globe。\n输出：results 数组，每项包含 remId、text、isDocument，以及 totalFound 和 source。\n搜索结果不写入缓存——需要详情请拿 remId 调用 read_rem 或 read_tree。\n常见工作流：search 定位 → read_rem 获取详情 → read_tree 展开子树。\n关联工具：read_rem（详情）、read_tree（子树）、read_globe（按结构浏览）',
     parameters: z.object({
       query: z.string().describe('搜索关键词'),
       numResults: z
@@ -58,6 +58,15 @@ export function registerReadTools(server: FastMCP): void {
       if (args.includePowerup !== undefined)
         payload.includePowerup = args.includePowerup;
       const response = await callCli('read-rem', payload);
+      // 直接返回 data（RemObject）——缩进与 edit_rem 的 str_replace 目标格式一致。
+      // 附加提示让模型直接复制而非重新构造 oldStr。
+      if (response.ok && response.data) {
+        const json = JSON.stringify(response.data, null, 2);
+        return (
+          '以下是 edit_rem 的 str_replace 操作对象，构造 oldStr 时直接从中复制（含缩进空格）：\n\n' +
+          json
+        );
+      }
       return JSON.stringify(response, null, 2);
     },
   });

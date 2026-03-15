@@ -6,10 +6,18 @@
 
 ## 功能
 
-`health` 分两步检查系统状态：
+`health` 分两步检查指定实例的系统状态：
 
-1. **本地检查**：读取 PID 文件，确认 daemon 进程是否存活
+1. **本地检查**：通过注册表查找实例，确认 daemon 进程是否存活
 2. **远程检查**：通过 WS 连接 daemon，获取 Plugin 连接状态和 SDK 就绪状态
+
+### 多实例支持
+
+通过 `--instance <name>` 指定要检查的实例。不指定时检查 `default` 实例。
+
+```bash
+remnote-bridge health --instance work
+```
 
 ---
 
@@ -24,7 +32,7 @@ remnote-bridge health
 输出示例（全部健康）：
 
 ```
-✅ 守护进程  运行中（PID: 12345，已运行 5 分钟）
+✅ 守护进程  运行中（PID: 12345，实例: default，槽位: 0，已运行 5 分钟）
 ✅ Plugin    已连接
 ✅ SDK       就绪
 
@@ -34,7 +42,7 @@ remnote-bridge health
 输出示例（部分不健康）：
 
 ```
-✅ 守护进程  运行中（PID: 12345，已运行 2 分钟）
+✅ 守护进程  运行中（PID: 12345，实例: work，槽位: 1，已运行 2 分钟）
 ❌ Plugin    未连接
 ❌ SDK       未就绪
 
@@ -80,11 +88,12 @@ remnote-bridge health --reload
   "ok": true,
   "command": "health",
   "exitCode": 0,
+  "instance": "default",
+  "slotIndex": 0,
   "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 300 },
   "plugin": { "connected": true },
   "sdk": { "ready": true },
-  "timeoutRemaining": 1500,
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "timeoutRemaining": 1500
 }
 ```
 
@@ -95,11 +104,12 @@ remnote-bridge health --reload
   "ok": false,
   "command": "health",
   "exitCode": 1,
+  "instance": "work",
+  "slotIndex": 1,
   "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 120 },
   "plugin": { "connected": false },
   "sdk": { "ready": false },
-  "timeoutRemaining": 1680,
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "timeoutRemaining": 1680
 }
 ```
 
@@ -110,10 +120,10 @@ remnote-bridge health --reload
   "ok": false,
   "command": "health",
   "exitCode": 2,
+  "instance": "default",
   "daemon": { "running": false },
   "plugin": { "connected": false },
-  "sdk": { "ready": false },
-  "timestamp": "2026-03-06T10:00:00.000Z"
+  "sdk": { "ready": false }
 }
 ```
 
@@ -123,7 +133,7 @@ remnote-bridge health --reload
 
 | 检查项 | 检查方式 | 含义 |
 |--------|----------|------|
-| **daemon** | PID 文件 + `kill(pid, 0)` 探活 | 守护进程是否在运行且可达 |
+| **daemon** | 注册表查找 + `kill(pid, 0)` 探活 | 守护进程是否在运行且可达 |
 | **plugin** | daemon 内部的 `pluginConnected` 状态 | RemNote Plugin 是否已通过 WS 连接到 daemon |
 | **sdk** | Plugin 的 hello 握手中的 `sdkReady` 字段 | RemNote SDK 是否就绪（知识库已加载，可调用 API） |
 
@@ -179,7 +189,7 @@ headless 模式下 `health` 基础输出额外包含 `headless` 对象：
   "headless": {
     "status": "running",
     "chromeConnected": true,
-    "pageUrl": "http://localhost:8080",
+    "pageUrl": "http://localhost:29101",
     "reloadCount": 0,
     "lastError": null,
     "recentConsoleErrors": []
@@ -218,7 +228,7 @@ headless 模式下 `health` 基础输出额外包含 `headless` 对象：
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
 | daemon 未运行 | 未执行 connect / 已超时关闭 | 执行 `connect` |
-| daemon 运行但不可达 | WS 端口被占用或配置不匹配 | 检查 `.remnote-bridge.json` 中的 `wsPort` |
+| daemon 运行但不可达 | WS 端口被占用或配置不匹配 | 检查 `~/.remnote-bridge/slots.json` 中的端口配置 |
 | Plugin 未连接（标准模式） | RemNote 未打开 / Plugin 未安装 / URL 不匹配 | 打开 RemNote，确认 Plugin 中的 WS URL 设置 |
 | Plugin 未连接（headless 模式） | Chrome 页面加载异常 | `health --diagnose` 查看截图和状态，`health --reload` 重载页面 |
 | SDK 未就绪 | 知识库加载中 / Plugin 异常 | 等待几秒后重试，或刷新 RemNote 页面 |

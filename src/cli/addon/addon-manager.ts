@@ -9,7 +9,7 @@ import fs from 'fs';
 import os from 'os';
 import type { AddonDefinition } from './registry.js';
 import { ADDON_REGISTRY } from './registry.js';
-import type { AddonsConfig, AddonUserConfig, BridgeConfig } from '../config.js';
+import type { BridgeConfig } from '../config.js';
 
 const DETECT_TIMEOUT_MS = 5_000;
 const INSTALL_TIMEOUT_MS = 120_000;
@@ -135,43 +135,14 @@ export class AddonManager {
     onLog?.(`${name} 卸载成功`);
   }
 
-  /** 获取 addon 对应的环境变量（从 settings 映射） */
-  getEnvVars(name: string): Record<string, string> {
-    const def = ADDON_REGISTRY.get(name);
-    if (!def) return {};
-
-    const userConfig = this.config.addons?.[name];
-    if (!userConfig?.settings) return {};
-
-    const env: Record<string, string> = {};
-    for (const [settingsKey, envVar] of Object.entries(def.envMapping)) {
-      const val = userConfig.settings[settingsKey];
-      if (val !== undefined && val !== null) {
-        env[envVar] = String(val);
-      }
-    }
-    return env;
+  /** 获取 addon 对应的环境变量（addon 配置已独立存储，此方法保留供未来扩展） */
+  getEnvVars(_name: string): Record<string, string> {
+    return {};
   }
 
-  /** 校验 addon 配置完整性 */
-  validateSettings(name: string): { valid: boolean; missing: string[] } {
-    const def = ADDON_REGISTRY.get(name);
-    if (!def || !def.requiredSettings?.length) {
-      return { valid: true, missing: [] };
-    }
-
-    const userConfig = this.config.addons?.[name];
-    const settings = userConfig?.settings ?? {};
-    const missing: string[] = [];
-
-    for (const key of def.requiredSettings) {
-      const val = settings[key];
-      if (val === undefined || val === null || val === '') {
-        missing.push(key);
-      }
-    }
-
-    return { valid: missing.length === 0, missing };
+  /** 校验 addon 配置完整性（addon 配置已独立存储，此方法保留供未来扩展） */
+  validateSettings(_name: string): { valid: boolean; missing: string[] } {
+    return { valid: true, missing: [] };
   }
 
   /** connect 时自动安装所有已启用但未安装的 addon */

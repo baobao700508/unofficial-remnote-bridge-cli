@@ -38,16 +38,19 @@ export async function search(
 
   const rems = await plugin.search.search([query], undefined, { numResults });
 
-  const results: SearchResultItem[] = [];
-  for (const rem of rems) {
-    const markdownText = await safeToMarkdown(plugin, rem.text ?? []);
-    const isDocument = await rem.isDocument();
-    results.push({
-      remId: rem._id,
-      text: markdownText.replace(/\n/g, ' '),
-      isDocument,
-    });
-  }
+  const results: SearchResultItem[] = await Promise.all(
+    rems.map(async (rem) => {
+      const [markdownText, isDocument] = await Promise.all([
+        safeToMarkdown(plugin, rem.text ?? []),
+        rem.isDocument(),
+      ]);
+      return {
+        remId: rem._id,
+        text: markdownText.replace(/\n/g, ' '),
+        isDocument,
+      };
+    }),
+  );
 
   return {
     query,

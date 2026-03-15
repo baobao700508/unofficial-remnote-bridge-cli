@@ -635,21 +635,49 @@ newStr:  "\"text\": [\n    \"点击\",\n    {\n      \"i\": \"m\",\n      \"iUrl
 
 ### 示例 4：修改高亮颜色（Rem 级别 vs RichText 级别）
 
-**Rem 级别的 `highlightColor`**（整行背景色，值为英文字符串）：
+#### ⚠️ highlightColor vs h — 两种完全不同的高亮
+
+| 属性 | 位置 | 值类型 | 效果 | 修改方式 |
+|:-----|:-----|:-------|:-----|:---------|
+| `highlightColor` | RemObject 顶层字段 | 字符串 `"Red"`/`"Yellow"` 等，或 `null` | 整行背景色（左侧彩色竖条） | str_replace 顶层字段 |
+| `h` | RichText 元素内部 | 数字 0-9 | 文字片段的荧光底色 | str_replace text 数组内的对象 |
+
+#### RichText `h` 颜色值对照表（必须用数字，不是字符串）
+
+| 值 | 颜色 | 值 | 颜色 | 值 | 颜色 |
+|:---|:-----|:---|:-----|:---|:-----|
+| 0 | 无（默认） | 4 | Green | 7 | Gray |
+| 1 | Red | 5 | Purple | 8 | Brown |
+| 2 | Orange | 6 | Blue | 9 | Pink |
+| 3 | Yellow | — | — | — | — |
+
+#### 4a. 设置/清除整行背景色（highlightColor）
 
 ```
+// 设置为黄色背景
 oldStr:  "\"highlightColor\": null"
-newStr:  "\"highlightColor\": \"Red\""
+newStr:  "\"highlightColor\": \"Yellow\""
+
+// 清除背景色
+oldStr:  "\"highlightColor\": \"Yellow\""
+newStr:  "\"highlightColor\": null"
 ```
 
-**RichText 级别的 `h`**（行内文字高亮，值为数字 0-9）：
+#### 4b. 给文字加/去荧光底色（RichText h 字段）
+
+先 read_rem 找到 text 数组中目标文字对象的精确 JSON。用 `h` 值旁边的 `"i"` 和 `"text"` 字段一起匹配，确保唯一。
 
 ```
-oldStr:  "\"text\": [\n    \"普通文本\"\n  ]"
-newStr:  "\"text\": [\n    {\n      \"h\": 1,\n      \"i\": \"m\",\n      \"text\": \"红色高亮文本\"\n    }\n  ]"
+// "Todo List" 文字加黄色荧光（h: 0 → 3）
+oldStr:  "\"h\": 0,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
+newStr:  "\"h\": 3,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
+
+// 去掉荧光（h: 3 → 0）
+oldStr:  "\"h\": 3,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
+newStr:  "\"h\": 0,\n      \"i\": \"m\",\n      \"text\": \"Todo List \""
 ```
 
-> **区分**：`highlightColor` 是 RemObject 顶层字段，值为字符串（`"Red"`, `"Blue"` 等）；RichText 的 `h` 是行内格式标记，值为数字（1=Red, 2=Orange 等，见 RemColor 枚举）。
+⚠️ **关键**：oldStr 中必须包含足够的上下文（如 `"i": "m"` 和 `"text": "..."`）来唯一定位。不能只写 `"h": 0` — 可能匹配到多处。
 
 ### 示例 5：添加完形填空
 

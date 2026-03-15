@@ -55,10 +55,9 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   searchNumResults: 20,
 };
 
-/** 单个 addon 的用户配置 */
+/** 单个 addon 的用户配置（仅控制启用状态，具体配置存储在 addon 独立文件中） */
 export interface AddonUserConfig {
   enabled: boolean;
-  settings?: Record<string, unknown>;
 }
 
 /** addons 配置：addon 名称 → 用户配置 */
@@ -118,9 +117,6 @@ function mergeAddons(parsed: Record<string, unknown> | undefined): AddonsConfig 
     const obj = raw as Record<string, unknown>;
     result[name] = {
       enabled: typeof obj.enabled === 'boolean' ? obj.enabled : false,
-      settings: typeof obj.settings === 'object' && obj.settings !== null
-        ? obj.settings as Record<string, unknown>
-        : undefined,
     };
   }
   return Object.keys(result).length > 0 ? result : undefined;
@@ -242,3 +238,37 @@ function findLegacyConfigPath(): string | null {
     return null;
   }
 }
+
+// ── Addon 独立配置 ──
+
+/** addon 数据根目录 ~/.remnote-bridge/addons/<name>/ */
+export function addonDataDir(name: string): string {
+  return path.join(GLOBAL_DIR, 'addons', name);
+}
+
+/** addon 配置文件路径 ~/.remnote-bridge/addons/<name>/config.json */
+export function addonConfigPath(name: string): string {
+  return path.join(addonDataDir(name), 'config.json');
+}
+
+/** 读取 addon 配置 JSON（文件不存在返回 null） */
+export function loadAddonConfig(name: string): Record<string, unknown> | null {
+  const p = addonConfigPath(name);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf-8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** 保存 addon 配置 JSON（原子写入） */
+export function saveAddonConfig(name: string, data: Record<string, unknown>): void {
+  const dir = addonDataDir(name);
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, 'config.json');
+  const tmpPath = filePath + '.tmp.' + process.pid;
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  fs.renameSync(tmpPath, filePath);
+}
+

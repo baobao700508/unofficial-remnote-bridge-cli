@@ -85,6 +85,16 @@ RemNote 的格式设置（标题、高亮、代码等）会注入隐藏的系统
 
 所有操作都依赖一个活跃的会话。会话 = 守护进程的生命周期。
 
+### 多实例支持
+
+系统支持最多 **4 个并发实例**，每个实例连接不同的 RemNote 知识库。通过 \\\`instance\\\` 参数指定实例名：
+
+- \\\`connect(instance="work")\\\` — 启动 "work" 实例
+- \\\`health(instance="work")\\\` — 检查 "work" 实例状态
+- \\\`disconnect(instance="work")\\\` — 停止 "work" 实例
+
+不指定 instance 时默认为 \\\`"default"\\\`。每个实例独占一个槽位（固定端口组），槽位自动分配。各实例的缓存相互独立。
+
 ### 标准模式（需要用户配合）
 
 \\\`\\\`\\\`
@@ -109,7 +119,7 @@ disconnect → 关闭 daemon，清空所有缓存
 
 \\\`setup\\\` 会弹出 Chrome 窗口，用户需要完成两件事：
 1. **登录 RemNote**
-2. **配置 dev plugin**：插件图标 → 开发你的插件 → 填入 \\\`http://localhost:8080\\\`
+2. **配置 dev plugin**：插件图标 → 开发你的插件 → 填入 connect 输出的 Plugin 服务地址（如 \\\`http://localhost:29101\\\`）
 
 完成后**彻底退出 Chrome**（macOS 必须 Cmd+Q，仅关窗口不够）。
 
@@ -118,7 +128,7 @@ disconnect → 关闭 daemon，清空所有缓存
 2. 立即告知用户：
    "已打开 Chrome 浏览器。请完成以下操作：
     1. 登录 RemNote
-    2. 在 RemNote 中配置开发插件：点击左下角插件图标 → 开发你的插件 → 输入 http://localhost:8080
+    2. 在 RemNote 中配置开发插件：点击左下角插件图标 → 开发你的插件 → 输入 connect 输出的 Plugin 服务地址
     3. 完成后彻底退出 Chrome（macOS 请按 Cmd+Q）"
 3. 等待 \\\`setup\\\` 返回（阻塞，最长 10 分钟）
 4. 成功 → 进入下一步 \\\`connect(headless=true)\\\`
@@ -166,7 +176,7 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存
 1. 打开 RemNote 桌面端或网页端
 2. 点击左侧边栏底部的插件图标（拼图形状）
 3. 点击「开发你的插件」（Develop Your Plugin）
-4. 在输入框中填入 \\\`http://localhost:8080\\\`（即 connect 输出的 Plugin 服务地址）
+4. 在输入框中填入 connect 输出的 Plugin 服务地址（如 \\\`http://localhost:29101\\\`）
 5. 等待插件加载完成
 
 **非首次使用**（之前已加载过此插件）：
@@ -245,7 +255,72 @@ oldStr:  "text": [\\n    "点击访问官网"\\n  ]
 newStr:  "text": [\\n    "点击",\\n    {\\n      "i": "m",\\n      "iUrl": "https://remnote.com",\\n      "text": "访问官网"\\n    }\\n  ]
 \\\`\\\`\\\`
 
-注意：\\\`highlightColor\\\`（Rem 顶层字段，字符串如 \\\`"Red"\\\`）和 RichText 的 \\\`h\\\`（行内格式标记，数字 0-9）是两个独立属性。详见 \\\`resource://rem-object-fields\\\`。
+### ⚠️ highlightColor vs h — 两种完全不同的高亮
+
+这是最常见的混淆点，必须区分：
+
+| 属性 | 位置 | 值类型 | 效果 | 修改方式 |
+|:-----|:-----|:-------|:-----|:---------|
+| \\\`highlightColor\\\` | RemObject 顶层字段 | 字符串 \\\`"Red"\\\`/\\\`"Yellow"\\\` 等，或 \\\`null\\\` | 整行背景色（左侧彩色竖条） | str_replace 顶层字段 |
+| \\\`h\\\` | RichText 元素内部 | 数字 0-9 | 文字片段的荧光底色 | str_replace text 数组内的对象 |
+
+**RichText \\\`h\\\` 颜色值对照表**（必须用数字，不是字符串）：
+
+| 值 | 颜色 | 值 | 颜色 | 值 | 颜色 |
+|:---|:-----|:---|:-----|:---|:-----|
+| 0 | 无（默认） | 4 | Green | 7 | Gray |
+| 1 | Red | 5 | Purple | 8 | Brown |
+| 2 | Orange | 6 | Blue | 9 | Pink |
+| 3 | Yellow | — | — | — | — |
+
+### 常见属性修改速查（edit_rem str_replace 模板）
+
+以下模板基于 \\\`JSON.stringify(obj, null, 2)\\\` 的缩进格式。**oldStr/newStr 必须包含精确的缩进空格**。
+
+**① 设置/清除整行背景色（highlightColor）**
+
+\\\`\\\`\\\`
+// 设置为黄色背景
+oldStr:  "highlightColor": null
+newStr:  "highlightColor": "Yellow"
+
+// 清除背景色
+oldStr:  "highlightColor": "Yellow"
+newStr:  "highlightColor": null
+\\\`\\\`\\\`
+
+**② 给文字加荧光底色（RichText h 字段）**
+
+先 read_rem 找到 text 数组中目标文字对象的精确格式，然后替换 h 值。
+
+\\\`\\\`\\\`
+// "Todo List" 文字加黄色荧光（h: 0 → 3）
+// ⚠️ 只替换包含目标文字的那一行 h 值，用上下文确保唯一匹配
+oldStr:       "h": 0,\\n      "i": "m",\\n      "text": "Todo List "
+newStr:       "h": 3,\\n      "i": "m",\\n      "text": "Todo List "
+
+// 去掉荧光（h: 3 → 0）
+oldStr:       "h": 3,\\n      "i": "m",\\n      "text": "Todo List "
+newStr:       "h": 0,\\n      "i": "m",\\n      "text": "Todo List "
+\\\`\\\`\\\`
+
+**⚠️ 关键要点**：oldStr 中必须包含足够的上下文（如 \\\`"i": "m"\\\` 和 \\\`"text": "..."\\\`）来唯一定位。不能只写 \\\`"h": 0\\\` — 可能匹配到多处。
+
+**③ 修改 Rem 类型**
+
+\\\`\\\`\\\`
+// 普通 → 概念
+oldStr:  "type": "default"
+newStr:  "type": "concept"
+\\\`\\\`\\\`
+
+**④ 修改文字颜色（RichText tc 字段）**
+
+\\\`\\\`\\\`
+// 加红色文字颜色（与 h 类似，tc 也是数字 0-9）
+oldStr:       "i": "m",\\n      "text": "重要内容"
+newStr:       "i": "m",\\n      "tc": 1,\\n      "text": "重要内容"
+\\\`\\\`\\\`
 
 ### 缓存行为速查
 
@@ -312,10 +387,27 @@ newStr:   最后一个兄弟 <!--idZ-->
 
 > 用户说："连不上"、"命令报错了"
 
-使用 \\\`health\\\` 检查三层状态，然后对症处理：
+使用 \\\`health\\\` 检查三层状态（多实例时指定 instance），然后对症处理：
 - daemon 未运行 → 执行 \\\`connect\\\`，然后引导用户在 RemNote 中加载插件
-- Plugin 未连接 → 提醒用户：首次使用需在 RemNote 的「开发你的插件」中填入 \\\`http://localhost:8080\\\`；非首次使用只需刷新 RemNote 页面
+- Plugin 未连接 → 提醒用户：首次使用需在 RemNote 的「开发你的插件」中填入对应 Plugin 服务地址（如 \\\`http://localhost:29101\\\`）；非首次使用只需刷新 RemNote 页面
 - SDK 未就绪 → 等待几秒后重试 health
+
+### 场景 H：管理增强项目
+
+> 用户说："安装语义搜索"、"配置 RAG"
+
+使用 \\\`addon\\\` 工具管理增强项目：
+- \\\`addon(action="list")\\\` — 查看所有可用增强项目及状态
+- \\\`addon(action="install", name="remnote-rag")\\\` — 安装指定增强项目
+- \\\`addon(action="uninstall", name="remnote-rag")\\\` — 卸载指定增强项目
+
+安装后需在配置页面中填写必需的配置项（如 API Key）。
+
+### 场景 I：重置环境
+
+> 用户说："全部清理"、"重新开始"
+
+使用 \\\`clean\\\` 工具彻底清理所有 daemon 进程、PID 文件、注册表和 addon 数据。清理后需重新 \\\`connect\\\`。
 
 ---
 

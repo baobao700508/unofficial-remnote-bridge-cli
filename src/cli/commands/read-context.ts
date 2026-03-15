@@ -11,8 +11,8 @@
  * - --json 结构化 JSON 输出
  */
 
-import { sendDaemonRequest, DaemonNotRunningError, DaemonUnreachableError } from '../daemon/send-request.js';
-import { jsonOutput } from '../utils/output.js';
+import { sendDaemonRequest } from '../daemon/send-request.js';
+import { jsonOutput, handleCommandError } from '../utils/output.js';
 
 export interface ReadContextOptions {
   json?: boolean;
@@ -61,22 +61,7 @@ export async function readContextCommand(options: ReadContextOptions = {}): Prom
     if (options.focusRemId) reqPayload.focusRemId = options.focusRemId;
     result = await sendDaemonRequest('read_context', reqPayload);
   } catch (err) {
-    if (err instanceof DaemonNotRunningError || err instanceof DaemonUnreachableError) {
-      if (json) {
-        jsonOutput({ ok: false, command: 'read-context', error: (err as Error).message });
-      } else {
-        console.error(`错误: ${(err as Error).message}`);
-      }
-      process.exitCode = 2;
-      return;
-    }
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (json) {
-      jsonOutput({ ok: false, command: 'read-context', error: errorMsg });
-    } else {
-      console.error(`错误: ${errorMsg}`);
-    }
-    process.exitCode = 1;
+    handleCommandError(err, 'read-context', json);
     return;
   }
 
