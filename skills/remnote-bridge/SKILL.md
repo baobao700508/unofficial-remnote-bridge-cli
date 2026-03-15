@@ -102,7 +102,7 @@ Portal 的编辑同步意味着修改一处会影响另一处。Portal 引用的
 | 删除 Portal | `edit-tree` | 从大纲中移除 Portal 行（与删除普通行相同） |
 | 修改引用列表（增删引用的 Rem） | `edit-rem` | str_replace 简化 JSON 中的 `portalDirectlyIncludedRem` 数组 |
 | 移动 Portal（换父节点/位置） | `edit-tree` | 与移动普通行相同 |
-| 读取 Portal | `read-rem` | 自动输出 9 字段简化 JSON |
+| 读取 Portal | `read-rem` | 自动输出 8 字段简化 JSON |
 
 ### RichText 格式
 
@@ -578,7 +578,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 | `type` | 不可设为 `portal`（只能通过 SDK `createPortal()` 创建） |
 | `parent` + `positionAmongstSiblings` | 共享同一 SDK 调用 `setParent(parentId, position)`，**应在同一次 str_replace 中同时修改** |
 | `tags` / `sources` | **Diff 机制**：对比当前 vs 目标数组，逐项 add/remove。必须列出完整目标数组，缺少的会被删除 |
-| `portalDirectlyIncludedRem` | Portal 专用可写。**Diff 机制**：对比当前 vs 目标数组，逐项 addToPortal/removeFromPortal。仅 type=portal 时可修改。edit-rem 对 Portal 使用 9 字段简化 JSON |
+| `portalDirectlyIncludedRem` | Portal 专用可写。**Diff 机制**：对比当前 vs 目标数组，逐项 addToPortal/removeFromPortal。仅 type=portal 时可修改。edit-rem 对 Portal 使用 8 字段简化 JSON |
 
 ### 常用只读字段（修改只产生警告，不生效）
 
@@ -591,8 +591,8 @@ aliases, descendants, siblingRem, isTable, portalType, propertyType
 
 | 模式 | 字段数 | 用法 |
 |:-----|:-------|:-----|
-| 默认 | 34（RW + R） | 常用场景 |
-| Portal 简化 | 9（id, type, portalType, portalDirectlyIncludedRem, parent, positionAmongstSiblings, children, createdAt, updatedAt） | type=portal 时自动切换，`--full` 和 `--fields` 可覆盖 |
+| 默认 | 33（RW + R） | 常用场景 |
+| Portal 简化 | 8（id, type, portalType, portalDirectlyIncludedRem, parent, positionAmongstSiblings, createdAt, updatedAt） | type=portal 时自动切换，`--full` 和 `--fields` 可覆盖 |
 | `--full` | 51（含低频 R-F） | 需要 Powerup 标识、时间戳等 |
 | `--fields` | 自选 + id | 精确获取特定字段 |
 

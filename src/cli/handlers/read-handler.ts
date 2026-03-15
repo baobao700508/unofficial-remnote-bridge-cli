@@ -11,6 +11,7 @@ import { RemCache } from './rem-cache.js';
 
 /** R-F 字段（仅 --full 模式输出，默认不输出） */
 const RF_FIELDS = new Set([
+  'children',
   'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
   'isPowerupPropertyListItem', 'isPowerupSlot',
   'deepRemsBeingReferenced',
@@ -21,10 +22,10 @@ const RF_FIELDS = new Set([
   'localUpdatedAt', 'lastPracticed',
 ]);
 
-/** Portal 简化输出字段（type === 'portal' 时默认输出这 9 个字段） */
+/** Portal 简化输出字段（type === 'portal' 时默认输出这 8 个字段） */
 export const PORTAL_FIELDS = [
   'id', 'type', 'portalType', 'portalDirectlyIncludedRem',
-  'parent', 'positionAmongstSiblings', 'children',
+  'parent', 'positionAmongstSiblings',
   'createdAt', 'updatedAt',
 ] as const;
 
@@ -74,7 +75,7 @@ export class ReadHandler {
         }
       }
     } else if ((remObject as Record<string, unknown>).type === 'portal') {
-      // Portal 简化模式：只输出 9 个关键字段
+      // Portal 简化模式：只输出 8 个关键字段
       const obj = remObject as Record<string, unknown>;
       result = {};
       for (const field of PORTAL_FIELDS) {

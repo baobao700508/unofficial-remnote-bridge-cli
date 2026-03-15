@@ -348,9 +348,9 @@ edit-rem(remId, oldStr, newStr)
 
 ### 简化 JSON 作为操作目标
 
-**问题**：缓存中存储完整 51 字段 JSON，但 AI 看到的是 9 字段简化 JSON。oldStr 来自简化输出，在完整 JSON 上匹配不到。
+**问题**：缓存中存储完整 51 字段 JSON，但 AI 看到的是 8 字段简化 JSON。oldStr 来自简化输出，在完整 JSON 上匹配不到。
 
-**方案**：Portal 路径在**简化 JSON**（9 字段）上执行 str_replace：
+**方案**：Portal 路径在**简化 JSON**（8 字段）上执行 str_replace：
 
 1. 防线 1 + 2：不变（完整 JSON 对比）
 2. **str_replace**：将缓存的完整 JSON 转换为简化 JSON，在简化 JSON 上执行 str_replace
@@ -742,5 +742,5 @@ newStr:  "\"text\": [\n    \"光合作用需要\",\n    {\n      \"cId\": \"cloz
 | `invalid JSON` | 替换后的文本不是合法 JSON | 检查 newStr 的引号、逗号、括号完整性 |
 | `Failed to update field` | SDK setter 调用失败 | 检查字段值是否在允许范围内（如 type 不能设为 portal） |
 | `Field '...' is read-only and was ignored` | 修改了只读字段 | 该字段只能读取，不可通过 edit-rem 修改 |
-| `old_str not found in the simplified Portal JSON` | Portal 编辑时 oldStr 在简化 JSON 中不匹配 | 检查 oldStr 是否匹配 9 字段简化 JSON 格式（而非完整 51 字段 JSON） |
+| `old_str not found in the simplified Portal JSON` | Portal 编辑时 oldStr 在简化 JSON 中不匹配 | 检查 oldStr 是否匹配 8 字段简化 JSON 格式（而非完整 51 字段 JSON） |
 | `守护进程未运行` | daemon 未启动 | 执行 `remnote-bridge connect` |

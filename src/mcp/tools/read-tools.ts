@@ -35,7 +35,7 @@ export function registerReadTools(server: FastMCP): void {
   server.addTool({
     name: 'read_rem',
     description:
-      '通过 Rem ID 读取单个 Rem 的完整属性，返回标准化的 RemObject（JSON 格式）。\n\n适用场景：\n- 查看 Rem 的详细属性（文本、类型、标签、父子关系、练习方向等）\n- 作为 edit_rem 的前置步骤——必须先 read_rem 建立缓存\n- 不适合查看子树结构（那是 read_tree）\n\n输出：RemObject JSON，默认 34 个常用字段，full=true 返回 51 个，fields 可指定子集。\n关键字段：id, text, backText, type, parent, children, tags, isDocument, practiceDirection。\n结果自动缓存供 edit_rem 使用。默认过滤 Powerup 噪音。\n完整字段列表见 resource://rem-object-fields。\n关联工具：search（定位 remId）→ read_rem → edit_rem（编辑属性）\n区别：read_tree 返回子树大纲，read_rem 返回单个 Rem 的 JSON',
+      '通过 Rem ID 读取单个 Rem 的完整属性，返回标准化的 RemObject（JSON 格式）。\n\n适用场景：\n- 查看 Rem 的详细属性（文本、类型、标签、父子关系、练习方向等）\n- 作为 edit_rem 的前置步骤——必须先 read_rem 建立缓存\n- 不适合查看子树结构（那是 read_tree）\n\n输出：RemObject JSON，默认 33 个常用字段，full=true 返回 51 个，fields 可指定子集。\n关键字段：id, text, backText, type, parent, children, tags, isDocument, practiceDirection。\n结果自动缓存供 edit_rem 使用。默认过滤 Powerup 噪音。\n完整字段列表见 resource://rem-object-fields。\n关联工具：search（定位 remId）→ read_rem → edit_rem（编辑属性）\n区别：read_tree 返回子树大纲，read_rem 返回单个 Rem 的 JSON',
     parameters: z.object({
       remId: z.string().describe('目标 Rem 的 ID'),
       fields: z
