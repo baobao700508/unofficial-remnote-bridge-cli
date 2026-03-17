@@ -338,6 +338,29 @@ newStr:
   子节点 A <!--idA-->
 \`\`\`
 
+#### 行引用模板 \`{{remId}}\`
+
+在 oldStr/newStr 中使用 \`{{remId}}\` 引用缓存大纲中已有行的完整内容（不含缩进）。系统在 str_replace 前自动展开。
+
+**优势**：避免抄写完整行内容（remId、元数据标记），减少 token 浪费和复制错误。
+
+**示例：重排两个节点**
+\`\`\`
+// 不用模板：
+oldStr: "    动态数组 <!--id1_1 type:concept-->\\n    静态数组 <!--id1_2 type:concept-->"
+newStr: "    静态数组 <!--id1_2 type:concept-->\\n    动态数组 <!--id1_1 type:concept-->"
+
+// 用模板：
+oldStr: "    {{id1_1}}\\n    {{id1_2}}"
+newStr: "    {{id1_2}}\\n    {{id1_1}}"
+\`\`\`
+
+**规则**：
+- \`{{remId}}\` 展开为**不含缩进**的完整行内容，缩进由你控制
+- 只能引用缓存大纲中存在的 remId
+- 新增行不能用 \`{{}}\`（新增行没有 remId）
+- 可以混用：部分行用 \`{{id}}\`，部分行手动写
+
 #### ⚠️ children_captured 详解
 
 在有子节点的 Rem 和其 children 之间插入新行，会导致新行"劫持"已有 children：

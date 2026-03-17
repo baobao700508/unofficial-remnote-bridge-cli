@@ -83,6 +83,11 @@ export function registerEditTools(server: FastMCP): void {
       '\\n- 箭头分隔符（闪卡）：→ ← ↔（单行）、↓ ↑ ↕（多行，带 backText 或子节点为答案）' +
       '\\n- 元数据注释（可选）：<!--type:concept--> <!--doc--> <!--tag:Name(id)--> 可组合' +
       '\\n- Portal 创建：<!--portal refs:id1,id2--> 或 <!--portal-->（空 Portal）' +
+      '\\n\\n行引用模板 {{remId}}：' +
+      '\\n在 oldStr/newStr 中使用 {{remId}} 引用缓存大纲中已有行的完整内容（不含缩进），系统在 str_replace 前自动展开。缩进仍由你控制。' +
+      '\\n优势：避免反复抄写行内容（含 remId 和元数据标记），减少 token 开销和复制错误。' +
+      '\\n示例 reorder：oldStr="    {{id1}}\\n    {{id2}}"  newStr="    {{id2}}\\n    {{id1}}"' +
+      '\\n规则：只能引用缓存大纲中存在的 remId；新增行不能使用 {{}}；可混用模板和手写内容。' +
       '\\n\\n⚠️ 插入位置红线：新行必须插在目标层级所有兄弟的末尾，不能插在父 Rem 和它的 children 之间，否则触发 children_captured 错误。如需"创建新父节点并移入已有 children"，必须分两次 edit_tree 完成。' +
       '\\n\\n六种禁止操作：' +
       '\\n- content_modified：修改已有行内容 → 改用 edit_rem' +
@@ -101,8 +106,8 @@ export function registerEditTools(server: FastMCP): void {
       '\\n\\n关联工具：read_tree（前置读取大纲）、edit_rem（修改单个 Rem 属性/内容）',
     parameters: z.object({
       remId: z.string().describe('根 Rem 的 ID（与 read_tree 时相同）'),
-      oldStr: z.string().describe('要替换的大纲片段（必须精确匹配缓存中的内容，且恰好匹配 1 次）'),
-      newStr: z.string().describe('替换后的大纲片段（可新增/删除/移动/重排行，但禁止修改已有行内容）'),
+      oldStr: z.string().describe('要替换的大纲片段（必须精确匹配缓存中的内容，且恰好匹配 1 次）。支持 {{remId}} 引用已有行内容（不含缩进），系统自动展开'),
+      newStr: z.string().describe('替换后的大纲片段（可新增/删除/移动/重排行，但禁止修改已有行内容）。支持 {{remId}} 引用已有行内容（不含缩进），系统自动展开'),
     }),
     execute: async (args) => {
       const response = await callCli('edit-tree', {
