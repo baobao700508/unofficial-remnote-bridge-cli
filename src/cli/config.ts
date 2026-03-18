@@ -37,6 +37,8 @@ export interface DefaultsConfig {
   readContextMode: 'focus' | 'page';
   readContextAncestorLevels: number;
   readContextDepth: number;
+  // read-rem-in-tree
+  readRemInTreeMaxNodes: number;
   // search
   searchNumResults: number;
 }
@@ -48,6 +50,7 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   readTreeDepth: 3,
   readTreeAncestorLevels: 0,
   readTreeIncludePowerup: false,
+  readRemInTreeMaxNodes: 50,
   readGlobeDepth: -1,
   readContextMode: 'focus',
   readContextAncestorLevels: 2,
@@ -98,6 +101,7 @@ function mergeDefaults(parsed: Partial<DefaultsConfig> | undefined): DefaultsCon
       ? parsed.readTreeAncestorLevels : DEFAULT_DEFAULTS.readTreeAncestorLevels,
     readTreeIncludePowerup: typeof parsed.readTreeIncludePowerup === 'boolean'
       ? parsed.readTreeIncludePowerup : DEFAULT_DEFAULTS.readTreeIncludePowerup,
+    readRemInTreeMaxNodes: isPositiveNumber(parsed.readRemInTreeMaxNodes) ? parsed.readRemInTreeMaxNodes : DEFAULT_DEFAULTS.readRemInTreeMaxNodes,
     readGlobeDepth: typeof parsed.readGlobeDepth === 'number' ? parsed.readGlobeDepth : DEFAULT_DEFAULTS.readGlobeDepth,
     readContextMode: parsed.readContextMode === 'focus' || parsed.readContextMode === 'page'
       ? parsed.readContextMode : DEFAULT_DEFAULTS.readContextMode,

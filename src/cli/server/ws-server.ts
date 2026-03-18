@@ -34,6 +34,7 @@ import { TreeReadHandler } from '../handlers/tree-read-handler.js';
 import { TreeEditHandler } from '../handlers/tree-edit-handler.js';
 import { GlobeReadHandler } from '../handlers/globe-read-handler.js';
 import { ContextReadHandler } from '../handlers/context-read-handler.js';
+import { TreeRemReadHandler } from '../handlers/tree-rem-read-handler.js';
 import crypto from 'crypto';
 
 const PLUGIN_REQUEST_TIMEOUT_MS = 15_000;
@@ -82,6 +83,7 @@ export class BridgeServer {
   private treeEditHandler: TreeEditHandler;
   private globeReadHandler: GlobeReadHandler;
   private contextReadHandler: ContextReadHandler;
+  private treeRemReadHandler: TreeRemReadHandler;
   private defaults: DefaultsConfig;
 
   private config: Required<Omit<BridgeServerConfig, 'onLog' | 'getTimeoutRemaining' | 'defaults' | 'slotIndex' | 'getHeadlessStatus' | 'diagnoseHeadless' | 'reloadHeadless'>> & {
@@ -124,6 +126,7 @@ export class BridgeServer {
     this.treeEditHandler = new TreeEditHandler(remCache, forwardFn, defaults);
     this.globeReadHandler = new GlobeReadHandler(forwardFn, defaults);
     this.contextReadHandler = new ContextReadHandler(forwardFn, defaults);
+    this.treeRemReadHandler = new TreeRemReadHandler(remCache, forwardFn, config.onLog, defaults);
   }
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
@@ -399,6 +402,8 @@ export class BridgeServer {
 
       if (request.action === 'read_rem') {
         result = await this.readHandler.handleReadRem(request.payload);
+      } else if (request.action === 'read_rem_in_tree') {
+        result = await this.treeRemReadHandler.handleReadRemInTree(request.payload);
       } else if (request.action === 'read_tree') {
         result = await this.treeReadHandler.handleReadTree(request.payload);
       } else if (request.action === 'edit_tree') {
@@ -518,8 +523,10 @@ export class BridgeServer {
 
   /** 获取当前状态（timeoutRemaining 通过构造时注入的回调获取） */
   getStatus(): StatusResult {
+    const connected = this.pluginSocket?.readyState === WebSocket.OPEN;
     const result: StatusResult = {
-      pluginConnected: this.pluginSocket?.readyState === WebSocket.OPEN,
+      pluginConnected: connected,
+      pluginIsTwin: connected ? this.pluginIsTwin : false,
       sdkReady: this.pluginSdkReady,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       timeoutRemaining: this.config.getTimeoutRemaining?.() ?? 0,

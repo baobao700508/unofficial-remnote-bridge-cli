@@ -14,6 +14,7 @@ import { disconnectCommand } from './commands/disconnect.js';
 import { readRemCommand } from './commands/read-rem.js';
 import { editRemCommand } from './commands/edit-rem.js';
 import { readTreeCommand } from './commands/read-tree.js';
+import { readRemInTreeCommand } from './commands/read-rem-in-tree.js';
 import { editTreeCommand } from './commands/edit-tree.js';
 import { readGlobeCommand } from './commands/read-globe.js';
 import { readContextCommand } from './commands/read-context.js';
@@ -175,6 +176,37 @@ program
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readTreeCommand(remIdOrJson, { json, ...cmdOpts });
+    }
+  });
+
+program
+  .command('read-rem-in-tree [remIdOrJson]')
+  .description('读取 Rem 子树大纲 + 每个节点的完整 RemObject（read-tree + read-rem 合体）')
+  .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
+  .option('--max-nodes <maxNodes>', '全局节点上限（默认 50）')
+  .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
+  .option('--ancestor-levels <ancestorLevels>', '向上追溯祖先层数（默认 0，上限 10）')
+  .option('--fields <fields>', '只返回 RemObject 中指定字段（逗号分隔）')
+  .option('--full', '输出全部 51 个字段（含 R-F 低频字段）')
+  .option('--includePowerup', '包含 Powerup 系统数据（默认过滤）')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string; maxNodes?: string; maxSiblings?: string; ancestorLevels?: string; fields?: string; full?: boolean; includePowerup?: boolean }) => {
+    const { json } = program.opts();
+    if (json) {
+      const input = parseJsonInput('read-rem-in-tree', remIdOrJson);
+      if (!input) return;
+      await readRemInTreeCommand(input.remId, {
+        json,
+        depth: input.depth?.toString(),
+        maxNodes: input.maxNodes?.toString(),
+        maxSiblings: input.maxSiblings?.toString(),
+        ancestorLevels: input.ancestorLevels?.toString(),
+        fields: input.fields,
+        full: input.full,
+        includePowerup: input.includePowerup,
+      });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      await readRemInTreeCommand(remIdOrJson, { json, ...cmdOpts });
     }
   });
 

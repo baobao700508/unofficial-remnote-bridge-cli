@@ -11,6 +11,7 @@ import type { ReactRNPlugin } from '@remnote/plugin-sdk';
 import type { BridgeRequest } from './websocket-client';
 import { readRem } from '../services/read-rem';
 import { readTree } from '../services/read-tree';
+import { readRemInTree } from '../services/read-rem-in-tree';
 import { readGlobe } from '../services/read-globe';
 import { readContext } from '../services/read-context';
 import { writeRemFields } from '../services/write-rem-fields';
@@ -36,6 +37,8 @@ export function createMessageRouter(plugin: ReactRNPlugin): (request: BridgeRequ
         return readRem(plugin, request.payload as { remId: string; includePowerup?: boolean });
       case 'read_tree':
         return readTree(plugin, request.payload as { remId: string; depth?: number; maxNodes?: number; maxSiblings?: number; ancestorLevels?: number; includePowerup?: boolean });
+      case 'read_rem_in_tree':
+        return readRemInTree(plugin, request.payload as { remId: string; depth?: number; maxNodes?: number; maxSiblings?: number; ancestorLevels?: number; includePowerup?: boolean });
       case 'write_rem_fields':
         return writeRemFields(plugin, request.payload as { remId: string; changes: Record<string, unknown> });
       case 'create_rem':

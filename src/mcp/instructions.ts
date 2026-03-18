@@ -233,6 +233,8 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存，清除 hea
 
 **注意**：\`read_rem\` 默认模式启用 Token Slimming——省略处于默认值的字段，未返回的字段即默认值（如 type 未显示 = "default"，isTodo 未显示 = false，tags 未显示 = []）。需要完整字段用 \`full=true\`。
 
+> **批量修改多个节点时**：改用 \`read_rem_in_tree\` 一次性获取全部节点属性，避免逐个 read_rem。详见场景 D2。
+
 #### edit_rem changes 示例
 
 \`\`\`jsonc
@@ -278,6 +280,22 @@ changes: { "type": "concept", "highlightColor": "Yellow", "fontSize": "H1" }
 - **fontSize**：\`null\` → 调用 \`setFontSize(undefined)\`（恢复普通大小）
 - **todoStatus**：依赖 \`isTodo=true\` 才生效；清除 todo 应设 \`isTodo=false\`
 - **type**：不可设为 \`portal\`（Portal 只能通过 SDK \`createPortal()\` 或 edit_tree \`<!--portal-->\` 创建）
+
+### 场景 D2：批量读取 + 标注（课本划重点）
+
+> "帮我标注这些笔记的重点"、"给关键词加高亮"、"批量修改格式"
+
+当需要读取一棵子树并对**多个节点**进行属性或富文本修改时，使用 \`read_rem_in_tree\` 一次性获取全部信息：
+
+\`read_rem_in_tree\` → 同时获取大纲 + 每个节点的 RemObject（含完整 RichText）
+  ↓
+对目标节点直接调用 \`edit_rem\`（rem 缓存已就绪，无需再逐个 read_rem）
+  +
+如需结构变更，直接调用 \`edit_tree\`（tree 缓存已就绪，无需再 read_tree）
+
+**为什么不用 read_tree + N×read_rem？** \`read_rem_in_tree\` 一次调用建立双重缓存，省去 N+1 次网络往返。对 30+ 节点的子树，差异是 1 次调用 vs 31+ 次调用。
+
+**注意**：\`read_rem_in_tree\` 默认 maxNodes=50（每节点需 40+ SDK 调用），大子树需显式设置 maxNodes。
 
 ### 场景 E：修改结构（新增/删除/移动/重排）
 
@@ -407,7 +425,9 @@ newStr:   最后一个兄弟 <!--idZ-->
 
 ### 场景 G：排查连接问题
 
-\`health\` 检查三层状态：daemon 未运行 → \`connect\`；Plugin 未连接 → 引导用户操作 RemNote；SDK 未就绪 → 等待重试。
+\`health\` 默认查询所有活跃实例的三层状态（daemon / Plugin / SDK），返回 \`instances\` 数组。有 \`--instance\` 或 \`--headless\` 时只查询指定实例。每个实例的 \`plugin.isTwin\` 标记是否为孪生连接。
+
+故障定位：无活跃实例 → \`connect\`；Plugin 未连接 → 引导用户操作 RemNote（或使用 headless 模式）；SDK 未就绪 → 等待重试。
 
 ### 场景 H：管理增强项目
 
@@ -423,8 +443,9 @@ newStr:   最后一个兄弟 <!--idZ-->
 
 ### 黄金法则：先 read 再 edit
 
-- \`edit_rem\` 前必须先 \`read_rem\` 同一个 remId
-- \`edit_tree\` 前必须先 \`read_tree\` 同一个 remId
+- \`edit_rem\` 前必须先 \`read_rem\` 或 \`read_rem_in_tree\` 同一个 remId
+- \`edit_tree\` 前必须先 \`read_tree\` 或 \`read_rem_in_tree\` 同一个 remId
+- \`read_rem_in_tree\` 同时建立两种缓存，调用后可直接 \`edit_tree\` 和 \`edit_rem\`
 - \`search\`/\`read_globe\`/\`read_context\` **不写入缓存**，不能作为 edit 前置
 
 跳过 read 直接 edit 会被拒绝（硬性要求）。

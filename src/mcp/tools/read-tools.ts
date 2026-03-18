@@ -76,6 +76,7 @@ export function registerReadTools(server: FastMCP): void {
       '\\n\\n关键约束：' +
       '\\n- 结果自动写入缓存供 edit_rem 使用。缓存存储完整 RemObject，不受 fields/full 选项影响' +
       '\\n- 默认过滤 Powerup 噪音（系统 Tag 和隐藏子 Rem），includePowerup=true 可恢复' +
+      '\\n\\n⚠️ 如果你需要读取多个 Rem 的属性（≥3 个），且它们在同一棵子树下，请改用 read_rem_in_tree（一次调用批量读取，省去逐个 read_rem 的开销）。' +
       '\\n\\n典型工作流：search 定位 remId → read_rem 获取详情并建立缓存 → edit_rem 编辑属性。' +
       '\\n关联工具：search（定位 remId）、edit_rem（编辑属性，需先 read_rem）、read_tree（查看子树大纲）',
     parameters: z.object({
@@ -135,6 +136,7 @@ export function registerReadTools(server: FastMCP): void {
       '\\n- 结果自动写入缓存供 edit_tree 使用。edit_tree 的 oldStr 必须精确匹配此大纲中的文本' +
       '\\n- 默认过滤 Powerup 噪音，includePowerup=true 可恢复' +
       '\\n- Portal 感知：Portal 类型 Rem 标注 type:portal 和 refs:id1,id2（引用的 Rem ID）' +
+      '\\n\\n⚠️ 如果你需要读取子树后对其中多个节点执行 edit_rem，请改用 read_rem_in_tree（一次调用同时建立 tree 和 rem 双重缓存，省去逐个 read_rem 的开销）。' +
       '\\n\\n典型工作流：search 定位 remId → read_tree 展开子树并建立缓存 → edit_tree 结构编辑。' +
       '\\n关联工具：search（定位 remId）、edit_tree（结构编辑，需先 read_tree）、read_rem（单 Rem JSON 详情）、read_globe（全局鸟瞰）',
     parameters: z.object({
@@ -186,6 +188,84 @@ export function registerReadTools(server: FastMCP): void {
         },
         data.outline,
       );
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // read_rem_in_tree
+  // -------------------------------------------------------------------------
+  server.addTool({
+    name: 'read_rem_in_tree',
+    description:
+      '⭐ 批量编辑场景的首选工具。当你需要读取子树并修改其中多个节点的属性/富文本时，优先使用此工具而非 read_tree + N×read_rem。' +
+      '\\nread_tree + read_rem 的完美结合体：一次调用同时获取子树 Markdown 大纲和每个节点的完整 RemObject JSON。' +
+      '\\n\\n适用场景：需要同时查看子树结构和节点详细属性时（如批量编辑前的全量读取）；一次调用同时建立 tree 缓存（供 edit_tree）和 rem 缓存（供 edit_rem）。' +
+      '\\n不适用场景：只需大纲不需属性（用 read_tree，更轻量）；只需单个 Rem 属性（用 read_rem）。' +
+      '\\n\\n前置条件：daemon 已连接；需要有效的 remId。' +
+      '\\n\\n参数说明：' +
+      '\\n- remId（必需）：子树根节点的 Rem ID' +
+      '\\n- depth（可选，默认 3，-1 无限）：递归展开深度' +
+      '\\n- maxNodes（可选，默认 50）：全局节点总预算。注意默认值比 read_tree 的 200 低，因为每节点需 40+ SDK 调用' +
+      '\\n- maxSiblings（可选，默认 20）：单个父节点下最大可见子节点数' +
+      '\\n- ancestorLevels（可选，默认 0，上限 10）：向上追溯祖先层数' +
+      '\\n- fields（可选）：RemObject 字段过滤，只返回指定字段子集' +
+      '\\n- full（可选，默认 false）：返回全部 51 个 RemObject 字段' +
+      '\\n- includePowerup（可选，默认 false）：包含 Powerup 系统数据' +
+      '\\n\\n输出格式：Data JSON，包含：' +
+      '\\n- outline：Markdown 大纲文本（与 read_tree 输出格式完全一致）' +
+      '\\n- remObjects：扁平 map { remId → RemObject }，每个 RemObject 与 read_rem 输出一致（受 fields/full 参数影响）' +
+      '\\n- rootId, depth, nodeCount 等元数据' +
+      '\\n\\n关键约束：' +
+      '\\n- 同时建立双重缓存：tree:{remId} 供 edit_tree 使用，rem:{nodeRemId} 供 edit_rem 使用' +
+      '\\n- 缓存条目约 N+4（1 tree + 3 参数 + N rem），注意 LRU 上限 200' +
+      '\\n- RemObject 默认启用 Token Slimming（与 read_rem 一致）' +
+      '\\n\\n典型工作流：read_rem_in_tree 一次获取全部信息 → edit_tree 结构编辑 + edit_rem 属性编辑。' +
+      '\\n关联工具：read_tree（只需大纲）、read_rem（只需单 Rem）、edit_tree（结构编辑）、edit_rem（属性编辑）',
+    parameters: z.object({
+      remId: z.string().describe('根 Rem 的 ID'),
+      depth: z
+        .number()
+        .optional()
+        .describe('展开深度（默认 3）'),
+      maxNodes: z
+        .number()
+        .optional()
+        .describe('节点总数上限（默认 50）'),
+      maxSiblings: z
+        .number()
+        .optional()
+        .describe('同级节点显示上限'),
+      ancestorLevels: z
+        .number()
+        .optional()
+        .describe('向上展示的祖先层级数'),
+      fields: z
+        .array(z.string())
+        .optional()
+        .describe('RemObject 字段过滤'),
+      full: z
+        .boolean()
+        .optional()
+        .describe('返回全部 RemObject 字段'),
+      includePowerup: z
+        .boolean()
+        .optional()
+        .describe('是否包含 Powerup 元信息'),
+    }),
+    execute: async (args) => {
+      const payload: Record<string, unknown> = { remId: args.remId };
+      if (args.depth !== undefined) payload.depth = args.depth;
+      if (args.maxNodes !== undefined) payload.maxNodes = args.maxNodes;
+      if (args.maxSiblings !== undefined) payload.maxSiblings = args.maxSiblings;
+      if (args.ancestorLevels !== undefined) payload.ancestorLevels = args.ancestorLevels;
+      if (args.fields !== undefined) payload.fields = args.fields;
+      if (args.full !== undefined) payload.full = args.full;
+      if (args.includePowerup !== undefined) payload.includePowerup = args.includePowerup;
+      const response = await callCli('read-rem-in-tree', payload, { timeoutMs: 60_000 });
+      if (!response.data) {
+        return `read_rem_in_tree 返回了空的 data，remId: ${args.remId}。请检查该 Rem 是否存在。`;
+      }
+      return formatDataJson(response);
     },
   });
 

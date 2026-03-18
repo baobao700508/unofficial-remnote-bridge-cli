@@ -69,7 +69,7 @@ export function registerInfraTools(server: FastMCP): void {
   server.addTool({
     name: 'health',
     description:
-      '检查系统三层状态（daemon 守护进程 / Plugin 连接 / SDK 就绪），用于诊断连接问题。\n\n适用场景：\n- 业务命令失败时，首先调用 health 定位故障层级\n- 执行 connect 后确认通道是否完全就绪\n- 长时间未操作后，检查 daemon 是否仍在运行\n\n输出：返回 JSON，关键字段 ok（三层是否全部健康）、instance、slotIndex、daemon.running、plugin.connected、sdk.ready、timeoutRemaining。headless 模式下额外包含 headless 对象。\n三层有严格依赖：daemon 运行 → Plugin 连接 → SDK 就绪。\nok 为 false 时：daemon 未运行则 connect；Plugin 未连接则确认 RemNote 已打开（或使用 headless 模式）；SDK 未就绪则等待重试。\n\n--diagnose 模式（headless 专用）：截图 + 详细状态 + console 错误 + 排查建议。\n--reload 模式（headless 专用）：重载 headless Chrome 页面。\n\n只读不写，不改变任何状态（--reload 除外）。\n关联工具：connect（启动）、disconnect（结束）',
+      '检查系统三层状态（daemon 守护进程 / Plugin 连接 / SDK 就绪），用于诊断连接问题。\n\n两种模式：\n- 全量模式（默认）：返回所有活跃实例的状态，字段 instances 是数组，每个元素包含 instance、slotIndex、daemon、plugin（含 isTwin 孪生标记）、sdk、timeoutRemaining\n- 单实例模式（headless 会话中自动触发）：返回当前实例的状态，结构与之前相同但 plugin 多了 isTwin 字段\n\nplugin.isTwin 表示 Plugin 连接是否为"孪生连接"——即 Plugin 的 twinSlotIndex 与 daemon 的槽位索引匹配。孪生连接优先级更高，可抢占非孪生连接。\n\n三层有严格依赖：daemon 运行 → Plugin 连接 → SDK 就绪。\nok 为 false 时：无活跃实例则 connect；Plugin 未连接则确认 RemNote 已打开（或使用 headless 模式）；SDK 未就绪则等待重试。\n\n--diagnose 模式（headless 专用）：截图 + 详细状态 + console 错误 + 排查建议。\n--reload 模式（headless 专用）：重载 headless Chrome 页面。\n\n只读不写，不改变任何状态（--reload 除外）。\n关联工具：connect（启动）、disconnect（结束）',
     parameters: z.object({
       diagnose: z.boolean().optional().describe('诊断 headless Chrome（截图 + 状态 + console 错误）'),
       reload: z.boolean().optional().describe('重载 headless Chrome 页面'),

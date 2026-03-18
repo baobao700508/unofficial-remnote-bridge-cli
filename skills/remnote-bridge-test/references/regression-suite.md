@@ -417,6 +417,90 @@
 
 ---
 
+### L3-04: 富文本标注修改 + read-rem-in-tree 验证
+
+> ⚠️ **不可并行**：此用例涉及多次 edit_rem + read_rem_in_tree，高频操作。必须单独串行执行。
+
+**task_description**:
+```
+
+在测试页面下完成以下任务：
+
+阶段 1：创建带初始标注的节点
+
+1. 确认连接正常
+2. 读取测试页面子树
+3. 创建以下结构（edit_tree）：
+
+   {prefix} 化学笔记
+     化学键 ↔ 原子间的强相互作用 <!--type:concept-->
+       共价键 → 共用电子对形成的化学键 <!--type:descriptor-->
+       离子键 → 阴阳离子间的静电引力 <!--type:descriptor-->
+       金属键 → 金属阳离子与自由电子间的作用 <!--type:descriptor-->
+     化学反应 ↔ 物质转变为新物质的过程 <!--type:concept-->
+       氧化还原 → 电子转移的反应 <!--type:descriptor-->
+       酸碱反应 → 质子转移的反应 <!--type:descriptor-->
+       速率因素 ↓ <!--type:descriptor-->
+         温度
+         浓度
+         催化剂
+     溶液 ↔ 均匀混合物 <!--type:concept-->
+       浓度 → 溶质与溶液的比值 <!--type:descriptor-->
+       溶解度 → 一定温度下饱和溶液中溶质的量 <!--type:descriptor-->
+
+4. 使用 read_rem_in_tree 一次性读取全部节点（maxNodes=30）
+5. 对以下节点施加初始标注（edit_rem）：
+   - "化学键" concept：highlightColor = "Yellow"
+   - "共价键" descriptor 的 backText：["共用", {"h": 3, "i": "m", "text": "电子对"}, "形成的化学键"]
+   - "化学反应" concept：highlightColor = "Blue"
+   - "氧化还原" descriptor 的 backText：[{"b": true, "i": "m", "text": "电子转移"}, "的反应"]
+
+阶段 2：修改已有标注
+
+6. 再次使用 read_rem_in_tree 读取最新状态
+7. 修改标注（edit_rem）：
+   a. "化学键"：改 highlightColor 从 Yellow 到 Red
+   b. "共价键"：给 backText 中"电子对"额外加粗（h + b 组合）→
+      ["共用", {"b": true, "h": 3, "i": "m", "text": "电子对"}, "形成的化学键"]
+   c. "氧化还原"：把 backText 改为纯文本（移除粗体）→ ["电子转移的反应"]
+   d. "溶液" concept：新增 highlightColor = "Green"
+   e. "浓度" descriptor 的 backText 改为：
+      [{"i": "m", "text": "溶质", "u": true}, "与", {"i": "m", "text": "溶液", "u": true}, "的比值"]
+
+阶段 3：验证修改
+
+8. 使用 read_rem_in_tree 读取验证
+9. 从 remObjects 逐项验证：
+   - "化学键" highlightColor = "Red"（从 Yellow 改来）
+   - "共价键" backText 中"电子对"同时有 h:3 和 b:true
+   - "氧化还原" backText 是纯字符串，无格式对象
+   - "溶液" highlightColor = "Green"（新增）
+   - "浓度" backText 中"溶质"和"溶液"有 u:true
+```
+
+**Chrome 验证**：
+- ⬜ "化学键" 红色整行高亮（从黄色改来）
+- ⬜ "共价键" backText 中"电子对"黄色荧光+粗体
+- ⬜ "氧化还原" 纯文本，无格式
+- ⬜ "溶液" 绿色整行高亮
+- ⬜ "浓度" backText 中"溶质"和"溶液"有下划线
+
+**断言**：
+- [ ] read_rem_in_tree 成功返回 outline + remObjects
+- [ ] edit_rem 修改 highlightColor 生效（Yellow→Red）
+- [ ] edit_rem 修改 RichText（添加 b+h 组合）生效
+- [ ] edit_rem 移除格式（还原纯文本）生效
+- [ ] edit_rem 新增 highlightColor 生效
+- [ ] edit_rem 添加下划线（u:true）生效
+- [ ] 最终 read_rem_in_tree 返回的 remObjects 与预期一致
+
+**工具选择检查**：
+- [ ] 阶段 1 使用 read_rem_in_tree（而非 read_tree + N×read_rem）
+- [ ] 阶段 2 使用 read_rem_in_tree 重新读取（而非逐个 read_rem）
+- [ ] edit_rem 前未冗余调用 read_rem（缓存已由 read_rem_in_tree 建立）
+
+---
+
 ## L4 大规模真实任务
 
 > 模拟用户让 AI 做的大规模知识整理任务。
@@ -581,6 +665,119 @@
 
 ---
 
+### L4-03: 大规模创建 + 批量富文本标注 + 读取验证
+
+> ⚠️ **不可并行**：此用例创建 35+ 节点 + 多次 edit_rem + 2 次 read_rem_in_tree。必须单独串行执行。
+
+**task_description**:
+```
+在测试页面下完成以下任务：
+
+阶段 1：创建 30+ 节点知识结构
+
+1. 确认连接正常（health 三层就绪）
+2. 读取测试页面子树（read_tree）
+3. 在测试页面下创建以下结构（edit_tree，可分多次）：
+
+   # {prefix} 生物学笔记
+     ## 细胞生物学
+       细胞膜 ↔ 选择性透过的磷脂双分子层 <!--type:concept-->
+         功能 → 保护细胞、控制物质进出 <!--type:descriptor-->
+         组成 → 磷脂、蛋白质、糖类 <!--type:descriptor-->
+       细胞核 ↔ 含遗传物质的细胞控制中心 <!--type:concept-->
+         功能 → 储存 DNA、控制基因表达 <!--type:descriptor-->
+         结构 → 核膜、核仁、染色质 <!--type:descriptor-->
+       线粒体 ↔ 细胞的能量工厂 <!--type:concept-->
+         功能 → 有氧呼吸产生 ATP <!--type:descriptor-->
+         特点 → 含自身 DNA，双层膜结构 <!--type:descriptor-->
+     ## 遗传学
+       DNA ↔ 脱氧核糖核酸，遗传信息载体 <!--type:concept-->
+         结构 → 双螺旋，碱基配对 A-T, G-C <!--type:descriptor-->
+         复制 → 半保留复制 <!--type:descriptor-->
+       RNA ↔ 核糖核酸，参与蛋白质合成 <!--type:concept-->
+         类型 ↓ <!--type:descriptor-->
+           mRNA：信使 RNA
+           tRNA：转运 RNA
+           rRNA：核糖体 RNA
+       基因表达 ↔ 从 DNA 到蛋白质的过程 <!--type:concept-->
+         转录 → DNA → mRNA <!--type:descriptor-->
+         翻译 → mRNA → 蛋白质 <!--type:descriptor-->
+     ## 生态学
+       生态系统 ↔ 生物群落与无机环境的统一体 <!--type:concept-->
+         组成 → 生产者、消费者、分解者、无机环境 <!--type:descriptor-->
+         能量流动 → 单向流动，逐级递减 <!--type:descriptor-->
+       食物链 ↔ 生物之间的营养关系 <!--type:concept-->
+         规律 → 能量沿食物链传递效率 10%-20% <!--type:descriptor-->
+       碳循环 ↔ 碳元素在生态系统中的循环 <!--type:concept-->
+         路径 ↓ <!--type:descriptor-->
+           光合作用固定 CO₂
+           呼吸作用释放 CO₂
+           分解者分解有机物
+
+4. 读取子树确认结构完整（约 35+ 节点）
+
+阶段 2：批量富文本标注（课本划重点）
+
+5. 使用 read_rem_in_tree 读取整棵子树（maxNodes 设为 50），一次获取所有节点的 RemObject
+
+6. 从 remObjects 中找到以下节点的 remId，然后逐个 edit_rem 设置格式：
+
+   a. 行级高亮（整行背景色）：
+      - "细胞膜" 节点：highlightColor = "Yellow"
+      - "DNA" 节点：highlightColor = "Red"
+      - "生态系统" 节点：highlightColor = "Green"
+
+   b. 行内荧光标注（修改 backText 字段中的 RichText）：
+      - "细胞核"的 "功能" descriptor：把 backText 改为
+        [{"h": 3, "i": "m", "text": "储存 DNA"}, "、控制基因表达"]
+      - "基因表达"的 "转录" descriptor：把 backText 改为
+        ["DNA → ", {"b": true, "h": 1, "i": "m", "text": "mRNA"}]
+
+   c. 粗体 + 下划线组合：
+      - "线粒体"的 "功能" descriptor：把 backText 改为
+        [{"b": true, "i": "m", "text": "有氧呼吸"}, "产生 ", {"i": "m", "text": "ATP", "u": true}]
+
+   d. 文字颜色：
+      - "食物链"的 "规律" descriptor：把 backText 改为
+        ["能量沿食物链传递效率 ", {"i": "m", "tc": 1, "text": "10%-20%"}]
+
+阶段 3：读取验证
+
+7. 再次使用 read_rem_in_tree 读取整棵子树（maxNodes=50）
+8. 从返回的 remObjects 中验证：
+   - "细胞膜" 节点的 highlightColor 是否为 "Yellow"
+   - "DNA" 节点的 highlightColor 是否为 "Red"
+   - "生态系统" 节点的 highlightColor 是否为 "Green"
+   - 被修改 backText 的节点，backText 字段是否包含预期的格式化对象（h、b、u、tc 字段）
+
+9. 报告所有验证结果
+```
+
+**Chrome 验证**：
+- ⬜ 35+ 节点内容正确
+- ⬜ H1 根 → 3 个 H2 章节 → concept → descriptor 层级正确
+- ⬜ concept 加粗，descriptor 正常字重
+- ⬜ 细胞膜黄色、DNA 红色、生态系统绿色整行高亮
+- ⬜ "储存 DNA" 黄色荧光底色
+- ⬜ "mRNA" 粗体+红色荧光
+- ⬜ "有氧呼吸"粗体，"ATP"下划线
+- ⬜ "10%-20%" 红色文字
+
+**断言**：
+- [ ] edit_tree 成功创建 35+ 节点结构
+- [ ] read_rem_in_tree 成功返回全部节点的 remObjects（nodeCount ≥ 35）
+- [ ] edit_rem 设置 highlightColor 生效（3 个节点）
+- [ ] edit_rem 修改 RichText 行内高亮（h 字段）生效
+- [ ] edit_rem 修改 RichText 粗体+下划线组合生效
+- [ ] edit_rem 修改 RichText 文字颜色（tc 字段）生效
+- [ ] 最终 read_rem_in_tree 返回的 remObjects 中所有标注与预期一致
+
+**工具选择检查**：
+- [ ] 阶段 2 使用 read_rem_in_tree（而非 read_tree + N×read_rem）
+- [ ] edit_rem 前未冗余调用 read_rem
+
+---
+
 ## L5 极端边界 + 错误恢复
 
 > 测试防线触发、大树省略、并发检测等边界场景。
@@ -707,7 +904,8 @@
 | read_tree | L2-01~04, L3-01~03, L4-01~02, L5-01~03 |
 | edit_tree | L2-01~02, L2-04, L3-01~03, L4-01~02, L5-01~03 |
 | read_rem | L2-02~03, L3-01, L4-01~02, L5-01 |
-| edit_rem | L2-03, L4-02, L5-01 |
+| edit_rem | L2-03, L3-04, L4-02, L4-03, L5-01 |
+| read_rem_in_tree | L3-04, L4-03 |
 | addon | （独立管理命令，按需手动测） |
 | setup / clean | （破坏性命令，不适合自动化） |
 

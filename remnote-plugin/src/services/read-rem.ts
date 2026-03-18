@@ -33,6 +33,21 @@ export async function readRem(
     throw new Error(`Rem not found: ${payload.remId}`);
   }
 
+  return buildRemObject(plugin, rem, { includePowerup });
+}
+
+/**
+ * 从已有 Rem 对象组装完整 RemObject（跳过 findOne）。
+ *
+ * 供 readRem 和 readRemInTree 共享。
+ */
+export async function buildRemObject(
+  plugin: ReactRNPlugin,
+  rem: Rem,
+  options: { includePowerup?: boolean },
+): Promise<RemObject & { powerupFiltered?: { tags: number; children: number } }> {
+  const { includePowerup = false } = options;
+
   // 并行获取所有异步字段
   const [
     isDocument,
