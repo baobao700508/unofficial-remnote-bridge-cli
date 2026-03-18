@@ -174,6 +174,66 @@ oldStr 必须在缓存大纲中恰好匹配 1 次
 
 ---
 
+## 行引用模板 `{{remId}}`
+
+在 oldStr/newStr 中使用 `{{remId}}` 引用缓存大纲中已有行的完整内容（不含缩进）。系统在 str_replace 前自动展开。不含 `{{}}` 的传统写法完全兼容。
+
+### 动机
+
+AI 构造 oldStr/newStr 时需精确复制已有行（含 17+ 字符 Rem ID 和元数据标记），导致 token 浪费和复制错误。`{{remId}}` 让 AI 只写 ID，系统自动替换为完整行内容。
+
+### 展开规则
+
+| 输入 | 展开为 |
+|------|--------|
+| `{{remId}}` | 该 remId 对应行的去缩进完整内容（含 `<!--remId 元数据-->`） |
+| `    {{remId}}` | AI 写的缩进 + 展开后的完整内容 |
+| 不含 `{{}}` 的文本 | 原样不变 |
+
+### 示例
+
+**重排（对比传统写法）**
+
+```
+# 传统写法（~250 tokens）
+oldStr: "    动态数组 <!--id1_1 type:concept-->\n    静态数组 <!--id1_2 type:concept-->"
+newStr: "    静态数组 <!--id1_2 type:concept-->\n    动态数组 <!--id1_1 type:concept-->"
+
+# 模板写法（~50 tokens）
+oldStr: "    {{id1_1}}\n    {{id1_2}}"
+newStr: "    {{id1_2}}\n    {{id1_1}}"
+```
+
+**移动（改变缩进）**
+
+```
+oldStr: "  {{idA}}\n    {{idT}}\n  {{idB}}"
+newStr: "  {{idA}}\n  {{idB}}\n    {{idT}}"
+```
+
+**删除（模板用于上下文定位）**
+
+```
+oldStr: "    {{idA}}\n    {{idA1}}\n    {{idB}}"
+newStr: "    {{idB}}"
+```
+
+**新增 + 模板混用**
+
+```
+oldStr: "  {{idZ}}"
+newStr: "  新增行\n  {{idZ}}"
+```
+
+### 限制
+
+- 只匹配纯字母数字（`[a-zA-Z0-9]+`），与 RemNote cloze 语法 `{{text}}` 不冲突（cloze 含中文/空格/标点不会被匹配）
+- 匹配到但不在缓存大纲中的 `{{xxx}}` 原样保留（可能是 cloze），并输出 templateWarnings
+- `{{remId}}` 不含缩进，缩进由 AI 控制（move 操作会改变缩进）
+- 新增行没有 remId，不能用模板表示
+
+---
+
 ## 支持的操作
 
 ### 新增行
@@ -458,8 +518,9 @@ RemNote SDK 存在已知 bug：
 4. daemon TreeEditHandler:
    ├─ 防线 1: cache.get('tree:' + remId) 存在？
    ├─ 防线 2: 用缓存的 depth/maxNodes/maxSiblings 重新 read-tree → 对比
-   ├─ 防线 3: countOccurrences(cachedOutline, oldStr) === 1？
-   ├─ modifiedOutline = cachedOutline.replace(oldStr, newStr)
+   ├─ 模板展开: {{remId}} → 缓存中对应行的完整内容（不含缩进）
+   ├─ 防线 3: countOccurrences(cachedOutline, expandedOldStr) === 1？
+   ├─ modifiedOutline = cachedOutline.replace(expandedOldStr, expandedNewStr)
    ├─ 解析新旧大纲为树（parseOutline）
    ├─ 对比差异（diffTrees）
    │   ├─ 根节点校验
@@ -499,11 +560,19 @@ remnote-bridge edit-tree kLr --old-str '    叶子节点 <!--leaf-->\n' --new-st
 ### 调换两个兄弟的顺序
 
 ```bash
+# 传统写法
 remnote-bridge edit-tree kLr --old-str '  节点 A <!--idA-->\n  节点 B <!--idB-->' --new-str '  节点 B <!--idB-->\n  节点 A <!--idA-->'
+
+# 模板写法（JSON 模式）
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  {{idA}}\n  {{idB}}","newStr":"  {{idB}}\n  {{idA}}"}'
 ```
 
 ### 将节点移到另一个父节点下
 
 ```bash
+# 传统写法
 remnote-bridge edit-tree kLr --old-str '  旧父 <!--oldP-->\n    目标 <!--target-->\n  新父 <!--newP-->' --new-str '  旧父 <!--oldP-->\n  新父 <!--newP-->\n    目标 <!--target-->'
+
+# 模板写法（JSON 模式）
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  {{oldP}}\n    {{target}}\n  {{newP}}","newStr":"  {{oldP}}\n  {{newP}}\n    {{target}}"}'
 ```

@@ -2,16 +2,79 @@
  * TreeEditHandler — edit-tree 请求的业务编排
  *
  * 职责：
- * 1. 三道防线（缓存存在、变更检测、str_replace 精确匹配）
- * 2. 解析新旧大纲并 diff
- * 3. 逐项执行操作（通过 forwardToPlugin 调用原子操作）
- * 4. 成功后重新 read-tree 更新缓存
+ * 1. 模板展开（{{remId}} → 缓存中对应行的完整内容）
+ * 2. 三道防线（缓存存在、变更检测、str_replace 精确匹配）
+ * 3. 解析新旧大纲并 diff
+ * 4. 逐项执行操作（通过 forwardToPlugin 调用原子操作）
+ * 5. 成功后重新 read-tree 更新缓存
  */
 
 import type { DefaultsConfig } from '../config.js';
 import { DEFAULT_DEFAULTS } from '../config.js';
 import { RemCache } from './rem-cache.js';
 import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiffError, type ParsedMetadata } from './tree-parser.js';
+
+// ────────────────────────── 模板展开 ──────────────────────────
+
+/**
+ * 匹配 {{remId}} 占位符。
+ * 限定纯字母数字，避免与 RemNote cloze 语法 {{text}} 冲突
+ * （cloze 内容可能含中文、空格、标点，不会被此正则匹配）。
+ */
+const TEMPLATE_RE = /\{\{([a-zA-Z0-9]+)\}\}/g;
+
+/** 行尾标记正则（与 tree-parser.ts 的 LINE_MARKER_RE 一致） */
+const LINE_MARKER_RE = /<!--(\S+)(?:\s+\S+)*-->$/;
+
+/** 省略占位符正则（与 tree-parser.ts 的 ELIDED_LINE_RE 一致） */
+const ELIDED_LINE_RE = /^<!--\.\.\.elided\s/;
+
+/**
+ * 从缓存大纲构建 remId → 去缩进完整行 的映射。
+ * 省略占位符行无 remId，自然不会进入映射。
+ */
+function buildLineMap(cachedOutline: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const line of cachedOutline.split('\n')) {
+    const stripped = line.trimStart();
+    if (!stripped || ELIDED_LINE_RE.test(stripped)) continue;
+    const match = stripped.match(LINE_MARKER_RE);
+    if (match) {
+      map.set(match[1], stripped);
+    }
+  }
+  return map;
+}
+
+/**
+ * 展开 oldStr/newStr 中的 {{remId}} 占位符。
+ *
+ * {{remId}} 被替换为该 remId 在缓存大纲中对应行的完整内容（不含缩进）。
+ * 不含 {{}} 的文本原样返回（零开销，向后兼容）。
+ *
+ * 匹配到纯字母数字但不在 lineMap 中的 {{xxx}} 原样保留（可能是 cloze 内容），
+ * 不报错，避免与 RemNote 的 {{cloze}} 语法冲突。未展开的模板记录在 warnings 中。
+ */
+function expandTemplates(
+  text: string,
+  lineMap: Map<string, string>,
+  warnings: string[],
+): string {
+  if (!text.includes('{{')) return text;
+  return text.replace(TEMPLATE_RE, (match, remId: string) => {
+    const content = lineMap.get(remId);
+    if (content === undefined) {
+      // 不在 lineMap 中：可能是 cloze 文本，原样保留并记录 warning
+      warnings.push(
+        `{{${remId}}} 未在缓存大纲中找到，已原样保留（若为 cloze 可忽略；若为 remId 请检查拼写）`,
+      );
+      return match;
+    }
+    return content;
+  });
+}
+
+// ────────────────────────── 接口 ──────────────────────────
 
 export interface TreeEditPayload {
   remId: string;
@@ -73,8 +136,19 @@ export class TreeEditHandler {
       );
     }
 
+    // ── 模板展开：{{remId}} → 缓存中对应行的完整内容（不含缩进）──
+    const lineMap = buildLineMap(cachedOutline);
+    const templateWarnings: string[] = [];
+    const expandedOldStr = expandTemplates(oldStr, lineMap, templateWarnings);
+    const expandedNewStr = expandTemplates(newStr, lineMap, templateWarnings);
+
+    // 展开后 noop 检查（原始不等但展开后可能相等）
+    if (expandedOldStr === expandedNewStr) {
+      return { ok: true, operations: [], ...(templateWarnings.length > 0 && { templateWarnings }) };
+    }
+
     // ── 防线 3: str_replace 精确匹配 ──
-    const matchCount = countOccurrences(cachedOutline, oldStr);
+    const matchCount = countOccurrences(cachedOutline, expandedOldStr);
     if (matchCount === 0) {
       throw new Error(
         `old_str not found in the tree outline of ${remId}`,
@@ -87,7 +161,7 @@ export class TreeEditHandler {
       );
     }
 
-    const modifiedOutline = cachedOutline.replace(oldStr, newStr);
+    const modifiedOutline = cachedOutline.replace(expandedOldStr, expandedNewStr);
 
     // ── 解析新旧大纲 ──
     const oldTree = parseOutline(cachedOutline);
@@ -245,7 +319,7 @@ export class TreeEditHandler {
     };
     this.cache.set('tree:' + remId, updatedResult.outline);
 
-    return { ok: true, operations };
+    return { ok: true, operations, ...(templateWarnings.length > 0 && { templateWarnings }) };
   }
 }
 

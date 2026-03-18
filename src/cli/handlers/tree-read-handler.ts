@@ -48,9 +48,12 @@ export class TreeReadHandler {
     const previousCachedAt = this.cache.getCreatedAt(cacheKey);
 
     // 转发到 Plugin 的 read_tree service
-    const result = await this.forwardToPlugin('read_tree', {
+    const rawResult = await this.forwardToPlugin('read_tree', {
       remId, depth, maxNodes, maxSiblings, ancestorLevels, includePowerup,
-    }) as TreeReadResult;
+    }) as TreeReadResult & { nodeRemIds?: unknown };
+    // 剥离内部字段 nodeRemIds（不暴露给 CLI 输出）
+    delete rawResult.nodeRemIds;
+    const result = rawResult as TreeReadResult;
 
     // 缓存大纲文本 + 读取参数（供 edit-tree 乐观并发检测时复现相同查询）
     this.cache.set(cacheKey, result.outline);

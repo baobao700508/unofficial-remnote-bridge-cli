@@ -8,26 +8,7 @@
  */
 
 import { RemCache } from './rem-cache.js';
-
-/** R-F 字段（仅 --full 模式输出，默认不输出） */
-const RF_FIELDS = new Set([
-  'children',
-  'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
-  'isPowerupPropertyListItem', 'isPowerupSlot',
-  'deepRemsBeingReferenced',
-  'ancestorTagRem', 'descendantTagRem',
-  'portalsAndDocumentsIn', 'allRemInDocumentOrPortal', 'allRemInFolderQueue',
-  'timesSelectedInSearch', 'lastTimeMovedTo', 'schemaVersion',
-  'embeddedQueueViewMode',
-  'localUpdatedAt', 'lastPracticed',
-]);
-
-/** Portal 简化输出字段（type === 'portal' 时默认输出这 8 个字段） */
-export const PORTAL_FIELDS = [
-  'id', 'type', 'portalType', 'portalDirectlyIncludedRem',
-  'parent', 'positionAmongstSiblings',
-  'createdAt', 'updatedAt',
-] as const;
+import { filterRemFields } from './rem-field-filter.js';
 
 export class ReadHandler {
   constructor(
@@ -59,39 +40,7 @@ export class ReadHandler {
     const fields = payload.fields as string[] | undefined;
     const full = payload.full as boolean | undefined;
 
-    let result: Record<string, unknown>;
-
-    if (full) {
-      // --full → 返回完整对象（含 R-F 字段）。浅拷贝避免污染缓存对象。
-      result = { ...(remObject as Record<string, unknown>) };
-    } else if (fields) {
-      // --fields 过滤：只返回指定字段 + id
-      const obj = remObject as Record<string, unknown>;
-      result = { id: obj.id };
-      for (const field of fields) {
-        if (field in obj) {
-          result[field] = obj[field];
-        }
-      }
-    } else if ((remObject as Record<string, unknown>).type === 'portal') {
-      // Portal 简化模式：只输出 8 个关键字段
-      const obj = remObject as Record<string, unknown>;
-      result = {};
-      for (const field of PORTAL_FIELDS) {
-        if (field in obj) {
-          result[field] = obj[field];
-        }
-      }
-    } else {
-      // 默认模式：排除 R-F 字段
-      const obj = remObject as Record<string, unknown>;
-      result = {};
-      for (const [key, value] of Object.entries(obj)) {
-        if (!RF_FIELDS.has(key)) {
-          result[key] = value;
-        }
-      }
-    }
+    let result = filterRemFields(remObject as Record<string, unknown>, { full, fields });
 
     // 附加缓存覆盖提示
     if (previousCachedAt) {

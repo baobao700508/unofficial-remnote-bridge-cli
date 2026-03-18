@@ -14,6 +14,7 @@ import { disconnectCommand } from './commands/disconnect.js';
 import { readRemCommand } from './commands/read-rem.js';
 import { editRemCommand } from './commands/edit-rem.js';
 import { readTreeCommand } from './commands/read-tree.js';
+import { readRemInTreeCommand } from './commands/read-rem-in-tree.js';
 import { editTreeCommand } from './commands/edit-tree.js';
 import { readGlobeCommand } from './commands/read-globe.js';
 import { readContextCommand } from './commands/read-context.js';
@@ -65,14 +66,28 @@ program
   .description('RemNote Bridge — CLI + MCP Server + Plugin')
   .version(version)
   .option('--json', '以 JSON 格式输出（适用于程序化调用）')
-  .option('--instance <name>', '指定 daemon 实例名（也可用 REMNOTE_BRIDGE_INSTANCE 环境变量）')
-  .option('--headless', '使用 headless 实例（覆盖 --instance，也可用 REMNOTE_HEADLESS=1 环境变量）');
+  .option('--instance <name>', '指定 daemon 实例名（"headless" 是保留名，不可使用）')
+  .option('--headless', '使用 headless 模式（固定实例名为 headless，也可用 REMNOTE_HEADLESS=1 环境变量）');
 
 // 全局参数同步到环境变量，使所有命令中的 resolveInstanceId() 自动生效
 program.hook('preAction', () => {
   const opts = program.opts();
   const headlessEnv = process.env.REMNOTE_HEADLESS;
   const isHeadless = opts.headless || headlessEnv === '1' || headlessEnv === 'true';
+
+  // 禁止 --instance headless，必须使用 --headless
+  if (!isHeadless && opts.instance === 'headless') {
+    const msg = '错误: --instance headless 不是合法用法。请使用 --headless 全局选项连接 headless 实例。\n'
+      + '用法: remnote-bridge --headless connect（启动）→ remnote-bridge --headless <命令>（后续操作）';
+    if (opts.json) {
+      console.log(JSON.stringify({ ok: false, command: 'unknown', error: msg }));
+    } else {
+      console.error(msg);
+    }
+    process.exitCode = 1;
+    // 阻止后续命令执行
+    process.exit(1);
+  }
 
   if (isHeadless) {
     // headless 覆盖 instance，固定实例名
@@ -161,6 +176,37 @@ program
     } else {
       if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
       await readTreeCommand(remIdOrJson, { json, ...cmdOpts });
+    }
+  });
+
+program
+  .command('read-rem-in-tree [remIdOrJson]')
+  .description('读取 Rem 子树大纲 + 每个节点的完整 RemObject（read-tree + read-rem 合体）')
+  .option('--depth <depth>', '展开深度（默认 3，-1 = 全部展开）')
+  .option('--max-nodes <maxNodes>', '全局节点上限（默认 50）')
+  .option('--max-siblings <maxSiblings>', '每个父节点下展示的 children 上限（默认 20）')
+  .option('--ancestor-levels <ancestorLevels>', '向上追溯祖先层数（默认 0，上限 10）')
+  .option('--fields <fields>', '只返回 RemObject 中指定字段（逗号分隔）')
+  .option('--full', '输出全部 51 个字段（含 R-F 低频字段）')
+  .option('--includePowerup', '包含 Powerup 系统数据（默认过滤）')
+  .action(async (remIdOrJson: string | undefined, cmdOpts: { depth?: string; maxNodes?: string; maxSiblings?: string; ancestorLevels?: string; fields?: string; full?: boolean; includePowerup?: boolean }) => {
+    const { json } = program.opts();
+    if (json) {
+      const input = parseJsonInput('read-rem-in-tree', remIdOrJson);
+      if (!input) return;
+      await readRemInTreeCommand(input.remId, {
+        json,
+        depth: input.depth?.toString(),
+        maxNodes: input.maxNodes?.toString(),
+        maxSiblings: input.maxSiblings?.toString(),
+        ancestorLevels: input.ancestorLevels?.toString(),
+        fields: input.fields,
+        full: input.full,
+        includePowerup: input.includePowerup,
+      });
+    } else {
+      if (!remIdOrJson) { console.error('错误: 缺少 remId'); process.exitCode = 1; return; }
+      await readRemInTreeCommand(remIdOrJson, { json, ...cmdOpts });
     }
   });
 

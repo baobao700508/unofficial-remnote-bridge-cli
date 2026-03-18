@@ -78,6 +78,7 @@ export interface ReloadResult {
 
 export interface StatusResult {
   pluginConnected: boolean;
+  pluginIsTwin: boolean;
   sdkReady: boolean;
   uptime: number;
   timeoutRemaining: number;

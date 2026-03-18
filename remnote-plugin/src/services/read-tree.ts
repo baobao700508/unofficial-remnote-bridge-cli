@@ -43,6 +43,8 @@ export interface ReadTreeResult {
   depth: number;
   nodeCount: number;
   outline: string;
+  /** 树中所有节点的 remId 列表（遍历顺序） */
+  nodeRemIds: string[];
   /** 祖先链（从直接父亲到最远祖先，由近及远） */
   ancestors?: AncestorInfo[];
   powerupFiltered?: { tags: number; children: number };
@@ -75,6 +77,7 @@ export async function readTree(
   let totalFilteredTags = 0;
   let totalFilteredChildren = 0;
   const budget = { remaining: maxNodes };
+  const nodeRemIds: string[] = [];
 
   /**
    * 递归构建 OutlineNode 树。
@@ -86,6 +89,7 @@ export async function readTree(
   async function buildNode(rem: Rem, currentDepth: number, maxDepth: number): Promise<OutlineNode> {
     nodeCount++;
     budget.remaining--;
+    nodeRemIds.push(rem._id);
 
     const allChildren = await rem.getChildrenRem();
     const children = includePowerup ? allChildren : await filterNoisyChildren(allChildren);
@@ -179,6 +183,7 @@ export async function readTree(
     depth,
     nodeCount,
     outline,
+    nodeRemIds,
   };
 
   // 祖先链构建
