@@ -292,6 +292,12 @@ remnote-bridge addon uninstall remnote-rag --purge
 
 ## Changelog
 
+### 0.1.15 (2026-03-18)
+
+- **Defense-2 false positive fix** — Removed `.sort()` from ID arrays in RemObject serialization that caused spurious concurrency conflicts in edit-rem
+- **Documentation overhaul** — Strengthened headless mode warnings, added anti-hallucination guardrails for Plugin loading instructions, restructured edit-tree template/fallback dual-mode docs
+- **Skill ↔ MCP doc sync** — Aligned connect, edit-tree, overall instructions across Skill and MCP layers
+
 ### 0.1.14 (2026-03-18)
 
 - **read-rem-in-tree** — New command: fetch subtree outline + all Rem objects in one call (batch read for bulk edits)

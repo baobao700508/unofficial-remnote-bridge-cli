@@ -119,12 +119,20 @@ RemNote 格式设置（标题、高亮、代码等）底层通过 Powerup 机制
 
 所有操作都依赖一个活跃的会话（= 守护进程的生命周期）。
 
-### 标准模式（需要用户配合）
+> **⚠️ 关于 Plugin 加载方式（防幻觉红线）**：
+> - 本插件是**开发者插件**，通过 RemNote「开发你的插件」功能加载本地 URL
+> - **禁止**告诉用户"去插件市场/商店搜索安装"——本插件**不在 RemNote 插件市场中**
+> - **禁止**告诉用户"Settings → Plugins"——这个路径不存在
+> - **禁止**编造不存在的安装流程——严格按照下方步骤引导用户
+
+### 标准模式（默认，推荐）
+
+**标准模式是日常使用的推荐方式**。用户在自己的浏览器中打开 RemNote 并加载 Plugin，Agent 可以通过 \`read_context\` 感知用户正在浏览的页面和焦点位置，实现真正的协作。
 
 \`\`\`
 connect → 启动 daemon（幂等）
   ↓
-⚠️ 用户操作：确保 RemNote 中已加载插件（见下方说明）
+⚠️ 引导用户加载 Plugin（见下方 ★ 标记的步骤）
   ↓
 health → 确认三层就绪（daemon / Plugin / SDK）
   ↓
@@ -133,11 +141,34 @@ health → 确认三层就绪（daemon / Plugin / SDK）
 disconnect → 关闭 daemon，清空所有缓存
 \`\`\`
 
-### Headless 模式（自动连接）
+### ★ 标准模式：connect 后引导用户加载 Plugin（核心步骤）
+
+\`connect\`（不传 headless）成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。你必须引导用户完成以下操作：
+
+**首次使用**（RemNote 从未加载过此插件）：
+1. 打开 RemNote 桌面端或网页端
+2. 点击左侧边栏底部的**插件图标**（拼图形状）
+3. 点击「**开发你的插件**」（Develop Your Plugin）
+4. 在输入框中填入 connect 输出的 **Plugin 服务地址**（如 \`http://localhost:29101\`）
+5. 等待插件加载完成
+
+**非首次使用**（之前已加载过此插件）：
+- 只需**刷新 RemNote 页面**即可（浏览器 F5 或 Cmd+R）
+
+**你必须**：执行 \`connect\` 后，**立即**将上述步骤告知用户，**禁止**跳过此步直接调用业务命令。引导用户完成后，用 \`health\` 确认三层就绪再继续。
+
+### Headless 模式（特殊场景，不推荐日常使用）
 
 通过 setup（一次性）+ headless Chrome 实现自动连接，后续 connect 无需用户介入。
 
-**⚠️ 模式选择建议**：日常使用推荐**标准模式**。Headless 模式下 Chrome 在后台运行，**无法感知用户正在 RemNote 中浏览和操作的界面**（\`read_context\` 返回的是 headless Chrome 的上下文，而非用户的浏览器）。只有在全自动化场景才建议使用 Headless 模式。
+**⚠️ 不推荐日常使用**。Headless Chrome 是后台独立实例，**会丢失用户上下文**：\`read_context\` 返回的是 headless Chrome 的上下文，不是用户浏览器的。Agent 无法感知用户正在浏览和操作的页面，协作体验大打折扣。
+
+**仅在以下场景使用 headless**：
+- 用户明确要求在**服务器/无 GUI 环境**中运行
+- 用户明确表示**不想参与操作**，希望全自动化（CI/CD、定时任务、批量处理等）
+- 用户自己不在 RemNote 前面，不需要与 Agent 协作浏览
+
+**默认始终使用标准模式**，除非用户主动要求 headless。
 
 #### 首次使用（setup）
 
@@ -168,22 +199,6 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存，清除 hea
 - \`health(diagnose=true)\`：截图 + Chrome 状态 + console 错误
 - \`health(reload=true)\`：重载 headless Chrome 页面
 - Plugin 始终不连接 → 可能登录 session 过期，需重新 setup
-
-### ⚠️ 标准模式：connect 后需要用户配合（重要）
-
-\`connect\`（不传 headless）成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。
-
-**首次使用**（RemNote 从未加载过此插件）：
-1. 打开 RemNote 桌面端或网页端
-2. 点击左侧边栏底部的插件图标（拼图形状）
-3. 点击「开发你的插件」（Develop Your Plugin）
-4. 在输入框中填入 connect 输出的 Plugin 服务地址（如 \`http://localhost:29101\`）
-5. 等待插件加载完成
-
-**非首次使用**（之前已加载过此插件）：
-- 只需**刷新 RemNote 页面**即可（浏览器 F5 或 Cmd+R）
-
-**你必须**：执行 \`connect\` 后，**立即告知用户需要完成上述操作**，不要直接调用业务命令。引导用户完成后，用 \`health\` 确认三层就绪再继续。
 
 ### Windows 注意事项
 
@@ -326,59 +341,39 @@ changes: { "type": "concept", "highlightColor": "Yellow", "fontSize": "H1" }
 - \`<!--portal refs:id1,id2-->\`（创建并引用指定 Rem）
 - \`<!--portal-->\`（创建空 Portal）
 
-#### str_replace 构造示例
-
-**示例 1：在末尾新增行**
-\`\`\`
-oldStr:
-  最后一个兄弟 <!--idZ-->
-newStr:
-  最后一个兄弟 <!--idZ-->
-  新增行
-\`\`\`
-
-**示例 2：删除一个带子节点的行（必须一起删）**
-\`\`\`
-oldStr:
-  子节点 A <!--idA-->
-    孙节点 A1 <!--idA1-->
-  子节点 B <!--idB-->
-newStr:
-  子节点 B <!--idB-->
-\`\`\`
-
-**示例 3：创建多行闪卡**
-\`\`\`
-oldStr:
-  子节点 A <!--idA-->
-newStr:
-  什么是线性回归？ ↓
-    一种基本的回归分析方法
-    假设因变量与自变量呈线性关系
-  子节点 A <!--idA-->
-\`\`\`
-
 #### 行引用模板 \`{{remId}}\`
 
-在 oldStr/newStr 中使用 \`{{remId}}\` 引用缓存大纲中已有行的完整内容（不含缩进）。系统在 str_replace 前自动展开。
+已有行支持两种写法：**模板模式**（推荐）和**完整匹配模式**（回退）。
 
-**优势**：避免抄写完整行内容（remId、元数据标记），减少 token 浪费和复制错误。
+**模板模式**（优先使用）：用 \`{{remId}}\` 引用已有行，系统自动展开为完整内容（不含缩进）。节省 token、减少复制错误。
+**完整匹配模式**（回退）：直接从大纲复制完整行内容（含 \`<!--remId 元数据-->\`）。
 
-**示例：重排两个节点**
+**策略：优先模板，连续失败则回退**。如果模板模式连续 2+ 次因 ID 错误导致 \`old_str not found\`，说明当前上下文不足以准确引用 ID——立即切换到完整匹配模式（从最新大纲复制完整行内容），不要反复重试模板。
+
+**模板模式示例**：
 \`\`\`
-// 不用模板：
-oldStr: "    动态数组 <!--id1_1 type:concept-->\\n    静态数组 <!--id1_2 type:concept-->"
-newStr: "    静态数组 <!--id1_2 type:concept-->\\n    动态数组 <!--id1_1 type:concept-->"
-
-// 用模板：
+# 重排两个节点
 oldStr: "    {{id1_1}}\\n    {{id1_2}}"
 newStr: "    {{id1_2}}\\n    {{id1_1}}"
+
+# 删除带子节点的行
+oldStr: "  {{idA}}\\n    {{idA1}}\\n  {{idB}}"
+newStr: "  {{idB}}"
+
+# 末尾新增行（新增行手动写，已有行用模板）
+oldStr: "  {{idZ}}"
+newStr: "  新增行\\n  {{idZ}}"
 \`\`\`
 
-**规则**：
+**完整匹配模式示例**（回退时使用）：
+\`\`\`
+oldStr: "    动态数组 <!--id1_1 type:concept-->\\n    静态数组 <!--id1_2 type:concept-->"
+newStr: "    静态数组 <!--id1_2 type:concept-->\\n    动态数组 <!--id1_1 type:concept-->"
+\`\`\`
+
+**模板规则**：
 - \`{{remId}}\` 展开为**不含缩进**的完整行内容，缩进由你控制
-- 只匹配纯字母数字（\`[a-zA-Z0-9]+\`），与 RemNote cloze 语法 \`{{text}}\` 不冲突（cloze 含中文/空格/标点，不会被匹配）
-- 匹配到但不在缓存大纲中的 \`{{xxx}}\` 原样保留（可能是 cloze），并输出 warning
+- 只匹配纯字母数字（\`[a-zA-Z0-9]+\`），与 RemNote cloze 语法 \`{{text}}\` 不冲突
 - 新增行不能用 \`{{}}\`（新增行没有 remId）
 - 可以混用：部分行用 \`{{id}}\`，部分行手动写
 
@@ -387,15 +382,13 @@ newStr: "    {{id1_2}}\\n    {{id1_1}}"
 在有子节点的 Rem 和其 children 之间插入新行，会导致新行"劫持"已有 children：
 
 \`\`\`
-❌ 错误：插在父 Rem 和 children 之间
-oldStr:   水分子 ↓ <!--idA-->
-newStr:   水分子 ↓ <!--idA-->
-          新行                    ← children 会变成新行的子节点！
+❌ 错误（模板）：
+oldStr: "  {{idA}}"   newStr: "  {{idA}}\\n  新行"   ← idA 有子节点，新行劫持 children！
+❌ 错误（完整匹配）：
+oldStr: "  水分子 ↓ <!--idA-->"   newStr: "  水分子 ↓ <!--idA-->\\n  新行"   ← 同理
 
 ✅ 正确：插在末尾
-oldStr:   最后一个兄弟 <!--idZ-->
-newStr:   最后一个兄弟 <!--idZ-->
-          新行
+oldStr: "  {{idZ}}"   newStr: "  {{idZ}}\\n  新行"
 \`\`\`
 
 #### 创建新节点并移动已有 children
@@ -427,7 +420,7 @@ newStr:   最后一个兄弟 <!--idZ-->
 
 \`health\` 默认查询所有活跃实例的三层状态（daemon / Plugin / SDK），返回 \`instances\` 数组。有 \`--instance\` 或 \`--headless\` 时只查询指定实例。每个实例的 \`plugin.isTwin\` 标记是否为孪生连接。
 
-故障定位：无活跃实例 → \`connect\`；Plugin 未连接 → 引导用户操作 RemNote（或使用 headless 模式）；SDK 未就绪 → 等待重试。
+故障定位：无活跃实例 → \`connect\`；Plugin 未连接 → 引导用户操作 RemNote（标准模式下刷新页面或首次加载插件）；SDK 未就绪 → 等待重试。
 
 ### 场景 H：管理增强项目
 
@@ -642,6 +635,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 ## 7. Error Quick Reference
 
 ### 诊断决策树
+
 
 \`\`\`
 命令报错

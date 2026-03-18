@@ -174,63 +174,55 @@ oldStr 必须在缓存大纲中恰好匹配 1 次
 
 ---
 
-## 行引用模板 `{{remId}}`
+## 两种写法：模板模式与完整匹配模式
 
-在 oldStr/newStr 中使用 `{{remId}}` 引用缓存大纲中已有行的完整内容（不含缩进）。系统在 str_replace 前自动展开。不含 `{{}}` 的传统写法完全兼容。
+已有行（带 `<!--remId-->` 注释的行）在 oldStr/newStr 中支持两种写法：
 
-### 动机
+### 模板模式（优先使用）
 
-AI 构造 oldStr/newStr 时需精确复制已有行（含 17+ 字符 Rem ID 和元数据标记），导致 token 浪费和复制错误。`{{remId}}` 让 AI 只写 ID，系统自动替换为完整行内容。
-
-### 展开规则
-
-| 输入 | 展开为 |
-|------|--------|
-| `{{remId}}` | 该 remId 对应行的去缩进完整内容（含 `<!--remId 元数据-->`） |
-| `    {{remId}}` | AI 写的缩进 + 展开后的完整内容 |
-| 不含 `{{}}` 的文本 | 原样不变 |
-
-### 示例
-
-**重排（对比传统写法）**
+用 `{{remId}}` 引用已有行，系统在 str_replace 前自动展开为完整行内容（不含缩进）。节省 token、减少复制错误。
 
 ```
-# 传统写法（~250 tokens）
-oldStr: "    动态数组 <!--id1_1 type:concept-->\n    静态数组 <!--id1_2 type:concept-->"
-newStr: "    静态数组 <!--id1_2 type:concept-->\n    动态数组 <!--id1_1 type:concept-->"
-
-# 模板写法（~50 tokens）
+# 重排
 oldStr: "    {{id1_1}}\n    {{id1_2}}"
 newStr: "    {{id1_2}}\n    {{id1_1}}"
-```
 
-**移动（改变缩进）**
-
-```
+# 移动（改变缩进 = 改变父节点）
 oldStr: "  {{idA}}\n    {{idT}}\n  {{idB}}"
 newStr: "  {{idA}}\n  {{idB}}\n    {{idT}}"
-```
 
-**删除（模板用于上下文定位）**
-
-```
+# 删除（必须同时删子行）
 oldStr: "    {{idA}}\n    {{idA1}}\n    {{idB}}"
 newStr: "    {{idB}}"
-```
 
-**新增 + 模板混用**
-
-```
+# 新增（新增行手动写，已有行用模板）
 oldStr: "  {{idZ}}"
 newStr: "  新增行\n  {{idZ}}"
 ```
 
-### 限制
-
-- 只匹配纯字母数字（`[a-zA-Z0-9]+`），与 RemNote cloze 语法 `{{text}}` 不冲突（cloze 含中文/空格/标点不会被匹配）
+**模板规则**：
+- `{{remId}}` 展开为**不含缩进**的完整行内容，缩进由你控制
+- 只匹配纯字母数字（`[a-zA-Z0-9]+`），与 RemNote cloze 语法 `{{text}}` 不冲突
 - 匹配到但不在缓存大纲中的 `{{xxx}}` 原样保留（可能是 cloze），并输出 templateWarnings
-- `{{remId}}` 不含缩进，缩进由 AI 控制（move 操作会改变缩进）
 - 新增行没有 remId，不能用模板表示
+
+### 完整匹配模式（回退）
+
+直接从大纲复制已有行的完整内容（含 `<!--remId 元数据-->`）。
+
+```
+# 重排
+oldStr: "    动态数组 <!--id1_1 type:concept-->\n    静态数组 <!--id1_2 type:concept-->"
+newStr: "    静态数组 <!--id1_2 type:concept-->\n    动态数组 <!--id1_1 type:concept-->"
+
+# 移动
+oldStr: "  子节点 A <!--idA-->\n    目标行 <!--idT-->\n  子节点 B <!--idB-->"
+newStr: "  子节点 A <!--idA-->\n  子节点 B <!--idB-->\n    目标行 <!--idT-->"
+```
+
+### ⚠️ 回退策略
+
+**优先使用模板模式**。但如果模板模式连续 2+ 次因 ID 错误导致 `old_str not found`，说明当前上下文不足以准确引用 ID——**立即切换到完整匹配模式**（重新 read_tree，从最新大纲复制完整行内容），不要反复重试模板。
 
 ---
 
@@ -241,12 +233,13 @@ newStr: "  新增行\n  {{idZ}}"
 在 newStr 中添加**无 remId 注释**的新行。新行可以使用 Markdown 前缀和箭头分隔符来设置属性。
 
 ```
-oldStr:
-  子节点 A <!--idA-->
+# 模板模式
+oldStr: "  {{idA}}"
+newStr: "  新增节点\n  {{idA}}"
 
-newStr:
-  新增节点
-  子节点 A <!--idA-->
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->"
+newStr: "  新增节点\n  子节点 A <!--idA-->"
 ```
 
 #### 新增行的 Markdown 前缀
@@ -326,12 +319,13 @@ newStr:
 示例：
 
 ```
-oldStr:
-  子节点 A <!--idA-->
+# 模板模式
+oldStr: "  {{idA}}"
+newStr: "  <!--portal refs:refId1,refId2-->\n  {{idA}}"
 
-newStr:
-  <!--portal refs:refId1,refId2-->
-  子节点 A <!--idA-->
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->"
+newStr: "  <!--portal refs:refId1,refId2-->\n  子节点 A <!--idA-->"
 ```
 
 #### 嵌套新增
@@ -339,11 +333,13 @@ newStr:
 新增行下面可以再嵌套新增行，通过缩进表示父子关系：
 
 ```
-newStr:
-  父节点 ↓
-    答案行 1
-    答案行 2
-  子节点 A <!--idA-->
+# 模板模式
+oldStr: "  {{idA}}"
+newStr: "  父节点 ↓\n    答案行 1\n    答案行 2\n  {{idA}}"
+
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->"
+newStr: "  父节点 ↓\n    答案行 1\n    答案行 2\n  子节点 A <!--idA-->"
 ```
 
 嵌套新增行的父 ID 通过内部占位标记 `__new_N__` 管理，创建顺序保证从浅到深。
@@ -353,14 +349,13 @@ newStr:
 新行**不能**插在一个有子节点的 Rem 和它的 children 之间，否则 children 会被新行"劫持"，触发 `children_captured` 错误。
 
 ```
-❌ 错误：插在父 Rem 和 children 之间
-  水分子 ↓ <!--idA-->
-  新行                    ← children 被解析为新行的子节点！
-    化学式 → H₂O <!--idB role:card-item-->
+❌ 错误（模板）：
+oldStr: "  {{idA}}"   newStr: "  {{idA}}\n  新行"   ← idA 有子节点，新行劫持 children！
+❌ 错误（完整匹配）：
+oldStr: "  水分子 ↓ <!--idA-->"   newStr: "  水分子 ↓ <!--idA-->\n  新行"   ← 同理
 
-✅ 正确：插在所有兄弟末尾
-    极性 → ... <!--idZ role:card-item-->
-  新行                    ← 不影响任何已有节点
+✅ 正确：插在末尾
+oldStr: "  {{idZ}}"   newStr: "  {{idZ}}\n  新行"
 ```
 
 #### 两步操作：创建新节点并移入已有 children
@@ -377,13 +372,13 @@ newStr:
 从 newStr 中移除带 remId 的行。**必须同时删除该行的所有可见子行**，否则报 orphan_detected 错误。
 
 ```
-oldStr:
-  子节点 A <!--idA-->
-    孙节点 A1 <!--idA1-->
-  子节点 B <!--idB-->
+# 模板模式
+oldStr: "  {{idA}}\n    {{idA1}}\n  {{idB}}"
+newStr: "  {{idB}}"
 
-newStr:
-  子节点 B <!--idB-->
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->\n    孙节点 A1 <!--idA1-->\n  子节点 B <!--idB-->"
+newStr: "  子节点 B <!--idB-->"
 ```
 
 删除操作按深度**从深到浅**执行（先删子后删父），确保 RemNote SDK 不会拒绝操作。
@@ -393,15 +388,13 @@ newStr:
 改变行的缩进级别或位置，使其移动到新的父节点下：
 
 ```
-oldStr:
-  子节点 A <!--idA-->
-    目标行 <!--idT-->
-  子节点 B <!--idB-->
+# 模板模式
+oldStr: "  {{idA}}\n    {{idT}}\n  {{idB}}"
+newStr: "  {{idA}}\n  {{idB}}\n    {{idT}}"
 
-newStr:
-  子节点 A <!--idA-->
-  子节点 B <!--idB-->
-    目标行 <!--idT-->
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->\n    目标行 <!--idT-->\n  子节点 B <!--idB-->"
+newStr: "  子节点 A <!--idA-->\n  子节点 B <!--idB-->\n    目标行 <!--idT-->"
 ```
 
 ### 重排行
@@ -409,15 +402,13 @@ newStr:
 调换同级行的顺序：
 
 ```
-oldStr:
-  子节点 A <!--idA-->
-  子节点 B <!--idB-->
-  子节点 C <!--idC-->
+# 模板模式
+oldStr: "  {{idA}}\n  {{idB}}\n  {{idC}}"
+newStr: "  {{idC}}\n  {{idA}}\n  {{idB}}"
 
-newStr:
-  子节点 C <!--idC-->
-  子节点 A <!--idA-->
-  子节点 B <!--idB-->
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->\n  子节点 B <!--idB-->\n  子节点 C <!--idC-->"
+newStr: "  子节点 C <!--idC-->\n  子节点 A <!--idA-->\n  子节点 B <!--idB-->"
 ```
 
 ---
@@ -543,36 +534,42 @@ RemNote SDK 存在已知 bug：
 
 ---
 
-## 常见使用模式
+## 常见使用模式（JSON 模式）
+
+> 优先使用模板模式；连续 2+ 次 `old_str not found` 则回退到完整匹配模式。
 
 ### 在指定位置插入新行
 
 ```bash
-remnote-bridge edit-tree kLr --old-str '  子节点 A <!--idA-->' --new-str '  新增行\n  子节点 A <!--idA-->'
+# 模板模式
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  {{idA}}","newStr":"  新增行\n  {{idA}}"}'
+
+# 完整匹配模式
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  子节点 A <!--idA-->","newStr":"  新增行\n  子节点 A <!--idA-->"}'
 ```
 
 ### 删除一个叶子节点
 
 ```bash
-remnote-bridge edit-tree kLr --old-str '    叶子节点 <!--leaf-->\n' --new-str ''
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"    {{leaf}}\n","newStr":""}'
 ```
 
 ### 调换两个兄弟的顺序
 
 ```bash
-# 传统写法
-remnote-bridge edit-tree kLr --old-str '  节点 A <!--idA-->\n  节点 B <!--idB-->' --new-str '  节点 B <!--idB-->\n  节点 A <!--idA-->'
-
-# 模板写法（JSON 模式）
+# 模板模式
 remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  {{idA}}\n  {{idB}}","newStr":"  {{idB}}\n  {{idA}}"}'
+
+# 完整匹配模式
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  节点 A <!--idA-->\n  节点 B <!--idB-->","newStr":"  节点 B <!--idB-->\n  节点 A <!--idA-->"}'
 ```
 
 ### 将节点移到另一个父节点下
 
 ```bash
-# 传统写法
-remnote-bridge edit-tree kLr --old-str '  旧父 <!--oldP-->\n    目标 <!--target-->\n  新父 <!--newP-->' --new-str '  旧父 <!--oldP-->\n  新父 <!--newP-->\n    目标 <!--target-->'
-
-# 模板写法（JSON 模式）
+# 模板模式
 remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  {{oldP}}\n    {{target}}\n  {{newP}}","newStr":"  {{oldP}}\n  {{newP}}\n    {{target}}"}'
+
+# 完整匹配模式
+remnote-bridge edit-tree --json '{"remId":"kLr","oldStr":"  旧父 <!--oldP-->\n    目标 <!--target-->\n  新父 <!--newP-->","newStr":"  旧父 <!--oldP-->\n  新父 <!--newP-->\n    目标 <!--target-->"}'
 ```

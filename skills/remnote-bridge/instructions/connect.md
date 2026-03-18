@@ -53,13 +53,20 @@ remnote-bridge --json connect --instance work
 
 ## 两种模式
 
-### 标准模式（默认）
+### 标准模式（默认，推荐）
 
-启动 daemon 后需要用户手动在 RemNote 中加载 Plugin。适用于用户已打开 RemNote 的场景。
+**标准模式是推荐的日常使用方式**。启动 daemon 后用户在自己的浏览器中加载 Plugin。优势：Agent 可以通过 `read-context` 感知用户正在浏览的页面和焦点位置，实现真正的协作。
 
-### Headless 模式（`--headless`）
+### Headless 模式（`--headless`，特殊场景）
 
-自动启动 headless Chrome 加载 Plugin，无需用户操作。适用于无 GUI 环境或全自动连接场景。
+自动启动 headless Chrome 加载 Plugin，无需用户操作。
+
+**⚠️ 不推荐日常使用**。Headless Chrome 是后台独立实例，**会丢失用户上下文**——`read-context` 返回的是 headless Chrome 的上下文，不是用户浏览器的。
+
+**仅在以下场景使用 headless**：
+- 用户明确要求在**服务器/无 GUI 环境**中运行
+- 用户明确表示**不想参与操作**，希望全自动化（CI/CD、定时任务、批量处理等）
+- 用户自己不在 RemNote 前面，不需要与 Agent 协作浏览
 
 **前置条件**：必须先执行 `setup` 完成 RemNote 登录。
 
@@ -93,12 +100,17 @@ remnote-bridge --headless disconnect # 结束
 
 `connect`（不传 `--headless`）成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成以下操作：
 
+> **⚠️ 防幻觉红线**：本插件是**开发者插件**，通过「开发你的插件」功能加载本地 URL。
+> - **禁止**告诉用户"去插件市场/商店搜索安装"——本插件**不在 RemNote 插件市场中**
+> - **禁止**告诉用户"Settings → Plugins"——这个路径不存在
+> - **禁止**编造不存在的安装流程——严格按照下方步骤引导用户
+
 ### 首次使用（RemNote 从未加载过此插件）
 
 1. 打开 RemNote 桌面端或网页端
-2. 点击左侧边栏底部的插件图标（拼图形状）
-3. 点击「开发你的插件」（Develop Your Plugin）
-4. 在输入框中填入 connect 输出的 Plugin 服务地址（如 `http://localhost:29101`）
+2. 点击左侧边栏底部的**插件图标**（拼图形状）
+3. 点击「**开发你的插件**」（Develop Your Plugin）
+4. 在输入框中填入 connect 输出的 **Plugin 服务地址**（如 `http://localhost:29101`）
 5. 等待插件加载完成
 
 ### 非首次使用（之前已加载过此插件）

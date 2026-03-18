@@ -292,6 +292,12 @@ remnote-bridge addon uninstall remnote-rag --purge
 
 ## Changelog
 
+### 0.1.15 (2026-03-18)
+
+- **防线 2 误判修复** — 移除 RemObject 序列化中 ID 数组的 `.sort()`，消除 edit-rem 并发检测的假阳性
+- **文档全面优化** — 加强 headless 模式警告、新增 Plugin 加载防幻觉红线、重组 edit-tree 模板/回退双模式文档
+- **Skill ↔ MCP 文档同步** — connect、edit-tree、overall 说明在 Skill 和 MCP 层全面对齐
+
 ### 0.1.14 (2026-03-18)
 
 - **read-rem-in-tree** — 新命令：一次调用获取子树大纲 + 所有 Rem 对象（批量读取，用于批量编辑场景）
