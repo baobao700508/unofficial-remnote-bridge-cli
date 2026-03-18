@@ -111,6 +111,7 @@ remnote-bridge search "machine learning"
 | `read-context` | Current focus/page context view | No |
 | `read-tree <remId>` | Subtree as Markdown outline | Yes |
 | `read-rem <remId>` | Single Rem's full JSON properties | Yes |
+| `read-rem-in-tree <remId>` | Subtree outline + all Rem objects in one call | Yes |
 | `search <query>` | Full-text search | No |
 
 ### Write
@@ -290,6 +291,14 @@ remnote-bridge addon uninstall remnote-rag --purge
 - **Multi-language support** — Internationalization for broader accessibility
 
 ## Changelog
+
+### 0.1.14 (2026-03-18)
+
+- **read-rem-in-tree** — New command: fetch subtree outline + all Rem objects in one call (batch read for bulk edits)
+- **Token Slimming** — `read-rem` omits default-value fields by default, reducing token usage; use `--full` for complete output
+- **rem-field-filter** — Extracted reusable field filtering logic from read-handler
+- **Headless policy** — Added headless prohibition to CLAUDE.md for testing scenarios
+- **health improvements** — Refactored diagnostics with better status reporting
 
 ### 0.1.13 (2026-03-15)
 

@@ -111,6 +111,7 @@ remnote-bridge search "machine learning"
 | `read-context` | 当前焦点/页面上下文视图 | 否 |
 | `read-tree <remId>` | 子树序列化为 Markdown 大纲 | 是 |
 | `read-rem <remId>` | 单个 Rem 的完整 JSON 属性 | 是 |
+| `read-rem-in-tree <remId>` | 子树大纲 + 所有 Rem 对象，一次调用 | 是 |
 | `search <query>` | 全文搜索 | 否 |
 
 ### 写入
@@ -290,6 +291,14 @@ remnote-bridge addon uninstall remnote-rag --purge
 - **多语言支持** — 国际化，更广泛的可访问性
 
 ## Changelog
+
+### 0.1.14 (2026-03-18)
+
+- **read-rem-in-tree** — 新命令：一次调用获取子树大纲 + 所有 Rem 对象（批量读取，用于批量编辑场景）
+- **Token Slimming** — `read-rem` 默认省略处于默认值的字段，减少 token 消耗；`--full` 获取完整输出
+- **rem-field-filter** — 从 read-handler 提取可复用的字段过滤逻辑
+- **Headless 策略** — CLAUDE.md 新增测试场景禁止 headless 模式的规则
+- **health 改进** — 重构诊断逻辑，优化状态报告
 
 ### 0.1.13 (2026-03-15)
 
