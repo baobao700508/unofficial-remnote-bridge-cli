@@ -6,69 +6,63 @@
 
 ## 功能
 
-`health` 分两步检查指定实例的系统状态：
+`health` 检查系统状态，支持两种模式：
 
+1. **全量模式**（默认）：遍历注册表所有活跃实例，逐个查询三层状态
+2. **单实例模式**（`--instance` / `--headless`）：只查询指定实例
+
+每个实例的检查分两步：
 1. **本地检查**：通过注册表查找实例，确认 daemon 进程是否存活
 2. **远程检查**：通过 WS 连接 daemon，获取 Plugin 连接状态和 SDK 就绪状态
 
-### 多实例支持
+### 孪生连接
 
-通过 `--instance <name>` 指定要检查的实例。不指定时检查 `default` 实例。
-
-`--headless` 是全局选项，用于检查 headless 模式启动的实例。
-
-```bash
-remnote-bridge health --instance work
-
-# 检查 headless 实例
-remnote-bridge --headless health
-```
+每个实例的 Plugin 连接会标记是否为**孪生连接**（`plugin.isTwin`）。孪生连接表示 Plugin 的 `twinSlotIndex` 与 daemon 的槽位索引匹配，优先级更高——孪生连接可以抢占非孪生连接。
 
 ---
 
 ## 用法
 
-### 人类模式
+### 全量模式（默认）
 
 ```bash
 remnote-bridge health
 ```
 
-输出示例（全部健康）：
+输出所有活跃实例的状态：
 
 ```
-✅ 守护进程  运行中（PID: 12345，实例: default，槽位: 0，已运行 5 分钟）
-✅ Plugin    已连接
+=== 实例: default（槽位 0）===
+✅ 守护进程  运行中（PID: 12345，已运行 5 分钟）
+✅ Plugin    已连接（孪生）
 ✅ SDK       就绪
-
 超时: 25 分钟后自动关闭
-```
 
-输出示例（部分不健康）：
-
-```
-✅ 守护进程  运行中（PID: 12345，实例: work，槽位: 1，已运行 2 分钟）
-❌ Plugin    未连接
-❌ SDK       未就绪
-
+=== 实例: headless（槽位 1）===
+✅ 守护进程  运行中（PID: 12346，已运行 2 分钟）
+✅ Plugin    已连接（非孪生）
+✅ SDK       就绪
+✅ Chrome     running
 超时: 28 分钟后自动关闭
 ```
 
-输出示例（daemon 未运行）：
+无活跃实例时：
 
 ```
-❌ 守护进程  未运行
-❌ Plugin    未连接
-❌ SDK       不可用
-
-提示: 执行 `remnote-bridge connect` 启动守护进程
+没有活跃的实例。执行 `remnote-bridge connect` 启动守护进程。
 ```
 
-### JSON 模式
+### 单实例模式
 
 ```bash
-remnote-bridge --json health
+# 指定实例
+remnote-bridge --instance work health
+
+# 检查 headless 实例
+remnote-bridge --headless health
 ```
+
+输出格式与之前相同，但只显示一个实例。
 
 ### Headless 诊断模式
 
@@ -86,7 +80,43 @@ remnote-bridge health --reload
 
 ## JSON 输出
 
-### 全部健康
+### 全量模式
+
+```json
+{
+  "ok": true,
+  "command": "health",
+  "exitCode": 0,
+  "instances": [
+    {
+      "instance": "default",
+      "slotIndex": 0,
+      "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 300 },
+      "plugin": { "connected": true, "isTwin": true },
+      "sdk": { "ready": true },
+      "timeoutRemaining": 1500
+    },
+    {
+      "instance": "headless",
+      "slotIndex": 1,
+      "daemon": { "running": true, "pid": 12346, "reachable": true, "uptime": 120 },
+      "plugin": { "connected": true, "isTwin": true },
+      "sdk": { "ready": true },
+      "timeoutRemaining": 1680,
+      "headless": {
+        "status": "running",
+        "chromeConnected": true,
+        "pageUrl": "http://localhost:29111",
+        "reloadCount": 0,
+        "lastError": null,
+        "recentConsoleErrors": []
+      }
+    }
+  ]
+}
+```
+
+### 单实例模式 — 全部健康
 
 ```json
 {
@@ -96,29 +126,13 @@ remnote-bridge health --reload
   "instance": "default",
   "slotIndex": 0,
   "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 300 },
-  "plugin": { "connected": true },
+  "plugin": { "connected": true, "isTwin": true },
   "sdk": { "ready": true },
   "timeoutRemaining": 1500
 }
 ```
 
-### Plugin 未连接
-
-```json
-{
-  "ok": false,
-  "command": "health",
-  "exitCode": 1,
-  "instance": "work",
-  "slotIndex": 1,
-  "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 120 },
-  "plugin": { "connected": false },
-  "sdk": { "ready": false },
-  "timeoutRemaining": 1680
-}
-```
-
-### daemon 未运行
+### 单实例模式 — daemon 未运行
 
 ```json
 {
@@ -128,7 +142,20 @@ remnote-bridge health --reload
   "instance": "default",
   "daemon": { "running": false },
   "plugin": { "connected": false },
-  "sdk": { "ready": false }
+  "sdk": { "ready": false },
+  "error": "守护进程未运行（实例: default），请先执行 remnote-bridge connect"
+}
+```
+
+### 全量模式 — 无活跃实例
+
+```json
+{
+  "ok": false,
+  "command": "health",
+  "exitCode": 2,
+  "instances": [],
+  "error": "没有活跃的实例，请执行 remnote-bridge connect 启动守护进程"
 }
 ```
 
@@ -140,6 +167,7 @@ remnote-bridge health --reload
 |--------|----------|------|
 | **daemon** | 注册表查找 + `kill(pid, 0)` 探活 | 守护进程是否在运行且可达 |
 | **plugin** | daemon 内部的 `pluginConnected` 状态 | RemNote Plugin 是否已通过 WS 连接到 daemon |
+| **plugin.isTwin** | Plugin hello 握手中的 `twinSlotIndex` | 是否为孪生连接（匹配 daemon 槽位索引） |
 | **sdk** | Plugin 的 hello 握手中的 `sdkReady` 字段 | RemNote SDK 是否就绪（知识库已加载，可调用 API） |
 
 ### 三层关系
@@ -156,9 +184,9 @@ daemon 运行 → Plugin 连接 → SDK 就绪
 
 | 退出码 | 含义 | 触发条件 |
 |--------|------|----------|
-| 0 | 全部健康 | daemon 运行 + Plugin 已连接 + SDK 就绪 |
+| 0 | 全部健康 | 所有实例三层均通过 |
 | 1 | 部分不健康 | daemon 运行但 Plugin 未连接或 SDK 未就绪 |
-| 2 | 不可达 | daemon 未运行，或运行但 WS 连接失败 |
+| 2 | 不可达 | 无活跃实例，或 daemon 不可达 |
 
 ---
 
@@ -166,11 +194,13 @@ daemon 运行 → Plugin 连接 → SDK 就绪
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| `instances` | array | 全量模式下所有实例的状态数组 |
 | `daemon.running` | boolean | 进程是否存活 |
 | `daemon.pid` | number | 进程 ID（仅运行时） |
 | `daemon.reachable` | boolean | WS 连接是否成功（仅运行时） |
 | `daemon.uptime` | number | 运行秒数（仅可达时） |
 | `plugin.connected` | boolean | Plugin WS 连接是否建立 |
+| `plugin.isTwin` | boolean | 是否为孪生连接 |
 | `sdk.ready` | boolean | RemNote SDK 是否就绪 |
 | `timeoutRemaining` | number | 距自动关闭的剩余秒数（仅可达时） |
 
@@ -178,19 +208,12 @@ daemon 运行 → Plugin 连接 → SDK 就绪
 
 ## Headless 模式附加输出
 
-### health 基础输出（headless 模式下额外字段）
+### health 基础输出（headless 实例额外字段）
 
-headless 模式下 `health` 基础输出额外包含 `headless` 对象：
+headless 实例额外包含 `headless` 对象：
 
 ```json
 {
-  "ok": true,
-  "command": "health",
-  "exitCode": 0,
-  "daemon": { "running": true, "pid": 12345, "reachable": true, "uptime": 300 },
-  "plugin": { "connected": true },
-  "sdk": { "ready": true },
-  "timeoutRemaining": 1500,
   "headless": {
     "status": "running",
     "chromeConnected": true,
@@ -232,7 +255,7 @@ headless 模式下 `health` 基础输出额外包含 `headless` 对象：
 
 | 症状 | 可能原因 | 解决方案 |
 |------|----------|----------|
-| daemon 未运行 | 未执行 connect / 已超时关闭 | 执行 `connect` |
+| 无活跃实例 | 未执行 connect / 已超时关闭 | 执行 `connect` |
 | daemon 运行但不可达 | WS 端口被占用或配置不匹配 | 检查 `~/.remnote-bridge/slots.json` 中的端口配置 |
 | Plugin 未连接（标准模式） | RemNote 未打开 / Plugin 未安装 / URL 不匹配 | 打开 RemNote，确认 Plugin 中的 WS URL 设置 |
 | Plugin 未连接（headless 模式） | Chrome 页面加载异常 | `health --diagnose` 查看截图和状态，`health --reload` 重载页面 |

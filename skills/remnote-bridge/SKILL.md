@@ -18,6 +18,7 @@ description: "RemNote 知识库操作指南。通过 remnote-bridge 命令行工
 | read-rem | `instructions/read-rem.md` |
 | edit-rem | `instructions/edit-rem.md` |
 | read-tree | `instructions/read-tree.md` |
+| read-rem-in-tree | `instructions/read-rem-in-tree.md` |
 | edit-tree | `instructions/edit-tree.md` |
 | read-globe | `instructions/read-globe.md` |
 | read-context | `instructions/read-context.md` |
