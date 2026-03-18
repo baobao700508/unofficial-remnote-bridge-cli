@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
-import { callCli } from '../daemon-client.js';
+import { callCli, setHeadlessMode } from '../daemon-client.js';
 import { formatDataJson } from '../format.js';
 
 export function registerInfraTools(server: FastMCP): void {
@@ -28,18 +28,23 @@ export function registerInfraTools(server: FastMCP): void {
   server.addTool({
     name: 'connect',
     description:
-      '启动守护进程（daemon），建立 CLI 与 RemNote Plugin 之间的通信通道。这是所有业务命令（read_rem、edit_rem、search 等）的前置步骤。\n\n适用场景：\n- 开始一次 RemNote 操作会话前，必须先调用此工具\n- 不确定 daemon 是否在运行时，也可安全调用（幂等）\n\n两种模式：\n- 标准模式（默认）：启动 daemon 后需要用户在 RemNote 中手动加载 Plugin\n- Headless 模式（headless=true）：自动启动 headless Chrome 加载 Plugin，无需用户操作。需先完成 setup（保存登录凭证）\n\n输出：返回 JSON，关键字段 ok、alreadyRunning、instance、slotIndex、pid、wsPort、headless。\n幂等：重复调用不会启动多个 daemon。daemon 默认 30 分钟无活动自动关闭。\n关联工具：setup（headless 前置）、disconnect（结束会话）、health（检查状态）',
+      '启动守护进程（daemon），建立 CLI 与 RemNote Plugin 之间的通信通道。这是所有业务命令（read_rem、edit_rem、search 等）的前置步骤。\n\n适用场景：\n- 开始一次 RemNote 操作会话前，必须先调用此工具\n- 不确定 daemon 是否在运行时，也可安全调用（幂等）\n\n两种模式：\n- 标准模式（默认）：启动 daemon 后需要用户在 RemNote 中手动加载 Plugin\n- Headless 模式（headless=true）：自动启动 headless Chrome 加载 Plugin，无需用户操作。需先完成 setup（保存登录凭证）\n\nHeadless 模式会话持久化：connect(headless=true) 后，MCP Server 自动记住 headless 状态，后续所有工具调用（health、read_rem、edit_rem 等）自动路由到 headless 实例，无需额外参数。disconnect 或 clean 后自动清除。\n\n输出：返回 JSON，关键字段 ok、alreadyRunning、instance、slotIndex、pid、wsPort、headless。\n幂等：重复调用不会启动多个 daemon。daemon 默认 30 分钟无活动自动关闭。\n关联工具：setup（headless 前置）、disconnect（结束会话）、health（检查状态）',
     parameters: z.object({
       headless: z.boolean().optional().describe('启用 headless 模式：自动启动 Chrome 加载 Plugin（需先 setup）'),
     }),
     execute: async (args) => {
-      const flags: string[] = [];
-      if (args.headless) flags.push('--headless');
-      const response = await callCli('connect', undefined, {
-        timeoutMs: 90_000,
-        flags: flags.length > 0 ? flags : undefined,
-      });
-      return formatDataJson(response);
+      // headless 模式：connect 前先设置，确保 callCli 注入 --headless
+      if (args.headless) setHeadlessMode(true);
+      try {
+        const response = await callCli('connect', undefined, {
+          timeoutMs: 90_000,
+        });
+        return formatDataJson(response);
+      } catch (e) {
+        // connect 失败时清除 headless 状态
+        if (args.headless) setHeadlessMode(false);
+        throw e;
+      }
     },
   });
 
@@ -49,10 +54,11 @@ export function registerInfraTools(server: FastMCP): void {
   server.addTool({
     name: 'disconnect',
     description:
-      '停止守护进程，释放所有端口、清空内存缓存、结束当前会话。\n\n适用场景：\n- 操作完成后主动释放资源\n- 需要重置连接状态（例如排查问题时先 disconnect 再 connect）\n\n输出：返回 JSON，关键字段 ok、wasRunning（之前是否在运行）、instance、pid。\n幂等：daemon 未运行时调用也返回 ok: true。\n所有缓存随 daemon 退出清空，下次 connect 后需重新 read。\n关联工具：connect（启动会话）、health（检查状态）',
+      '停止守护进程，释放所有端口、清空内存缓存、结束当前会话。自动清除 headless 模式状态。\n\n适用场景：\n- 操作完成后主动释放资源\n- 需要重置连接状态（例如排查问题时先 disconnect 再 connect）\n\n输出：返回 JSON，关键字段 ok、wasRunning（之前是否在运行）、instance、pid。\n幂等：daemon 未运行时调用也返回 ok: true。\n所有缓存随 daemon 退出清空，下次 connect 后需重新 read。\n关联工具：connect（启动会话）、health（检查状态）',
     parameters: z.object({}),
     execute: async () => {
       const response = await callCli('disconnect');
+      setHeadlessMode(false);
       return formatDataJson(response);
     },
   });
@@ -112,6 +118,7 @@ export function registerInfraTools(server: FastMCP): void {
     parameters: z.object({}),
     execute: async () => {
       const response = await callCli('clean');
+      setHeadlessMode(false);
       return formatDataJson(response);
     },
   });

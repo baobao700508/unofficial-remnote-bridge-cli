@@ -16,8 +16,12 @@ import { parseOutline, diffTrees, parsePowerupPrefix, type TreeOp, type TreeDiff
 
 // ────────────────────────── 模板展开 ──────────────────────────
 
-/** 匹配 {{remId}} 占位符 */
-const TEMPLATE_RE = /\{\{(\S+?)\}\}/g;
+/**
+ * 匹配 {{remId}} 占位符。
+ * 限定纯字母数字，避免与 RemNote cloze 语法 {{text}} 冲突
+ * （cloze 内容可能含中文、空格、标点，不会被此正则匹配）。
+ */
+const TEMPLATE_RE = /\{\{([a-zA-Z0-9]+)\}\}/g;
 
 /** 行尾标记正则（与 tree-parser.ts 的 LINE_MARKER_RE 一致） */
 const LINE_MARKER_RE = /<!--(\S+)(?:\s+\S+)*-->$/;
@@ -47,16 +51,24 @@ function buildLineMap(cachedOutline: string): Map<string, string> {
  *
  * {{remId}} 被替换为该 remId 在缓存大纲中对应行的完整内容（不含缩进）。
  * 不含 {{}} 的文本原样返回（零开销，向后兼容）。
+ *
+ * 匹配到纯字母数字但不在 lineMap 中的 {{xxx}} 原样保留（可能是 cloze 内容），
+ * 不报错，避免与 RemNote 的 {{cloze}} 语法冲突。未展开的模板记录在 warnings 中。
  */
-function expandTemplates(text: string, lineMap: Map<string, string>): string {
+function expandTemplates(
+  text: string,
+  lineMap: Map<string, string>,
+  warnings: string[],
+): string {
   if (!text.includes('{{')) return text;
-  return text.replace(TEMPLATE_RE, (_match, remId: string) => {
+  return text.replace(TEMPLATE_RE, (match, remId: string) => {
     const content = lineMap.get(remId);
     if (content === undefined) {
-      throw new Error(
-        `Template {{${remId}}} refers to a remId not found in the cached outline. ` +
-        `Only remIds visible in the last read-tree output can be referenced.`,
+      // 不在 lineMap 中：可能是 cloze 文本，原样保留并记录 warning
+      warnings.push(
+        `{{${remId}}} 未在缓存大纲中找到，已原样保留（若为 cloze 可忽略；若为 remId 请检查拼写）`,
       );
+      return match;
     }
     return content;
   });
@@ -126,12 +138,13 @@ export class TreeEditHandler {
 
     // ── 模板展开：{{remId}} → 缓存中对应行的完整内容（不含缩进）──
     const lineMap = buildLineMap(cachedOutline);
-    const expandedOldStr = expandTemplates(oldStr, lineMap);
-    const expandedNewStr = expandTemplates(newStr, lineMap);
+    const templateWarnings: string[] = [];
+    const expandedOldStr = expandTemplates(oldStr, lineMap, templateWarnings);
+    const expandedNewStr = expandTemplates(newStr, lineMap, templateWarnings);
 
     // 展开后 noop 检查（原始不等但展开后可能相等）
     if (expandedOldStr === expandedNewStr) {
-      return { ok: true, operations: [] };
+      return { ok: true, operations: [], ...(templateWarnings.length > 0 && { templateWarnings }) };
     }
 
     // ── 防线 3: str_replace 精确匹配 ──
@@ -306,7 +319,7 @@ export class TreeEditHandler {
     };
     this.cache.set('tree:' + remId, updatedResult.outline);
 
-    return { ok: true, operations };
+    return { ok: true, operations, ...(templateWarnings.length > 0 && { templateWarnings }) };
   }
 }
 

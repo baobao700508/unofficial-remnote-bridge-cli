@@ -175,10 +175,22 @@ export function instanceLogPath(slotIndex: number): string {
  * 解析实例标识。
  *
  * 优先级：REMNOTE_HEADLESS（最高，覆盖一切）> cliArg > REMNOTE_BRIDGE_INSTANCE > "default"
+ *
+ * "headless" 是保留实例名，只能通过 --headless 全局选项设置，不允许通过 --instance 或环境变量直接指定。
  */
 export function resolveInstanceId(cliArg?: string): string {
   // headless 模式覆盖 --instance，固定实例名
   if (process.env.REMNOTE_HEADLESS === '1') return 'headless';
+
+  // 禁止通过 --instance 或环境变量使用保留名 "headless"
+  const candidate = cliArg || process.env.REMNOTE_BRIDGE_INSTANCE;
+  if (candidate === 'headless') {
+    throw new Error(
+      '--instance headless 不是合法用法。请使用 --headless 全局选项。'
+      + '\n用法: remnote-bridge --headless connect → remnote-bridge --headless <命令>'
+    );
+  }
+
   if (cliArg) return cliArg;
   const fromEnv = process.env.REMNOTE_BRIDGE_INSTANCE;
   if (fromEnv) return fromEnv;

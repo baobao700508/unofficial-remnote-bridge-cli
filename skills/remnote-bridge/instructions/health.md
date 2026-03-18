@@ -15,8 +15,13 @@
 
 通过 `--instance <name>` 指定要检查的实例。不指定时检查 `default` 实例。
 
+`--headless` 是全局选项，用于检查 headless 模式启动的实例。
+
 ```bash
 remnote-bridge health --instance work
+
+# 检查 headless 实例
+remnote-bridge --headless health
 ```
 
 ---

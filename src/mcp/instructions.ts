@@ -155,12 +155,12 @@ setup 只需执行一次。之后每次连接直接用 \`connect(headless=true)\
 
 \`\`\`
 connect(headless=true) → 启动 daemon + headless Chrome 自动加载 RemNote 和 Plugin
-  ↓
+  ↓                        MCP Server 自动记住 headless 状态
 health → 等待三层就绪（Plugin 需要 10-30 秒连接，可多次轮询）
+  ↓                        后续所有工具自动路由到 headless 实例
+业务操作（read / search / edit）
   ↓
-业务操作
-  ↓
-disconnect → 关闭 daemon + headless Chrome，清空所有缓存
+disconnect → 关闭 daemon + headless Chrome，清空所有缓存，清除 headless 状态
 \`\`\`
 
 #### 排查
@@ -230,6 +230,8 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存
 > "把标题改成..."、"改成概念"、"加个高亮"
 
 \`read_rem\` → 确认当前属性 → \`edit_rem\` 传入 changes 对象。只需包含要修改的字段，未提及字段保持不变。
+
+**注意**：\`read_rem\` 默认模式启用 Token Slimming——省略处于默认值的字段，未返回的字段即默认值（如 type 未显示 = "default"，isTodo 未显示 = false，tags 未显示 = []）。需要完整字段用 \`full=true\`。
 
 #### edit_rem changes 示例
 
@@ -357,7 +359,8 @@ newStr: "    {{id1_2}}\\n    {{id1_1}}"
 
 **规则**：
 - \`{{remId}}\` 展开为**不含缩进**的完整行内容，缩进由你控制
-- 只能引用缓存大纲中存在的 remId
+- 只匹配纯字母数字（\`[a-zA-Z0-9]+\`），与 RemNote cloze 语法 \`{{text}}\` 不冲突（cloze 含中文/空格/标点，不会被匹配）
+- 匹配到但不在缓存大纲中的 \`{{xxx}}\` 原样保留（可能是 cloze），并输出 warning
 - 新增行不能用 \`{{}}\`（新增行没有 remId）
 - 可以混用：部分行用 \`{{id}}\`，部分行手动写
 

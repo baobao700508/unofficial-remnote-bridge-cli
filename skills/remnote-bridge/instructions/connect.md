@@ -43,7 +43,9 @@ remnote-bridge --json connect --instance work
 | 2 | 29120 | 29121 | 29122 |
 | 3 | 29130 | 29131 | 29132 |
 
-**实例名解析优先级**：CLI `--instance` 参数 > 环境变量 `REMNOTE_BRIDGE_INSTANCE` > 默认值 `default`。Headless 模式下固定为 `headless`。
+**实例名解析优先级**：CLI `--instance` 参数 > 环境变量 `REMNOTE_BRIDGE_INSTANCE` > 默认值 `default`。
+
+**⚠️ `headless` 是保留实例名**：`--instance headless` 会直接报错。headless 模式必须使用专用的 `--headless` 全局选项（见下方 Headless 模式章节）。
 
 **首次使用多实例时**，用户需在 RemNote 中为每个实例分别配置 dev plugin URL（对应各自的 Plugin 服务端口）。
 
@@ -73,6 +75,15 @@ remnote-bridge --json connect --headless
 ```
 
 Headless 模式下 Plugin 可能需要 10-30 秒才能连接到 daemon，使用 `health` 确认就绪。
+
+`--headless` 是全局选项，headless 会话中**所有命令都需要带上**：
+
+```bash
+remnote-bridge --headless connect    # 启动
+remnote-bridge --headless health     # 检查
+remnote-bridge --headless read-rem --json '{"remId":"..."}'  # 业务命令
+remnote-bridge --headless disconnect # 结束
+```
 
 排查工具：`health --diagnose`（截图+状态+console 错误）、`health --reload`（重载 Chrome 页面）。
 

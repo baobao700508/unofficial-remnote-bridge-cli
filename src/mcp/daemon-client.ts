@@ -24,6 +24,27 @@ const CLI_BIN = 'remnote-bridge';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
+// Headless 模式状态
+// ---------------------------------------------------------------------------
+
+/**
+ * 记住当前会话是否为 headless 模式。
+ * connect(headless=true) 后设为 true，disconnect/clean 后清除。
+ * callCli 会自动为所有 CLI 调用注入 --headless 全局选项。
+ */
+let _headlessMode = false;
+
+/** 设置 headless 模式状态（由 infra-tools 的 connect/disconnect/clean 调用） */
+export function setHeadlessMode(enabled: boolean): void {
+  _headlessMode = enabled;
+}
+
+/** 查询当前是否为 headless 模式 */
+export function isHeadlessMode(): boolean {
+  return _headlessMode;
+}
+
+// ---------------------------------------------------------------------------
 // 错误类
 // ---------------------------------------------------------------------------
 
@@ -61,8 +82,10 @@ export async function callCli(
 ): Promise<CliResponse> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  // 构造参数列表：--json <command> [flags...] [jsonStr]
-  const args: string[] = ['--json', command];
+  // 构造参数列表：--json [--headless] <command> [flags...] [jsonStr]
+  const args: string[] = ['--json'];
+  if (_headlessMode) args.push('--headless');
+  args.push(command);
   if (options?.flags) {
     args.push(...options.flags);
   }

@@ -239,7 +239,7 @@ remnote-bridge disconnect --instance work
 | 2 | 29120 | 29121 | 29122 |
 | 3 | 29130 | 29131 | 29132 |
 
-**实例名解析优先级**：CLI `--instance` > 环境变量 `REMNOTE_BRIDGE_INSTANCE` > 默认值 `default`。
+**实例名解析优先级**：CLI `--instance` > 环境变量 `REMNOTE_BRIDGE_INSTANCE` > 默认值 `default`。`headless` 是保留实例名，不可用于 `--instance`（会报错），必须使用 `--headless` 全局选项。
 
 **Plugin 自动发现**：Plugin 启动后通过 `/api/discovery` 获取其孪生 daemon 的连接信息（WS 端口、槽位索引等），自动建立连接。一个 Plugin 可同时连接最多 4 个 daemon。
 

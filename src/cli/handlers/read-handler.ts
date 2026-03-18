@@ -22,6 +22,45 @@ const RF_FIELDS = new Set([
   'localUpdatedAt', 'lastPracticed',
 ]);
 
+/** Token Slimming: 默认模式下，字段值匹配此表时省略输出。未列入的字段始终输出。 */
+const REM_DEFAULTS: Record<string, unknown> = {
+  backText: null,
+  type: 'default',
+  isDocument: false,
+  fontSize: null,
+  highlightColor: null,
+  isTodo: false,
+  todoStatus: null,
+  isCode: false,
+  isQuote: false,
+  isListItem: false,
+  isCardItem: false,
+  isTable: false,
+  isSlot: false,
+  isProperty: false,
+  portalType: null,
+  portalDirectlyIncludedRem: [],
+  propertyType: null,
+  enablePractice: false,
+  practiceDirection: 'forward',
+  tags: [],
+  sources: [],
+  aliases: [],
+  remsBeingReferenced: [],
+  remsReferencingThis: [],
+  taggedRem: [],
+  descendants: [],
+  siblingRem: [],
+  positionAmongstSiblings: null,
+};
+
+function matchesDefault(value: unknown, defaultValue: unknown): boolean {
+  if (Array.isArray(defaultValue) && defaultValue.length === 0) {
+    return Array.isArray(value) && value.length === 0;
+  }
+  return value === defaultValue;
+}
+
 /** Portal 简化输出字段（type === 'portal' 时默认输出这 8 个字段） */
 export const PORTAL_FIELDS = [
   'id', 'type', 'portalType', 'portalDirectlyIncludedRem',
@@ -83,13 +122,13 @@ export class ReadHandler {
         }
       }
     } else {
-      // 默认模式：排除 R-F 字段
+      // 默认模式：排除 R-F 字段 + 省略匹配默认值的字段（Token Slimming）
       const obj = remObject as Record<string, unknown>;
       result = {};
       for (const [key, value] of Object.entries(obj)) {
-        if (!RF_FIELDS.has(key)) {
-          result[key] = value;
-        }
+        if (RF_FIELDS.has(key)) continue;
+        if (key in REM_DEFAULTS && matchesDefault(value, REM_DEFAULTS[key])) continue;
+        result[key] = value;
       }
     }
 

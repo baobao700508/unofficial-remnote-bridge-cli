@@ -18,12 +18,17 @@
 
 通过 `--instance <name>` 指定要停止的实例。不指定时停止 `default` 实例。
 
+`--headless` 是全局选项，用于停止 headless 模式启动的实例。
+
 ```bash
 # 停止默认实例
 remnote-bridge disconnect
 
 # 停止指定实例
 remnote-bridge disconnect --instance work
+
+# 停止 headless 实例
+remnote-bridge --headless disconnect
 ```
 
 ---

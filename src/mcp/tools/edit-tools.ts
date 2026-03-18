@@ -87,7 +87,7 @@ export function registerEditTools(server: FastMCP): void {
       '\\n在 oldStr/newStr 中使用 {{remId}} 引用缓存大纲中已有行的完整内容（不含缩进），系统在 str_replace 前自动展开。缩进仍由你控制。' +
       '\\n优势：避免反复抄写行内容（含 remId 和元数据标记），减少 token 开销和复制错误。' +
       '\\n示例 reorder：oldStr="    {{id1}}\\n    {{id2}}"  newStr="    {{id2}}\\n    {{id1}}"' +
-      '\\n规则：只能引用缓存大纲中存在的 remId；新增行不能使用 {{}}；可混用模板和手写内容。' +
+      '\\n规则：只匹配纯字母数字（与 RemNote cloze {{text}} 不冲突）；未找到的 {{xxx}} 原样保留并输出 templateWarnings；新增行不能使用 {{}}；可混用模板和手写内容。' +
       '\\n\\n⚠️ 插入位置红线：新行必须插在目标层级所有兄弟的末尾，不能插在父 Rem 和它的 children 之间，否则触发 children_captured 错误。如需"创建新父节点并移入已有 children"，必须分两次 edit_tree 完成。' +
       '\\n\\n六种禁止操作：' +
       '\\n- content_modified：修改已有行内容 → 改用 edit_rem' +

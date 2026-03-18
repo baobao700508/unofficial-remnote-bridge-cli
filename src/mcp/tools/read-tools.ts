@@ -67,8 +67,9 @@ export function registerReadTools(server: FastMCP): void {
       '\\n- full（可选，默认 false）：返回全部 51 个字段（含低频 R-F 字段，如 children、isPowerup 系列、deepRemsBeingReferenced 等）' +
       '\\n- includePowerup（可选，默认 false）：包含 Powerup 系统数据（默认过滤噪音）' +
       '\\n\\n输出格式：Data JSON，核心为 RemObject 对象。' +
-      '\\n- 默认 33 个常用字段（RW + R），full=true 时 51 个，Portal 类型自动简化为 8 个关键字段' +
-      '\\n- 关键字段：id, text, backText, type(concept/descriptor/default/portal), parent, isDocument, tags, fontSize(H1/H2/H3/null), highlightColor(Red/Orange/Yellow/Green/Blue/Purple/Gray/Brown/Pink/null), practiceDirection(forward/backward/both/none), isTodo, todoStatus(Finished/Unfinished/null)' +
+      '\\n- 默认模式（Token Slimming）：省略处于默认值的字段，典型普通 Rem 仅输出 5-6 个差异字段。未显示的字段即为默认值（如 type 未显示 = "default"，isTodo 未显示 = false，tags 未显示 = []）。始终输出的字段：id, text, parent, createdAt, updatedAt' +
+      '\\n- full=true 时返回全部 51 个字段，Portal 类型自动简化为 8 个关键字段' +
+      '\\n- 关键字段：id, text, backText(null), type(concept/descriptor/default/portal), parent, isDocument(false), tags([]), fontSize(H1/H2/H3/null), highlightColor(Red/.../Pink/null), practiceDirection(forward/backward/both/none), isTodo(false), todoStatus(Finished/Unfinished/null)——括号内为默认值' +
       '\\n- children 字段属于 R-F 层级，默认不输出，需 full=true 或 fields 指定' +
       '\\n- text/backText 是 RichText JSON 数组，元素为纯字符串或带 i 字段的对象（i:"m" 格式化文本, i:"q" Rem 引用, i:"x" LaTeX, i:"i" 图片, i:"a" 音视频）' +
       '\\n- 可能附加 cacheOverridden（覆盖旧缓存时）和 powerupFiltered（过滤统计）元数据' +
