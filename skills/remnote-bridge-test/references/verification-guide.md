@@ -138,32 +138,13 @@
 
 ## 4. 结果记录格式
 
-每个测试用例的验收结果记录为：
+验收结果统一记录在 `remnote-bridge-test-workspace/results.md` 中，使用 SKILL.md §6 定义的 Markdown 表格格式。
 
-```json
-{
-  "test_id": "L2-01",
-  "interface": "mcp",
-  "verdict": "PASS" | "FAIL",
-  "dimensions": {
-    "text_content": { "pass": true, "notes": "" },
-    "structure": { "pass": true, "notes": "" },
-    "rem_type": { "pass": true, "notes": "" },
-    "flashcard": { "pass": null, "notes": "此测试不涉及闪卡" },
-    "format": { "pass": true, "notes": "" },
-    "portal": { "pass": null, "notes": "此测试不涉及 Portal" },
-    "tags": { "pass": null, "notes": "此测试不涉及标签" }
-  },
-  "failure_attribution": null | "doc" | "tool" | "model" | "verify",
-  "failure_detail": "",
-  "screenshot_path": "workspace/iteration-1/L2-MCP-01/screenshot.png"
-}
-```
+各维度标记：✅ PASS / ❌ FAIL / ⬜ 不涉及 / ❓ 无法确认
 
-- `pass: true` = 该维度验证通过
-- `pass: false` = 该维度验证失败
-- `pass: null` = 该测试不涉及此维度（跳过）
-- `verdict` 只有当所有相关维度都 `pass: true` 时才为 `"PASS"`
+截图保存路径：`remnote-bridge-test-workspace/{test_id}-{interface}/screenshot-{N}.png`（如 `L2-01-MCP/screenshot-1.png`）
+
+判定规则：所有相关维度都 PASS 才算 PASS，任一维度 FAIL 则整体 FAIL。
 
 ---
 

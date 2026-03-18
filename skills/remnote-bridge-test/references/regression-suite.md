@@ -858,37 +858,59 @@
 
 ---
 
-### L5-03: 并发检测
+### L5-03: 并发检测（三阶段 subagent）
 
-> ⚠️ **不可并行**：此用例需要主 agent 在中间修改数据，且测试并发防线。必须单独串行执行。
+> ⚠️ **不可并行**：三个阶段必须严格串行执行。
+>
+> **执行方式特殊**：此用例拆为 3 个 subagent 串行执行（Phase A → B → C），模拟"外部修改"场景。主 agent 只负责调度，**不直接调用 MCP 工具**。
 
-**task_description**:
+**Phase A — 创建数据并建立缓存（Subagent 1）**:
 ```
-测试写前变更检测（第二道防线）。
-
-1. 确认连接正常
-2. 读取测试页面子树
-3. 创建节点：{prefix} 并发测试目标
-4. 读取子树（read_tree），缓存状态 A
-
-5. ⚠️ 此步骤需要主 agent 协助：
-   主 agent 直接用 MCP 工具修改"{prefix} 并发测试目标"的文本为"{prefix} 已被外部修改"
-   （模拟另一个用户/进程修改了数据）
-
-6. subagent 尝试用 edit_tree 在"{prefix} 并发测试目标"同级新增节点
-   → 应该成功（因为没有修改被改动的那一行）
-
-7. 但如果 subagent 尝试用 edit_tree 删除或移动"{prefix} 并发测试目标"
-   → 可能触发并发检测（因为行内容已变化，oldStr 不匹配）
-
-8. 触发错误后，重新 read_tree 获取最新状态，再次操作
-
-报告：并发检测是否触发、错误信息内容、重新 read 后是否恢复成功
+1. 确认连接正常（health）
+2. 读取测试页面子树（read_tree）
+3. 创建节点（edit_tree）：{prefix} 并发测试目标
+4. 重新读取子树（read_tree），确认节点存在并建立 tree 缓存
+5. 报告新节点的 remId
 ```
 
-**验证**：并发检测机制正常工作。
+**Phase B — 模拟外部修改（Subagent 2）**:
+```
+1. 确认连接正常（health）
+2. 读取 Phase A 报告的 remId 对应的节点（read_rem）
+3. 修改其文本为 "{prefix} 已被外部修改"（edit_rem，changes: {text: "{prefix} 已被外部修改"}）
+4. 确认修改成功
+```
 
-**注意**：此用例需要主 agent 和 subagent 配合——主 agent 在 Step 5 直接修改数据，subagent 在 Step 6-8 尝试操作。实际执行时可能需要拆成两部分。
+> 此操作通过 edit_rem 修改了节点文本，但 daemon 中的 tree 缓存（Phase A 建立的）未被更新——edit_rem 只更新 rem 级别的缓存，不影响 tree 缓存。
+
+**Phase C — 验证并发检测（Subagent 3）**:
+```
+1. 确认连接正常（health）
+2. **不要重新 read_tree**——直接用 daemon 中 Phase A 的旧 tree 缓存
+3. 尝试 edit_tree，oldStr 包含原始文本 "{prefix} 并发测试目标"
+   → 预期失败：edit_tree 会重新从 Plugin 读取当前树状态，发现文本已变为
+     "{prefix} 已被外部修改"，oldStr 在当前大纲中找不到匹配
+   → 应返回 "old_str not found" 错误
+4. 记录错误信息全文
+5. 重新读取子树（read_tree）获取最新缓存
+6. 用正确的当前文本重试 edit_tree（如：在 "{prefix} 已被外部修改" 后新增一个兄弟节点）
+7. 确认操作成功
+```
+
+**主 agent 调度流程**：
+
+1. 派 Subagent 1 执行 Phase A → 从 transcript 中提取新节点 remId
+2. 派 Subagent 2 执行 Phase B（传入 remId）
+3. 派 Subagent 3 执行 Phase C（传入原始文本和 remId）
+4. 审计三个 transcript → Chrome 验收 → 判定
+
+**验证**：Phase C 步骤 3 触发 "old_str not found" 错误（证明 edit_tree 的重读对比机制正确检测到了变更），步骤 6-7 恢复成功。
+
+**断言**：
+- [ ] Phase A：成功创建节点并建立 tree 缓存
+- [ ] Phase B：成功通过 edit_rem 修改文本（模拟外部变更）
+- [ ] Phase C-3：edit_tree 返回 "old_str not found" 错误（并发检测生效）
+- [ ] Phase C-6：重新 read_tree 后操作成功（恢复路径正常）
 
 ---
 

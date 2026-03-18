@@ -283,7 +283,9 @@ edit-tree --json '{"remId":"kLr...","oldStr":"...","newStr":"..."}'
 
 ## 3. 标准工作流
 
-### ⚠️ 标准模式：connect 后需要用户配合
+### ⚠️ 标准模式（推荐）：connect 后需要用户配合
+
+**标准模式是推荐的日常使用方式**。用户在自己的浏览器中操作 RemNote，Agent 可以通过 `read-context` 感知用户正在浏览的页面和焦点位置，实现真正的协作。
 
 `connect` 成功只意味着 daemon 和 Plugin 服务已启动，**Plugin 并未自动连接**。用户必须在 RemNote 中完成操作，Plugin 才能连接到 daemon：
 
@@ -299,11 +301,18 @@ edit-tree --json '{"remId":"kLr...","oldStr":"...","newStr":"..."}'
 
 **你必须**：执行 `connect` 后，**立即告知用户需要完成上述操作**，不要直接调用业务命令。引导用户完成后，用 `health` 确认三层就绪再继续。
 
-### Headless 模式：自动连接
+### Headless 模式（特殊场景，不推荐日常使用）
 
-标准模式每次 connect 后都需要用户手动操作 RemNote。Headless 模式通过 setup（一次性）+ headless Chrome 实现自动连接，后续 connect 无需用户介入。
+通过 setup（一次性）+ headless Chrome 实现自动连接，后续 connect 无需用户介入。
 
-**⚠️ 模式选择建议**：日常使用推荐**标准模式**。Headless 模式下 Chrome 在后台运行，**无法感知用户正在 RemNote 中浏览和操作的界面**（`read-context` 返回的是 headless Chrome 的上下文，而非用户的浏览器）。只有在全自动化场景（CI/CD、定时任务、批量操作等无需与用户界面交互的场景）才建议使用 Headless 模式。
+**⚠️ 不推荐日常使用**。Headless Chrome 是后台独立实例，**会丢失用户上下文**——`read-context` 返回的是 headless Chrome 的上下文，不是用户浏览器的。Agent 无法感知用户正在浏览和操作的页面，协作体验大打折扣。
+
+**仅在以下场景使用 headless**：
+- 用户明确要求在**服务器/无 GUI 环境**中运行
+- 用户明确表示**不想参与操作**，希望全自动化（CI/CD、定时任务、批量处理等）
+- 用户自己不在 RemNote 前面，不需要与 Agent 协作浏览
+
+**默认始终使用标准模式**，除非用户主动要求 headless。
 
 #### 首次使用（setup）
 
