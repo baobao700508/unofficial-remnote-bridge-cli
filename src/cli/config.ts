@@ -52,7 +52,7 @@ export const DEFAULT_DEFAULTS: Readonly<DefaultsConfig> = {
   readTreeIncludePowerup: false,
   readRemInTreeMaxNodes: 50,
   readGlobeDepth: -1,
-  readContextMode: 'focus',
+  readContextMode: 'page',
   readContextAncestorLevels: 2,
   readContextDepth: 3,
   searchNumResults: 20,

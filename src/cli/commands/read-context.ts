@@ -2,7 +2,7 @@
  * read-context 命令
  *
  * 读取当前上下文视图。
- * - --mode focus|page（默认 focus）
+ * - --mode focus|page（默认 page）
  * - --ancestor-levels N 向上追溯几层祖先（默认 2，仅 focus 模式）
  * - --depth N 展开深度（默认 3，仅 page 模式）
  * - --max-nodes N 全局节点上限（默认 200）
@@ -26,7 +26,7 @@ export interface ReadContextOptions {
 
 export async function readContextCommand(options: ReadContextOptions = {}): Promise<void> {
   const { json } = options;
-  const mode = options.mode || 'focus';
+  const mode = options.mode || 'page';
 
   if (mode !== 'focus' && mode !== 'page') {
     const errMsg = '--mode must be "focus" or "page"';
