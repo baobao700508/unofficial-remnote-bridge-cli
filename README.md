@@ -60,7 +60,7 @@ remnote-bridge health
 
 # 4. Explore your knowledge base
 remnote-bridge read-globe                    # Global document overview
-remnote-bridge read-context                  # Current focus in RemNote
+remnote-bridge read-context                  # Current page context in RemNote
 remnote-bridge search "machine learning"     # Full-text search
 remnote-bridge read-tree <remId>             # Expand a subtree
 remnote-bridge read-rem <remId>              # Read Rem properties
@@ -108,7 +108,7 @@ remnote-bridge search "machine learning"
 | Command | Description | Caches |
 |:--------|:------------|:-------|
 | `read-globe` | Global document-level overview | No |
-| `read-context` | Current focus/page context view | No |
+| `read-context` | Current page/focus context view | No |
 | `read-tree <remId>` | Subtree as Markdown outline | Yes |
 | `read-rem <remId>` | Single Rem's full JSON properties | Yes |
 | `read-rem-in-tree <remId>` | Subtree outline + all Rem objects in one call | Yes |
@@ -291,6 +291,11 @@ remnote-bridge addon uninstall remnote-rag --purge
 - **Multi-language support** — Internationalization for broader accessibility
 
 ## Changelog
+
+### 0.1.17 (2026-03-19)
+
+- **Defense-2 three-layer field classification** — `edit_rem` concurrency detection now classifies field differences into three tiers: semantic fields (text/type/tags etc.) → hard reject; parent → pass with `⚠️ parent has changed` warning; metadata (position/timestamps etc.) → pass with `ℹ️ Metadata fields changed` warning. This eliminates false positives after `edit_tree` move/reorder operations
+- **Documentation sync** — Updated defense-2 descriptions across all 5 doc surfaces (SKILL.md, edit-rem.md, overall.md, MCP tool description, SERVER_INSTRUCTIONS) with three-layer classification, warning text examples, and revised judgment tree
 
 ### 0.1.16 (2026-03-19)
 

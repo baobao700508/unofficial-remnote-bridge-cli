@@ -5,7 +5,7 @@
  * Plugin 只负责原子写入（write_rem_fields）。
  *
  * 防线 1：缓存存在性检查（必须先 read 再 edit）
- * 防线 2：乐观并发检测（当前 JSON 与缓存 JSON 比较）
+ * 防线 2：语义并发检测（三层字段比较：语义字段硬拒绝，元数据放行+警告）
  */
 
 import { RemCache } from './rem-cache.js';
@@ -25,6 +25,31 @@ const READ_ONLY_FIELDS = new Set([
   'timesSelectedInSearch', 'lastTimeMovedTo', 'schemaVersion',
   'embeddedQueueViewMode',
   'createdAt', 'updatedAt', 'localUpdatedAt', 'lastPracticed',
+  'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
+  'isPowerupPropertyListItem', 'isPowerupSlot',
+]);
+
+// ── 防线 2 三层字段分类 ──────────────────────────────────────
+// 不在以下两个集合中的字段 = 第1层语义字段（硬拒绝）
+
+/** 第2层：敏感元数据字段——放行但输出专门警告。扩展时须同步更新 handleEditRem 中的 warned 警告生成逻辑 */
+const DEFENSE2_WARN_FIELDS = new Set([
+  'parent',
+]);
+
+/** 第3层：普通元数据字段——放行，有变化时输出统一警告 */
+const DEFENSE2_IGNORE_FIELDS = new Set([
+  'id',
+  // 位置/时间
+  'positionAmongstSiblings', 'updatedAt', 'localUpdatedAt', 'createdAt',
+  'lastPracticed', 'lastTimeMovedTo', 'timesSelectedInSearch',
+  // 级联关联
+  'children', 'siblingRem', 'descendants',
+  'deepRemsBeingReferenced', 'remsReferencingThis',
+  'taggedRem', 'ancestorTagRem', 'descendantTagRem',
+  'portalsAndDocumentsIn', 'allRemInDocumentOrPortal', 'allRemInFolderQueue',
+  // 系统
+  'schemaVersion', 'embeddedQueueViewMode',
   'isPowerup', 'isPowerupEnum', 'isPowerupProperty',
   'isPowerupPropertyListItem', 'isPowerupSlot',
 ]);
@@ -82,27 +107,49 @@ export class EditHandler {
       );
     }
 
-    // ── 防线 2: 乐观并发检测 ──
+    // ── 防线 2: 乐观并发检测（三层字段比较） ──
     const currentRemObject = await this.forwardToPlugin('read_rem', { remId });
-    const currentJson = JSON.stringify(currentRemObject, null, 2);
-    const cachedJson = JSON.stringify(cachedObj, null, 2);
-    if (currentJson !== cachedJson) {
-      // 诊断日志：打出具体哪些字段不同，帮助定位并发误判
-      const diff = diffFields(
-        cachedObj as Record<string, unknown>,
-        currentRemObject as Record<string, unknown>,
-      );
+    const { semantic, warned, ignored } = classifyDiff(
+      cachedObj as Record<string, unknown>,
+      currentRemObject as Record<string, unknown>,
+    );
+
+    // 第1层：语义字段冲突 → 硬拒绝
+    if (semantic.length > 0) {
       console.error(
-        `[defense-2] Rem ${remId} conflict detected. Changed fields: ${diff.join(', ') || '(JSON differs but no top-level field diff — possible nested change)'}`,
+        `[defense-2] Rem ${remId} conflict. Changed semantic fields: ${semantic.join(', ')}`,
       );
-      // 不更新缓存 — 迫使 AI re-read
       throw new Error(
         `Rem ${remId} has been modified since last read. Please read it again before editing.`,
       );
     }
 
+    // 第2层+第3层：元数据变化 → 放行，收集警告
+    const defense2Warnings: string[] = [];
+    if (warned.length > 0) {
+      const cachedParent = (cachedObj as Record<string, unknown>).parent;
+      const currentParent = (currentRemObject as Record<string, unknown>).parent;
+      defense2Warnings.push(
+        `⚠️ parent has changed (was: ${cachedParent}, now: ${currentParent}). ` +
+        `The Rem has been moved to a different parent since last read. Proceeding with edit.`,
+      );
+      console.error(`[defense-2] Rem ${remId} parent changed: ${cachedParent} → ${currentParent}`);
+    }
+    if (ignored.length > 0) {
+      defense2Warnings.push(
+        `ℹ️ Metadata fields changed since last read: ${ignored.join(', ')}. ` +
+        `This is expected after structural operations. Proceeding with edit.`,
+      );
+      console.error(`[defense-2] Rem ${remId} metadata drift: ${ignored.join(', ')}`);
+    }
+
+    // 静默刷新缓存（保持新鲜度）
+    if (warned.length > 0 || ignored.length > 0) {
+      this.cache.set('rem:' + remId, currentRemObject);
+    }
+
     // ── 遍历 changes keys：分类过滤 ──
-    const warnings: string[] = [];
+    const warnings: string[] = [...defense2Warnings];
     const writableChanges: Record<string, unknown> = {};
 
     for (const key of Object.keys(changes)) {
@@ -172,17 +219,26 @@ export class EditHandler {
   }
 }
 
-/** 比较两个 RemObject 的顶层字段，返回值不同的 key 列表 */
-function diffFields(
+/** 三层字段分类比较 — 防线2核心逻辑 */
+function classifyDiff(
   cached: Record<string, unknown>,
   current: Record<string, unknown>,
-): string[] {
+): { semantic: string[]; warned: string[]; ignored: string[] } {
   const allKeys = new Set([...Object.keys(cached), ...Object.keys(current)]);
-  const changed: string[] = [];
+  const semantic: string[] = [];
+  const warned: string[] = [];
+  const ignored: string[] = [];
+
   for (const key of allKeys) {
-    if (JSON.stringify(cached[key]) !== JSON.stringify(current[key])) {
-      changed.push(key);
+    if (JSON.stringify(cached[key]) === JSON.stringify(current[key])) continue;
+
+    if (DEFENSE2_WARN_FIELDS.has(key)) {
+      warned.push(key);
+    } else if (DEFENSE2_IGNORE_FIELDS.has(key)) {
+      ignored.push(key);
+    } else {
+      semantic.push(key);
     }
   }
-  return changed;
+  return { semantic, warned, ignored };
 }

@@ -335,11 +335,15 @@ export function registerReadTools(server: FastMCP): void {
       '\\n\\n重要：用户正在看的页面对 AI 不可见。当用户说"这个"、"当前页面"、"这里"，或描述与已知信息对不上时，必须主动调用 read_context 对齐信息。' +
       '\\n\\n适用场景：了解用户当前焦点位置或打开的页面；用户说"我现在在看什么"、"当前页面是什么"时使用；需要上下文才能理解用户指代时使用。' +
       '\\n不适用场景：查看特定 Rem（已知 remId 用 read_tree）；搜索内容（用 search）。' +
-      '\\n\\n前置条件：daemon 已连接。focus 模式需用户在 RemNote 中有焦点 Rem（光标在某个 Rem 上）或指定 focusRemId；page 模式需有打开的页面。' +
+      '\\n\\n前置条件：daemon 已连接。page 模式只需有打开的页面（几乎总满足）；focus 模式需用户光标停在某个 Rem 上或指定 focusRemId（否则报错"当前没有聚焦的 Rem"）。' +
+      '\\n\\n模式选择指引：' +
+      '\\n- 绝大多数场景用 page（默认）——用户通常只是打开页面浏览，不会特意点击某个 Rem，page 更可靠' +
+      '\\n- 仅当需要知道用户光标具体在哪个 Rem 上时才用 focus——如用户说"我正在编辑的这个"、"光标所在的 Rem"' +
+      '\\n- 不确定时用 page——最坏情况只是展开整个页面；focus 的最坏情况是报错' +
       '\\n\\n参数说明：' +
-      '\\n- mode（可选，默认 "focus"）：视图模式' +
+      '\\n- mode（可选，默认 "page"）：视图模式' +
+      '\\n  - page：以当前打开的页面为根，均匀展开子树（推荐，可靠性高）' +
       '\\n  - focus：以焦点 Rem 为中心的鱼眼视图。焦点完全展开(depth=3)，siblings 浅层预览(depth=1，前3个children可见)，叔伯不展开。焦点行以 * 前缀标记' +
-      '\\n  - page：以当前打开的页面为根，均匀展开子树' +
       '\\n- focusRemId（可选，仅 focus 模式）：指定任意 Rem 作为鱼眼中心，此时不依赖用户实际焦点。page 模式下传入会报错' +
       '\\n- ancestorLevels（可选，默认 2，仅 focus 模式生效）：从焦点向上追溯几层祖先作为上下文起点' +
       '\\n- depth（可选，默认 3，仅 page 模式生效）：向下展开深度（-1 无限）' +
@@ -358,7 +362,7 @@ export function registerReadTools(server: FastMCP): void {
       mode: z
         .enum(['focus', 'page'])
         .optional()
-        .describe('视图模式：focus（聚焦）或 page（页面），默认 focus'),
+        .describe('视图模式：page（页面）或 focus（聚焦），默认 page'),
       ancestorLevels: z
         .number()
         .optional()

@@ -238,7 +238,7 @@ disconnect → 关闭 daemon + headless Chrome，清空所有缓存，清除 hea
 - 用户的描述与你已知信息对不上
 - 搜索不到用户提到的内容
 
-\`read_context\`：focus 模式（默认）以用户焦点为中心构建鱼眼视图；page 模式以当前页面为根展开。两者都返回面包屑路径。
+\`read_context\`：默认使用 **page 模式**——只需有打开的页面即可，几乎总能成功。仅当需要知道用户光标具体在哪个 Rem 上时，才显式传 \`mode="focus"\`（focus 模式要求用户光标停在某个 Rem 上，否则报错"当前没有聚焦的 Rem"）。两者都返回面包屑路径。
 
 ### 场景 D：修改文本或属性
 
@@ -448,7 +448,7 @@ oldStr: "  {{idZ}}"   newStr: "  {{idZ}}\\n  新行"
 ### 两道防线
 
 1. **缓存存在**：必须有对应的 read 缓存
-2. **并发检测**：edit 时重新读取最新数据与缓存比较，Rem 被外部修改则拒绝——必须重新 read
+2. **语义并发检测**（三层字段分类）：edit 时重新读取最新数据并逐字段比较——语义字段（text/type/tags 等）变化 → 硬拒绝；parent 变化 → 放行 + warnings 返回 \`"⚠️ parent has changed (was: X, now: Y)..."\`；普通元数据（positionAmongstSiblings/updatedAt 等）变化 → 放行 + warnings 返回 \`"ℹ️ Metadata fields changed since last read: ..."\`。这意味着 \`edit_tree\` 移动/重排 Rem 后，可以直接 \`edit_rem\` 修改受影响节点，无需重新 read
 
 ### edit_tree 禁止事项
 
@@ -465,7 +465,9 @@ oldStr: "  {{idZ}}"   newStr: "  {{idZ}}\\n  新行"
 | 场景 | 缓存行为 | 重试策略 |
 |:-----|:---------|:---------|
 | edit_rem 写入成功 | 从 Plugin 重新读取 → 更新缓存 | 可继续编辑 |
-| edit_rem 防线拒绝/部分失败 | 不更新缓存 | 必须重新 read_rem |
+| edit_rem 仅元数据变化 | 静默刷新缓存并放行 | 可继续编辑（返回警告） |
+| edit_rem 语义字段冲突 | 不更新缓存 | 必须重新 read_rem |
+| edit_rem 部分写入失败 | 不更新缓存 | 必须重新 read_rem |
 | edit_tree 成功 | 自动 re-read → 更新缓存 | 可连续 edit |
 | edit_tree 防线 3 拒绝（str_replace 不匹配等） | 缓存保持不变 | 调整 oldStr/newStr 后直接重试 |
 | edit_tree 执行中异常 | 已执行操作保留（**无回滚**），不更新缓存 | 必须重新 read_tree |
@@ -630,7 +632,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 - 超链接必须用 \`iUrl\`，\`url\` 字段已废弃无效
 - RichText 对象内部按 **key 字母序排列**（\`_id\` < \`b\` < \`cId\` < \`h\` < \`i\` < \`iUrl\` < \`text\`），确保序列化一致性
 - \`highlightColor\`（RemObject 顶层，字符串 \`"Red"\`）与 \`h\`（RichText 内部，数字 \`1\`）完全独立——前者是整行背景色，后者是文字片段荧光底色
-- 防线 2（乐观并发检测）依赖 key 字母序的确定性序列化来比较缓存与最新数据
+- 防线 2（语义并发检测）依赖 key 字母序的确定性序列化来比较语义字段
 
 ---
 
@@ -645,7 +647,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 ├─ "Plugin 未连接" → RemNote 未打开或插件未加载 → 引导用户操作 RemNote
 ├─ "SDK 未就绪" → 知识库尚未加载 → 等待并重试 health
 ├─ "has not been read yet" → 未先 read → 执行对应 read 后重试
-├─ "has been modified since last read" → 被外部修改 → 必须重新 read（不可直接重试）
+├─ "has been modified since last read" → 语义字段被外部修改 → 必须重新 read（不可直接重试）
 ├─ "Invalid value" → 枚举字段值不合法 → 检查允许的值范围
 ├─ "old_str not found" → oldStr 不精确 → 检查缩进、空格、换行
 ├─ "old_str matches N locations" → oldStr 不够具体 → 扩大范围包含更多上下文

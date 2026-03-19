@@ -97,13 +97,20 @@ export type PropertyTypeValue =
 
 // ─── RemObject 主体 ─────────────────────────────────────────
 
+/**
+ * RemObject 字段注释标记说明：
+ * - [R] 只读 / [RW] 可读写 / [R-F] 只读+默认过滤
+ * - 🛡️D2 = 参与防线2语义比较（变化 → 硬拒绝）
+ * - ⚠️D2 = 敏感元数据（变化 → 放行 + 专门警告）
+ * - ⊘D2 = 普通元数据（变化 → 放行 + 统一警告）
+ */
 export interface RemObject {
 
   // ══════════════════════════════════════════════════════════
   //  核心标识
   // ══════════════════════════════════════════════════════════
 
-  /** [R] Rem 唯一 ID。SDK 直接属性 _id */
+  /** [R] ⊘D2 Rem 唯一 ID。SDK 直接属性 _id */
   id: string;
 
   // ══════════════════════════════════════════════════════════
@@ -111,12 +118,12 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 正面文本（RichText 数组）。SDK: text / setText()
+   * [RW] 🛡️D2 ✅ 正面文本（RichText 数组）。SDK: text / setText()
    * UI 行为：文本内容立即更新显示，无格式副作用
    */
   text: RichText;
   /**
-   * [RW] ✅ 背面文本。SDK: backText / setBackText()
+   * [RW] 🛡️D2 ✅ 背面文本。SDK: backText / setBackText()
    * UI 行为：设值后 Rem 显示为 "正面文本 → 背面文本" 格式（箭头分隔符）
    *         默认 null（无背面）；设值即产生闪卡正反面结构
    * 写入语义：null → setBackText([])（SDK 接受 undefined | RichTextInterface，空数组清除背面）
@@ -129,14 +136,14 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ Rem 类型。SDK: type, getType() / setType(SetRemType)
+   * [RW] 🛡️D2 ✅ Rem 类型。SDK: type, getType() / setType(SetRemType)
    * UI 行为：CONCEPT → 文字变粗体；DESCRIPTOR → 保持正常字重（与默认无视觉差异）
    *         SetRemType 不含 PORTAL(6)，Portal 只能通过 createPortal() 创建
    * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   type: RemTypeValue;
   /**
-   * [RW] ✅ 是否作为独立文档页面打开。SDK: isDocument() / setIsDocument()
+   * [RW] 🛡️D2 ✅ 是否作为独立文档页面打开。SDK: isDocument() / setIsDocument()
    * UI 行为：bullet (•) 变为文档页面图标（小方块），Rem 可作为独立页面打开
    *         独立于 type，CONCEPT Rem 可以同时是 Document
    * 底层机制：Powerup — 注入"文档" Tag + 自动创建 [Status];;[Draft] descriptor 子 Rem
@@ -148,11 +155,12 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 父 Rem ID。null 表示顶级。SDK: parent / setParent(parent, position?)
+   * [RW] ⚠️D2 ✅ 父 Rem ID。null 表示顶级。SDK: parent / setParent(parent, position?)
    * UI 行为：Rem 从原位置消失，出现在新父级的子列表中
+   * 防线2：结构操作后常变化，放行但输出专门警告
    */
   parent: string | null;
-  /** [R] 子 Rem ID 有序数组。SDK 直接属性 children（修改子的 parent 间接改变） */
+  /** [R] ⊘D2 子 Rem ID 有序数组。SDK 直接属性 children（修改子的 parent 间接改变） */
   children: string[];
 
   // ══════════════════════════════════════════════════════════
@@ -160,14 +168,14 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 标题大小。SDK: getFontSize() / setFontSize()
+   * [RW] 🛡️D2 ✅ 标题大小。SDK: getFontSize() / setFontSize()
    * UI 行为：H1 → 超大粗体；H2 → 大粗体（略小于 H1）；H3 → 中粗体
    *         默认 null（普通大小）；setFontSize(undefined) 恢复
    * 底层机制：Powerup — 注入"标题" Tag + 创建 [Size];;[H1/H2/H3] descriptor 子 Rem
    */
   fontSize: FontSize | null;
   /**
-   * [RW] ✅ 高亮颜色。SDK: getHighlightColor() / setHighlightColor()
+   * [RW] 🛡️D2 ✅ 高亮颜色。SDK: getHighlightColor() / setHighlightColor()
    * UI 行为：整行背景变为对应颜色（Red→粉红、Blue→浅蓝），bullet 也着色
    *         默认 null（无高亮）
    * SDK 注意：setHighlightColor() 只能设置颜色，不能清除（null/undefined 均被拒绝）
@@ -181,47 +189,47 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 是否待办。SDK: isTodo() / setIsTodo()
+   * [RW] 🛡️D2 ✅ 是否待办。SDK: isTodo() / setIsTodo()
    * UI 行为：文本前出现空心 checkbox（☐）；副作用：todoStatus 自动初始化为 "Unfinished"
    * 底层机制：Powerup — 注入"待办" Tag + 自动创建 [Status];;[Unfinished] descriptor 子 Rem
    */
   isTodo: boolean;
   /**
-   * [RW] ✅ 待办完成状态。SDK: getTodoStatus() / setTodoStatus()
+   * [RW] 🛡️D2 ✅ 待办完成状态。SDK: getTodoStatus() / setTodoStatus()
    * UI 行为：Finished → checkbox 变蓝色已勾选（☑）+ 文本加删除线
    *         前提：需先 setIsTodo(true)，否则无意义
    * 写入语义：null → 跳过（清除 todo 状态应通过 isTodo=false 实现，SDK 不接受 null）
    */
   todoStatus: TodoStatus | null;
   /**
-   * [RW] ✅ 是否代码块。SDK: isCode() / setIsCode()
+   * [RW] 🛡️D2 ✅ 是否代码块。SDK: isCode() / setIsCode()
    * UI 行为：Rem 变为代码块容器——等宽字体、灰色背景、块级缩进
    * 底层机制：Powerup — 注入"代码" Tag，无参数子 Rem
    */
   isCode: boolean;
   /**
-   * [RW] ✅ 是否引用块。SDK: isQuote() / setIsQuote()
+   * [RW] 🛡️D2 ✅ 是否引用块。SDK: isQuote() / setIsQuote()
    * UI 行为：左侧出现灰色竖线 + 行背景变浅灰（经典 blockquote 样式）
    * 底层机制：Powerup — 注入"引用" Tag，无参数子 Rem
    */
   isQuote: boolean;
   /**
-   * [RW] ✅ 是否列表项。SDK: isListItem() / setIsListItem()
+   * [RW] 🛡️D2 ✅ 是否列表项。SDK: isListItem() / setIsListItem()
    * UI 行为：bullet (•) 变为数字编号 "1."（有序列表样式）
    * 底层机制：Powerup — 注入"列表项" Tag，无参数子 Rem
    */
   isListItem: boolean;
   /**
-   * [RW] ✅ 是否卡片项。SDK: isCardItem() / setIsCardItem()
+   * [RW] 🛡️D2 ✅ 是否卡片项。SDK: isCardItem() / setIsCardItem()
    * UI：无明显变化。功能：标记 Rem 以卡片样式显示（类似看板布局），
    *     而非默认项目符号列表，在 RemNote 的 Card View 中生效
    * 底层机制：Powerup — 注入"卡片条目" Tag (MultiLineCard)，无参数子 Rem
    */
   isCardItem: boolean;
-  /** [R] 是否表格。SDK: isTable()（无 setIsTable，只有 setTableFilter） */
+  /** [R] 🛡️D2 是否表格。SDK: isTable()（无 setIsTable，只有 setTableFilter） */
   isTable: boolean;
   /**
-   * [RW] ✅ 是否 Powerup 插槽。SDK: isSlot() / setIsSlot()
+   * [RW] 🛡️D2 ✅ 是否 Powerup 插槽。SDK: isSlot() / setIsSlot()
    * UI：bullet 变为方形图标（☐）。功能：标记 Rem 为 Powerup 的数据插槽（slot），
    *     Powerup 注册时通过 slots 配置定义，用于存储键值对数据（值为 RichText）。
    *     通过 getPowerupProperty(code, slot) / setPowerupProperty() 读写
@@ -232,7 +240,7 @@ export interface RemObject {
    */
   isSlot: boolean;
   /**
-   * [RW] ✅ 是否 Tag 属性（表格列）。SDK: isProperty() / setIsProperty()
+   * [RW] 🛡️D2 ✅ 是否 Tag 属性（表格列）。SDK: isProperty() / setIsProperty()
    * UI：bullet 变为方形图标（☐，与 isSlot 相同）。功能：标记 Rem 为父级 Tag 的
    *     结构化属性列，可通过 getPropertyType() 指定数据类型（text/number/date/checkbox/
    *     single_select/multi_select/url/image 等），通过 getTagPropertyValue(propertyId) /
@@ -240,31 +248,31 @@ export interface RemObject {
    * 底层机制：与 isSlot 完全相同 — 注入同一个"模板插槽" Tag (vD8KGEg5dkj9bzkRn)
    */
   isProperty: boolean;
-  /** [R-F] 是否 Powerup。SDK: isPowerup()（写入用 addPowerup/removePowerup，参数化）。Powerup 系统标识 */
+  /** [R-F] ⊘D2 是否 Powerup。SDK: isPowerup()（写入用 addPowerup/removePowerup，参数化）。Powerup 系统标识 */
   isPowerup: boolean;
-  /** [R-F] 是否 Powerup 枚举。SDK: isPowerupEnum()。Powerup 细分类型 */
+  /** [R-F] ⊘D2 是否 Powerup 枚举。SDK: isPowerupEnum()。Powerup 细分类型 */
   isPowerupEnum: boolean;
-  /** [R-F] 是否 Powerup 属性。SDK: isPowerupProperty()。Powerup 细分类型 */
+  /** [R-F] ⊘D2 是否 Powerup 属性。SDK: isPowerupProperty()。Powerup 细分类型 */
   isPowerupProperty: boolean;
-  /** [R-F] 是否 Powerup 属性列表项。SDK: isPowerupPropertyListItem()。Powerup 细分类型 */
+  /** [R-F] ⊘D2 是否 Powerup 属性列表项。SDK: isPowerupPropertyListItem()。Powerup 细分类型 */
   isPowerupPropertyListItem: boolean;
-  /** [R-F] 是否 Powerup 插槽。SDK: isPowerupSlot()。Powerup 细分类型 */
+  /** [R-F] ⊘D2 是否 Powerup 插槽。SDK: isPowerupSlot()。Powerup 细分类型 */
   isPowerupSlot: boolean;
 
   // ══════════════════════════════════════════════════════════
   //  Portal 专用
   // ══════════════════════════════════════════════════════════
 
-  /** [R] Portal 子类型。仅 type === 'portal' 时有值。SDK: getPortalType() */
+  /** [R] 🛡️D2 Portal 子类型。仅 type === 'portal' 时有值。SDK: getPortalType() */
   portalType: PortalType | null;
-  /** [Portal-W] Portal 直接包含的 Rem ID 数组。SDK: getPortalDirectlyIncludedRem() / addToPortal() / removeFromPortal()。写入时使用 diff 机制。仅 type === 'portal' 时可修改 */
+  /** [Portal-W] 🛡️D2 Portal 直接包含的 Rem ID 数组。SDK: getPortalDirectlyIncludedRem() / addToPortal() / removeFromPortal()。写入时使用 diff 机制。仅 type === 'portal' 时可修改 */
   portalDirectlyIncludedRem: string[];
 
   // ══════════════════════════════════════════════════════════
   //  属性类型（当此 Rem 是 tag/powerup 的属性时）
   // ══════════════════════════════════════════════════════════
 
-  /** [R] 属性数据类型。SDK: getPropertyType() */
+  /** [R] 🛡️D2 属性数据类型。SDK: getPropertyType() */
   propertyType: PropertyTypeValue | null;
 
   // ══════════════════════════════════════════════════════════
@@ -272,14 +280,14 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 是否启用间隔重复练习。SDK: getEnablePractice() / setEnablePractice()
+   * [RW] 🛡️D2 ✅ 是否启用间隔重复练习。SDK: getEnablePractice() / setEnablePractice()
    * UI：无明显变化。功能：为 true 时，RemNote 根据 Rem 的 text/backText 结构
    *     自动生成闪卡并纳入间隔重复调度。setType(CONCEPT) 可能自动置为 true
    * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
    */
   enablePractice: boolean;
   /**
-   * [RW] ✅ 闪卡练习方向。SDK: getPracticeDirection() / setPracticeDirection()
+   * [RW] 🛡️D2 ✅ 闪卡练习方向。SDK: getPracticeDirection() / setPracticeDirection()
    * UI：无明显变化。功能：控制闪卡生成方向——forward=正面→背面，
    *     backward=背面→正面，both=双向生成，none=不生成闪卡
    * 底层机制：纯字段修改，不涉及 Powerup Tag 注入或隐藏子 Rem
@@ -291,7 +299,7 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 标签 Rem ID 数组。SDK: getTagRems() / addTag() / removeTag()
+   * [RW] 🛡️D2 ✅ 标签 Rem ID 数组。SDK: getTagRems() / addTag() / removeTag()
    * UI 行为：行右侧出现标签徽章（圆角矩形，显示标签名 + × 删除按钮）
    *         setType(CONCEPT) 等操作可能自动添加系统标签
    * 注意：系统 Powerup Tag 会混入此数组（如 setIsCode 注入的"代码" Tag），
@@ -299,12 +307,12 @@ export interface RemObject {
    */
   tags: string[];
   /**
-   * [RW] ✅ 来源 Rem ID 数组。SDK: getSources() / addSource() / removeSource()
+   * [RW] 🛡️D2 ✅ 来源 Rem ID 数组。SDK: getSources() / addSource() / removeSource()
    * UI 行为：Rem 下方出现来源引用子元素（灰色圆角框，显示来源 Rem 名 + ↗ 图标）
    */
   sources: string[];
   /**
-   * [R] 别名 Rem ID 数组。SDK: getAliases()
+   * [R] 🛡️D2 别名 Rem ID 数组。SDK: getAliases()
    * 写入接口 getOrCreateAliasWithText(text) 需要文本参数（非 ID），与 RemObject 的 ID 数组形式不匹配。
    * v1 标记为只读，后续可提供独立命令 `add-alias <remId> <text>`
    */
@@ -314,37 +322,37 @@ export interface RemObject {
   //  关联 — 引用关系（ID 数组）
   // ══════════════════════════════════════════════════════════
 
-  /** [R] 本 Rem 引用的其他 Rem ID 数组。SDK: remsBeingReferenced() */
+  /** [R] 🛡️D2 本 Rem 引用的其他 Rem ID 数组。SDK: remsBeingReferenced() */
   remsBeingReferenced: string[];
-  /** [R-F] 本 Rem 深层引用的 Rem ID 数组。SDK: deepRemsBeingReferenced()。可由 remsBeingReferenced 递归获取 */
+  /** [R-F] ⊘D2 本 Rem 深层引用的 Rem ID 数组。SDK: deepRemsBeingReferenced()。可由 remsBeingReferenced 递归获取 */
   deepRemsBeingReferenced: string[];
-  /** [R] 引用本 Rem 的 Rem ID 数组（反向链接）。SDK: remsReferencingThis() */
+  /** [R] ⊘D2 引用本 Rem 的 Rem ID 数组（反向链接）。SDK: remsReferencingThis() */
   remsReferencingThis: string[];
 
   // ══════════════════════════════════════════════════════════
   //  关联 — 标签体系（ID 数组）
   // ══════════════════════════════════════════════════════════
 
-  /** [R] 被本 Rem 标记的 Rem ID 数组（本 Rem 作为 tag 时）。SDK: taggedRem() */
+  /** [R] ⊘D2 被本 Rem 标记的 Rem ID 数组（本 Rem 作为 tag 时）。SDK: taggedRem() */
   taggedRem: string[];
-  /** [R-F] 祖先标签 Rem ID 数组。SDK: ancestorTagRem()。标签继承链，低频 */
+  /** [R-F] ⊘D2 祖先标签 Rem ID 数组。SDK: ancestorTagRem()。标签继承链，低频 */
   ancestorTagRem: string[];
-  /** [R-F] 后代标签 Rem ID 数组。SDK: descendantTagRem()。标签继承链，低频 */
+  /** [R-F] ⊘D2 后代标签 Rem ID 数组。SDK: descendantTagRem()。标签继承链，低频 */
   descendantTagRem: string[];
 
   // ══════════════════════════════════════════════════════════
   //  关联 — 层级遍历（ID 数组）
   // ══════════════════════════════════════════════════════════
 
-  /** [R] 所有后代 Rem ID 数组。SDK: getDescendants() */
+  /** [R] ⊘D2 所有后代 Rem ID 数组。SDK: getDescendants() */
   descendants: string[];
-  /** [R] 兄弟 Rem ID 数组。SDK: siblingRem() */
+  /** [R] ⊘D2 兄弟 Rem ID 数组。SDK: siblingRem() */
   siblingRem: string[];
-  /** [R-F] 包含的 Portal 和文档 Rem ID 数组。SDK: portalsAndDocumentsIn()。使用场景有限 */
+  /** [R-F] ⊘D2 包含的 Portal 和文档 Rem ID 数组。SDK: portalsAndDocumentsIn()。使用场景有限 */
   portalsAndDocumentsIn: string[];
-  /** [R-F] 文档/Portal 中所有 Rem ID 数组。SDK: allRemInDocumentOrPortal()。可能数据量大 */
+  /** [R-F] ⊘D2 文档/Portal 中所有 Rem ID 数组。SDK: allRemInDocumentOrPortal()。可能数据量大 */
   allRemInDocumentOrPortal: string[];
-  /** [R-F] 文件夹队列中的 Rem ID 数组。SDK: allRemInFolderQueue()。场景有限 */
+  /** [R-F] ⊘D2 文件夹队列中的 Rem ID 数组。SDK: allRemInFolderQueue()。场景有限 */
   allRemInFolderQueue: string[];
 
   // ══════════════════════════════════════════════════════════
@@ -352,36 +360,36 @@ export interface RemObject {
   // ══════════════════════════════════════════════════════════
 
   /**
-   * [RW] ✅ 在兄弟间的位置（0 起始）。SDK: positionAmongstSiblings() / setParent(parent, position)
+   * [RW] ⊘D2 ✅ 在兄弟间的位置（0 起始）。SDK: positionAmongstSiblings() / setParent(parent, position)
    * UI 行为：Rem 在父级子列表中的显示位置改变（测试：A→B→C 变为 B→C→A）
    *         position 超过实际数量会被钳位到末尾；位置相对于父 Rem 的全部 children
    */
   positionAmongstSiblings: number | null;
-  /** [R-F] 搜索中被选次数。SDK: timesSelectedInSearch()。统计数据，低频 */
+  /** [R-F] ⊘D2 搜索中被选次数。SDK: timesSelectedInSearch()。统计数据，低频 */
   timesSelectedInSearch: number;
-  /** [R-F] 上次移动时间（毫秒时间戳）。SDK: getLastTimeMovedTo()。过于细粒度 */
+  /** [R-F] ⊘D2 上次移动时间（毫秒时间戳）。SDK: getLastTimeMovedTo()。过于细粒度 */
   lastTimeMovedTo: number;
-  /** [R-F] Schema 版本号。SDK: getSchemaVersion()。内部版本号 */
+  /** [R-F] ⊘D2 Schema 版本号。SDK: getSchemaVersion()。内部版本号 */
   schemaVersion: number;
 
   // ══════════════════════════════════════════════════════════
   //  队列视图
   // ══════════════════════════════════════════════════════════
 
-  /** [R-F] 嵌入式队列视图模式。SDK: embeddedQueueViewMode()。场景有限 */
+  /** [R-F] ⊘D2 嵌入式队列视图模式。SDK: embeddedQueueViewMode()。场景有限 */
   embeddedQueueViewMode: boolean;
 
   // ══════════════════════════════════════════════════════════
   //  元数据 / 时间戳
   // ══════════════════════════════════════════════════════════
 
-  /** [R] 创建时间（毫秒时间戳）。SDK 直接属性 createdAt */
+  /** [R] ⊘D2 创建时间（毫秒时间戳）。SDK 直接属性 createdAt */
   createdAt: number;
-  /** [R] 最后更新时间（毫秒时间戳）。SDK 直接属性 updatedAt */
+  /** [R] ⊘D2 最后更新时间（毫秒时间戳）。SDK 直接属性 updatedAt */
   updatedAt: number;
-  /** [R-F] 本地最后更新时间（毫秒时间戳）。SDK 直接属性 localUpdatedAt。与 updatedAt 重叠 */
+  /** [R-F] ⊘D2 本地最后更新时间（毫秒时间戳）。SDK 直接属性 localUpdatedAt。与 updatedAt 重叠 */
   localUpdatedAt: number;
-  /** [R-F] 上次练习时间（毫秒时间戳）。SDK: getLastPracticed()。间隔重复内部数据 */
+  /** [R-F] ⊘D2 上次练习时间（毫秒时间戳）。SDK: getLastPracticed()。间隔重复内部数据 */
   lastPracticed: number;
 }
 

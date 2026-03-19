@@ -241,7 +241,7 @@ program
 program
   .command('read-context [jsonStr]')
   .description('读取当前上下文视图（focus 鱼眼 / page 页面）')
-  .option('--mode <mode>', '模式：focus（默认）或 page')
+  .option('--mode <mode>', '模式：page（默认）或 focus')
   .option('--ancestor-levels <levels>', '向上追溯几层祖先（默认 2，仅 focus 模式）')
   .option('--depth <depth>', '展开深度（默认 3，仅 page 模式）')
   .option('--max-nodes <maxNodes>', '全局节点上限（默认 200）')

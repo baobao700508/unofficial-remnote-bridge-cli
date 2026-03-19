@@ -60,7 +60,7 @@ remnote-bridge health
 
 # 4. 浏览知识库
 remnote-bridge read-globe                    # 全局文档概览
-remnote-bridge read-context                  # 当前焦点/页面上下文
+remnote-bridge read-context                  # 当前页面/焦点上下文
 remnote-bridge search "machine learning"     # 全文搜索
 remnote-bridge read-tree <remId>             # 展开子树
 remnote-bridge read-rem <remId>              # 读取 Rem 属性
@@ -108,7 +108,7 @@ remnote-bridge search "machine learning"
 | 命令 | 说明 | 缓存 |
 |:-----|:-----|:-----|
 | `read-globe` | 全局文档级概览 | 否 |
-| `read-context` | 当前焦点/页面上下文视图 | 否 |
+| `read-context` | 当前页面/焦点上下文视图 | 否 |
 | `read-tree <remId>` | 子树序列化为 Markdown 大纲 | 是 |
 | `read-rem <remId>` | 单个 Rem 的完整 JSON 属性 | 是 |
 | `read-rem-in-tree <remId>` | 子树大纲 + 所有 Rem 对象，一次调用 | 是 |
@@ -291,6 +291,11 @@ remnote-bridge addon uninstall remnote-rag --purge
 - **多语言支持** — 国际化，更广泛的可访问性
 
 ## Changelog
+
+### 0.1.17 (2026-03-19)
+
+- **防线 2 三层字段分类** — `edit_rem` 并发检测现在将字段差异分为三层：语义字段（text/type/tags 等）→ 硬拒绝；parent → 放行并返回 `⚠️ parent has changed` 警告；元数据（位置/时间戳等）→ 放行并返回 `ℹ️ Metadata fields changed` 警告。消除 `edit_tree` 移动/重排后的误报
+- **文档同步** — 在全部 5 个文档面（SKILL.md、edit-rem.md、overall.md、MCP 工具描述、SERVER_INSTRUCTIONS）更新防线 2 描述：三层分类机制、警告文本示例、修订判断树
 
 ### 0.1.16 (2026-03-19)
 

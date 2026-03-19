@@ -307,8 +307,8 @@ export class ConfigServer {
     <div class="field">
       <label>模式 (readContextMode)</label>
       <select id="readContextMode">
-        <option value="focus">focus</option>
         <option value="page">page</option>
+        <option value="focus">focus</option>
       </select>
     </div>
     <div class="field">

@@ -32,13 +32,17 @@ export function registerEditTools(server: FastMCP): void {
       '\\n- fontSize: H1 / H2 / H3 / null（恢复普通）' +
       '\\n- todoStatus: Finished / Unfinished / null（需先 isTodo=true）' +
       '\\n\\nhighlightColor vs RichText h 字段：两者完全独立。highlightColor 是整行背景色（字符串如 "Red"）；h 是 RichText 元素内部的行内荧光底色（数字：1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Purple, 6=Blue, 7=Gray, 8=Brown, 9=Pink）。' +
-      '\\n\\n输出格式：JSON 对象，包含 changes（已写入的字段名数组）和 warnings（只读/未知字段警告数组）。' +
+      '\\n\\n输出格式：JSON 对象，包含 changes（已写入的字段名数组）和 warnings（警告数组，可能包含防线2元数据警告和字段校验警告）。' +
       '\\n\\n两道防线：' +
       '\\n1. 缓存存在检查——未先 read_rem 则报 "has not been read yet"' +
-      '\\n2. 并发检测——edit 时重新从 Plugin 读取并对比缓存，不一致则报 "has been modified since last read"。防线拒绝/部分失败时不更新缓存，迫使重新 read_rem' +
+      '\\n2. 语义并发检测（三层字段分类）——edit 时重新读取并逐字段比较：' +
+      '\\n   - 语义字段（text/type/tags 等）变化 → 硬拒绝 "has been modified since last read"' +
+      '\\n   - parent 变化 → 放行 + warnings 返回 "⚠️ parent has changed (was: X, now: Y)..."' +
+      '\\n   - 普通元数据（positionAmongstSiblings/updatedAt 等）变化 → 放行 + warnings 返回 "ℹ️ Metadata fields changed since last read: ..."' +
+      '\\n   这意味着 edit_tree 移动/重排后可直接 edit_rem，无需重新 read' +
       '\\n\\n常见错误：' +
       '\\n- "has not been read yet" → 先 read_rem' +
-      '\\n- "has been modified since last read" → 重新 read_rem' +
+      '\\n- "has been modified since last read" → 语义字段被外部修改，重新 read_rem' +
       '\\n- "Invalid value for \'field\'" → 检查枚举合法值' +
       '\\n- "Field \'...\' is read-only/unknown and was ignored" → 警告不阻断' +
       '\\n\\n关联工具：read_rem（前置读取）、edit_tree（子树结构编辑）',

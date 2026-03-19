@@ -42,7 +42,7 @@ export async function readContext(
   payload: ReadContextPayload,
 ): Promise<ReadContextResult> {
   const {
-    mode = 'focus',
+    mode = 'page',
     ancestorLevels = 2,
     maxNodes = 200,
     maxSiblings = 20,

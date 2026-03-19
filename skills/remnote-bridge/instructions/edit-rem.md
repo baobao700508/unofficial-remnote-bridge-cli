@@ -225,28 +225,55 @@ if cache.get('rem:' + remId) === null:
 
 **恢复方式**：执行 `read-rem <remId>` 后重试。
 
-### 防线 2：乐观并发检测
+### 防线 2：语义并发检测（三层字段分类）
 
 **目的**：检测自上次 read 以来，Rem 是否被外部修改（如用户在 RemNote UI 中编辑、其他 Agent 修改等）。
 
+**核心机制**：将 RemObject 所有字段逐个比较，按差异字段所属层级决定处理方式：
+
 ```
 currentRemObject = forwardToPlugin('read_rem', { remId })
-currentJson = JSON.stringify(currentRemObject, null, 2)
-cachedJson = JSON.stringify(cachedObj, null, 2)
+{ semantic, warned, ignored } = classifyDiff(cachedObj, currentRemObject)
 
-if currentJson !== cachedJson:
-    // 不更新缓存 — 迫使 AI 重新 read 获取最新状态
-    throw "Rem {remId} has been modified since last read. Please read it again before editing."
+if semantic.length > 0:
+    // 第1层：语义字段冲突 → 硬拒绝，不更新缓存
+    throw "Rem {remId} has been modified since last read."
+
+if warned.length > 0:
+    // 第2层：parent 变化 → 放行 + 专门警告
+    warnings.push("⚠️ parent has changed (was: {old}, now: {new}). ...")
+
+if ignored.length > 0:
+    // 第3层：普通元数据变化 → 放行 + 统一警告
+    warnings.push("ℹ️ Metadata fields changed since last read: {fields}. ...")
+
+if warned.length > 0 || ignored.length > 0:
+    // 静默刷新缓存（保持新鲜度）
+    cache.set('rem:' + remId, currentRemObject)
 ```
 
-**关键设计**：
-- 比较方式：**将当前 RemObject 和缓存 RemObject 分别 JSON.stringify 后做文本比较**
-- 失败时**不更新缓存**：防止 AI 跳过 re-read 直接重试
-- RichText key 排序保证序列化确定性（`sortRichTextKeys()`）
+**三层字段分类**：
 
-**恢复方式**：执行 `read-rem <remId>` 获取最新状态后重试。
+| 层级 | 包含字段 | 变化时行为 |
+|:-----|:---------|:----------|
+| 第1层：语义字段 | text, backText, type, tags, highlightColor, fontSize 等（不在下面两层的所有字段） | **硬拒绝**，不更新缓存 |
+| 第2层：敏感元数据 | parent | **放行** + `⚠️ parent has changed (was: X, now: Y)...` 警告 + 刷新缓存 |
+| 第3层：普通元数据 | positionAmongstSiblings, updatedAt, siblingRem, children, descendants 等 23 个字段 | **放行** + `ℹ️ Metadata fields changed since last read: ...` 警告 + 刷新缓存 |
 
-### 两道防线判断树
+**设计意义**：`edit_tree` 移动/重排 Rem 后，可以直接 `edit_rem` 修改受影响节点的文本格式，无需逐个重新 `read_rem`。只有真正的内容/属性并发冲突才会被拦截。
+
+**warnings 输出示例**：
+
+| 场景 | warnings |
+|:-----|:---------|
+| 无外部变化 | `[]` |
+| edit_tree 重排后 | `["ℹ️ Metadata fields changed since last read: positionAmongstSiblings. This is expected after structural operations. Proceeding with edit."]` |
+| edit_tree 移动后 | `["⚠️ parent has changed (was: oldId, now: newId). The Rem has been moved to a different parent since last read. Proceeding with edit.", "ℹ️ Metadata fields changed since last read: siblingRem, positionAmongstSiblings, updatedAt. ..."]` |
+| 语义字段被外部修改 | 不返回（抛异常 `"has been modified since last read"`） |
+
+**恢复方式**（仅语义冲突需要）：执行 `read-rem <remId>` 获取最新状态后重试。
+
+### 防线判断树
 
 ```
 edit-rem(remId, changes)
@@ -255,9 +282,11 @@ edit-rem(remId, changes)
 │   ├─ 否 → ERROR: "has not been read yet"
 │   └─ 是 → 继续
 │
-├─ 防线 2: 当前值 === 缓存值？
-│   ├─ 否 → ERROR: "has been modified since last read"
-│   └─ 是 → 继续
+├─ 防线 2: 三层字段分类比较
+│   ├─ 语义字段变化 → ERROR: "has been modified since last read"
+│   ├─ 仅 parent 变化 → 放行（warnings += ⚠️ parent 警告，刷新缓存）
+│   ├─ 仅元数据变化 → 放行（warnings += ℹ️ 元数据警告，刷新缓存）
+│   └─ 无变化 → 继续
 │
 ├─ 字段分类
 │   ├─ 只读字段 → 警告
