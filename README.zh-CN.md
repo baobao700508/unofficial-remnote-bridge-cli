@@ -292,6 +292,12 @@ remnote-bridge addon uninstall remnote-rag --purge
 
 ## Changelog
 
+### 0.1.16 (2026-03-19)
+
+- **有序列表前缀容错** — `edit-tree` 新增行现在接受 `2.`~`9.` 前缀，自动归一化为 `isListItem=true`，并返回 `templateWarnings` 提醒使用 `1.`（Lazy Numbering 风格）。`10.` 及以上不匹配（保留为纯文本）
+- **templateWarnings 透传修复** — CLI `edit-tree` 命令现在正确包含 `templateWarnings` 到 JSON 输出中（之前被静默丢弃）
+- **Lazy Numbering 文档** — 在 MCP 工具描述、SERVER_INSTRUCTIONS 和 Skill 文档中添加醒目的有序列表使用规范说明
+
 ### 0.1.15 (2026-03-18)
 
 - **防线 2 误判修复** — 移除 RemObject 序列化中 ID 数组的 `.sort()`，消除 edit-rem 并发检测的假阳性

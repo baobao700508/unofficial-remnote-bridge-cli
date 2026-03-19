@@ -292,6 +292,12 @@ remnote-bridge addon uninstall remnote-rag --purge
 
 ## Changelog
 
+### 0.1.16 (2026-03-19)
+
+- **Ordered list prefix tolerance** — `edit-tree` now accepts `2.`~`9.` prefixes for ordered lists, auto-normalizes to `isListItem=true`, and returns `templateWarnings` to remind agents to use `1.` (Lazy Numbering). `10.` and above are not matched (kept as plain text)
+- **templateWarnings passthrough fix** — CLI `edit-tree` command now correctly includes `templateWarnings` in JSON output (was silently dropped)
+- **Lazy Numbering documentation** — Added prominent warnings in MCP tool description, SERVER_INSTRUCTIONS, and Skill docs explaining RemNote's auto-numbering convention
+
 ### 0.1.15 (2026-03-18)
 
 - **Defense-2 false positive fix** — Removed `.sort()` from ID arrays in RemObject serialization that caused spurious concurrency conflicts in edit-rem
