@@ -202,6 +202,8 @@ export interface PowerupPrefixResult {
   practiceDirection?: string;
   /** 是否为 multiline（↓ ↑ ↕） */
   isMultiline?: boolean;
+  /** 解析过程中的警告（如有序列表前缀归一化） */
+  warnings?: string[];
 }
 
 /**
@@ -219,6 +221,7 @@ export interface PowerupPrefixResult {
  */
 export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
   const powerups: Record<string, unknown> = {};
+  const warnings: string[] = [];
 
   if (rawContent === '---') {
     return { cleanContent: '', powerups: { addPowerup: 'dv' } };
@@ -234,6 +237,21 @@ export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
   // Todo
   if (content.startsWith('- [x] '))      { powerups.isTodo = true; powerups.todoStatus = 'Finished'; content = content.slice(6); }
   else if (content.startsWith('- [ ] ')) { powerups.isTodo = true; content = content.slice(6); }
+
+  // Quote（引用块）
+  if (content.startsWith('> ')) { powerups.isQuote = true; content = content.slice(2); }
+
+  // ListItem（有序列表）— 容错 1-9 开头，归一化为 isListItem
+  const listItemMatch = content.match(/^([1-9])\. /);
+  if (listItemMatch) {
+    powerups.isListItem = true;
+    content = content.slice(listItemMatch[0].length);
+    if (listItemMatch[1] !== '1') {
+      warnings.push(
+        `有序列表前缀 "${listItemMatch[0]}" 已归一化为 isListItem（RemNote 自动编号，请统一使用 "1. "）`,
+      );
+    }
+  }
 
   // Code
   if (content.startsWith('`') && content.endsWith('`') && content.length >= 2) {
@@ -301,6 +319,7 @@ export function parsePowerupPrefix(rawContent: string): PowerupPrefixResult {
   if (backText !== undefined) result.backText = backText;
   if (practiceDirection !== undefined) result.practiceDirection = practiceDirection;
   if (isMultiline !== undefined) result.isMultiline = isMultiline;
+  if (warnings.length > 0) result.warnings = warnings;
   return result;
 }
 

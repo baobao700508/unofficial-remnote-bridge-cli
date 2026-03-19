@@ -7,7 +7,7 @@
  * 依赖方向：services/rem-builder → utils/tree-serializer（单向）
  */
 
-import type { ReactRNPlugin, PluginRem as Rem } from '@remnote/plugin-sdk';
+import type { ReactRNPlugin, PluginRem as Rem, RichTextInterface } from '@remnote/plugin-sdk';
 import type { SerializableRem } from '../utils/tree-serializer';
 import { filterNoisyTags } from './powerup-filter';
 
@@ -21,7 +21,7 @@ export async function safeToMarkdown(
   richText: unknown[],
 ): Promise<string> {
   try {
-    return await plugin.richText.toMarkdown(richText);
+    return await plugin.richText.toMarkdown(richText as RichTextInterface);
   } catch {
     return richTextFallback(richText);
   }
@@ -93,6 +93,8 @@ export async function buildFullSerializableRem(
     isTodo,
     todoStatus,
     isCode,
+    isQuote,
+    isListItem,
     hasDvPowerup,
     portalIncludedRems,
   ] = await Promise.all([
@@ -114,6 +116,8 @@ export async function buildFullSerializableRem(
     rem.isTodo(),
     rem.getTodoStatus(),
     rem.isCode(),
+    rem.isQuote(),
+    rem.isListItem(),
     rem.hasPowerup('dv'),
     rem.type === 6 ? rem.getPortalDirectlyIncludedRem() : Promise.resolve([]),
   ]);
@@ -151,6 +155,8 @@ export async function buildFullSerializableRem(
     isTodo,
     todoStatus: (todoStatus as 'Finished' | 'Unfinished' | null) ?? null,
     isCode,
+    isQuote,
+    isListItem,
     isDivider,
     isTopLevel: rem.parent === null,
   };

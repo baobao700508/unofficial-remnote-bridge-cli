@@ -79,7 +79,8 @@ export function registerEditTools(server: FastMCP): void {
       '\\n4. 重排：调换同级行的顺序' +
       '\\n执行顺序：Create → Move → Reorder → Delete' +
       '\\n\\n新增行格式：' +
-      '\\n- Markdown 前缀：# / ## / ### / - [ ] / - [x] / `代码` / ---' +
+      '\\n- Markdown 前缀：# / ## / ### / - [ ] / - [x] / > / 1. / `代码` / ---' +
+      '\\n  ⚠️ 有序列表必须用 `1. `（Lazy Numbering）：RemNote 自动编号，不要写 `2. ` `3. ` 等。`2.`~`9.` 会被容错归一化并返回 templateWarnings 警告，`10.` 及以上不识别为列表。' +
       '\\n- 箭头分隔符（闪卡）：→ ← ↔（单行）、↓ ↑ ↕（多行，带 backText 或子节点为答案）' +
       '\\n- 元数据注释（可选）：<!--type:concept--> <!--doc--> <!--tag:Name(id)--> 可组合' +
       '\\n- Portal 创建：<!--portal refs:id1,id2--> 或 <!--portal-->（空 Portal）' +

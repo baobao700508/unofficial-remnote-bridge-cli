@@ -326,7 +326,9 @@ changes: { "type": "concept", "highlightColor": "Yellow", "fontSize": "H1" }
 
 新增行（无 remId 注释的行）支持以下格式：
 
-**Markdown 前缀**：\`# \` \`## \` \`### \` \`- [ ] \` \`- [x] \` \\\`code\\\` \`---\`
+**Markdown 前缀**：\`# \` \`## \` \`### \` \`- [ ] \` \`- [x] \` \`> \`(引用块) \`1. \`(有序列表) \\\`code\\\` \`---\`
+
+> **⚠️ 有序列表必须用 \`1. \` 前缀（Lazy Numbering）**：RemNote 有序列表采用 Lazy Numbering——所有列表项统一写 \`1. \`，RemNote 按层级自动编号（1./2./3./A./B./I./II.）。不要手动编号（如 \`2. \` \`3. \`）。\`2. \`~\`9. \` 会被容错处理（归一化为 isListItem 并返回 templateWarnings 警告），\`10. \` 及以上不会被识别为有序列表。
 
 **箭头分隔符**：
 - 单行：\`→\`（forward）\`←\`（backward）\`↔\`（both）——格式 \`text → backText\`
@@ -502,7 +504,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 \`\`\`
 
 - 缩进：每级 2 空格
-- 前缀：\`# \`(H1)、\`## \`(H2)、\`### \`(H3)、\`- [ ] \`(待办)、\`- [x] \`(已完成)、\\\`...\\\`(代码)、\`---\`(分隔线)
+- 前缀：\`# \`(H1)、\`## \`(H2)、\`### \`(H3)、\`- [ ] \`(待办)、\`- [x] \`(已完成)、\`> \`(引用块)、\`1. \`(有序列表)、\\\`...\\\`(代码)、\`---\`(分隔线)
 
 ### 元数据标记
 
@@ -537,7 +539,7 @@ tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem
 新增行（无 remId 注释的行）在 newStr 中出现时，会被创建为新的 Rem。格式选项：
 
 - 纯文本行：\`新内容\`
-- 带前缀：\`# 新标题\`、\`- [ ] 新待办\`
+- 带前缀：\`# 新标题\`、\`- [ ] 新待办\`、\`> 引用内容\`、\`1. 列表项\`
 - 带箭头：\`问题 → 答案\`、\`概念 ↔ 定义\`、\`题目 ↓\`
 - 带元数据注释（metadata-only，无 remId）：\`新行 <!--type:concept doc-->\`
 - Portal 行：\`<!--portal refs:id1,id2-->\`

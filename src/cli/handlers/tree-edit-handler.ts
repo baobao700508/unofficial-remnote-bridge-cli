@@ -87,6 +87,7 @@ export interface TreeEditResult {
   operations: TreeOp[];
   error?: string;
   details?: Record<string, unknown>;
+  templateWarnings?: string[];
 }
 
 export class TreeEditHandler {
@@ -231,7 +232,8 @@ export class TreeEditHandler {
           } else {
             // ── 普通 Rem 创建路径 ──
             // 解析 Markdown 前缀 + 箭头分隔符 → 属性
-            const { cleanContent, powerups, backText, practiceDirection } = parsePowerupPrefix(op.content);
+            const { cleanContent, powerups, backText, practiceDirection, warnings: prefixWarnings } = parsePowerupPrefix(op.content);
+            if (prefixWarnings?.length) templateWarnings.push(...prefixWarnings);
 
             const createResult = await this.forwardToPlugin('create_rem', {
               content: cleanContent,

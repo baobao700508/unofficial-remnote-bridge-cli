@@ -27,7 +27,7 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
     return;
   }
 
-  const data = result as { ok: boolean; operations: unknown[]; error?: string; details?: unknown };
+  const data = result as { ok: boolean; operations: unknown[]; error?: string; details?: unknown; templateWarnings?: string[] };
 
   if (!data.ok) {
     if (json) {
@@ -43,7 +43,12 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
   }
 
   if (json) {
-    jsonOutput({ ok: true, command: 'edit-tree', operations: data.operations });
+    jsonOutput({
+      ok: true,
+      command: 'edit-tree',
+      operations: data.operations,
+      ...(data.templateWarnings?.length && { templateWarnings: data.templateWarnings }),
+    });
   } else {
     if (data.operations.length === 0) {
       console.log('无结构变更。');
@@ -52,6 +57,12 @@ export async function editTreeCommand(remId: string, options: EditTreeOptions): 
       for (const op of data.operations) {
         const o = op as Record<string, unknown>;
         console.log(`  - ${o.type}: ${JSON.stringify(o)}`);
+      }
+    }
+    if (data.templateWarnings?.length) {
+      console.log('⚠ 模板/前缀警告：');
+      for (const w of data.templateWarnings) {
+        console.log(`  - ${w}`);
       }
     }
   }

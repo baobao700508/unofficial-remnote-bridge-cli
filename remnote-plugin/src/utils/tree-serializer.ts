@@ -65,6 +65,8 @@ export interface SerializableRem {
   isTodo: boolean;
   todoStatus: 'Finished' | 'Unfinished' | null;
   isCode: boolean;
+  isQuote: boolean;
+  isListItem: boolean;
   isDivider: boolean;
   /** 是否为知识库顶级 Rem（无父节点） */
   isTopLevel?: boolean;
@@ -130,6 +132,12 @@ function buildLineContent(rem: SerializableRem): string {
 
   // Code 包裹（最内层）
   if (rem.isCode) baseContent = '`' + baseContent + '`';
+
+  // ListItem 前缀（有序列表）
+  if (rem.isListItem) baseContent = '1. ' + baseContent;
+
+  // Quote 前缀（引用块）
+  if (rem.isQuote) baseContent = '> ' + baseContent;
 
   // Todo 前缀
   if (rem.isTodo) {
@@ -207,6 +215,8 @@ export function createMinimalSerializableRem(
     isTodo: false,
     todoStatus: null,
     isCode: false,
+    isQuote: false,
+    isListItem: false,
     isDivider: false,
     ...overrides,
   };
