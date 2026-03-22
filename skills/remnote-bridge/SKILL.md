@@ -169,8 +169,8 @@ Portal 的编辑同步意味着修改一处会影响另一处。Portal 引用的
 { "i": "m", "iUrl": "https://example.com", "text": "点击访问" }
 // 红色高亮 + 粗体（h 是数字，不是字符串）
 { "b": true, "h": 1, "i": "m", "text": "重点" }
-// 完形填空
-{ "cId": "cloze1", "i": "m", "text": "答案内容" }
+// 完形填空（⚠️ 创建填空优先用 edit-tree 的 {{文本}} 语法，SDK 自动生成安全 cId。edit-rem 仅修改已有 cloze，禁止手动编造 cId）
+{ "cId": "8291740362058173", "i": "m", "text": "答案内容" }
 // Rem 引用（_id 排在所有小写 key 之前）
 { "_id": "remId", "i": "q" }
 // Rem 引用加粗

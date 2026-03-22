@@ -91,6 +91,7 @@ Rem 有两个**独立维度**的类型：
 | 创建反向问答 | `edit-tree` 新增行 `问题 ← 答案` |
 | 创建双向问答 | `edit-tree` 新增行 `问题 ↔ 答案` |
 | 创建多行答案 | `edit-tree` 新增行 `问题 ↓`（子行自动成为答案） |
+| 创建完形填空 | `edit-tree` 新增行写 `水的化学式是{{H2O}}`（SDK 自动生成安全 cId，⚠️ **禁止**用 `edit-rem` 手动编造 cId） |
 | 改变闪卡类型/方向 | `edit-rem` 修改 `type`、`backText`、`practiceDirection` |
 
 `practiceDirection` 的取值：`forward`（正向）、`backward`（反向）、`both`（双向）、`none`（不练习）。
@@ -589,8 +590,8 @@ Portal：portalType [R], portalDirectlyIncludedRem [Portal-W]
 | `q` | `true` | 行内代码（红色等宽样式） |
 | `code` | `true` | 代码块（带语言标签和复制按钮） |
 | `language` | `string` | 代码块语言（如 `"javascript"`） |
-| `cId` | `string` | 完形填空 ID |
-| `hiddenCloze` | `true` | 完形填空隐藏状态 |
+| `cId` | `string` | 完形填空 ID（由 SDK 自动生成，禁止手动编造——创建填空用 `edit-tree` 的 `{{文本}}` 语法） |
+| `hiddenCloze` | `true` | 完形填空隐藏状态（只读，RemNote 自动管理） |
 | `iUrl` | `string` | 外部超链接 URL（`url` 字段已废弃，必须用 `iUrl`） |
 | `qId` | `string` | 行内引用链接的 Rem ID |
 
@@ -603,7 +604,7 @@ Portal：portalType [R], portalDirectlyIncludedRem [Portal-W]
 { "i": "m", "q": true, "text": "code" }        // 行内代码
 { "i": "m", "iUrl": "https://...", "text": "链接" } // 超链接
 { "b": true, "h": 1, "i": "m", "text": "重点" } // 粗体+红色高亮（h 是数字）
-{ "cId": "c1", "i": "m", "text": "答案" }       // 完形填空
+{ "cId": "4718093625140386", "i": "m", "text": "答案" } // 完形填空（cId 必须随机，禁止用 "c1" 等有语义命名）
 { "_id": "remId", "b": true, "i": "q" }         // Rem 引用加粗（_id 排最前）
 { "i": "x", "text": "E = mc^2" }                // LaTeX
 { "i": "a", "onlyAudio": false, "url": "..." }  // 视频（onlyAudio 必填！）

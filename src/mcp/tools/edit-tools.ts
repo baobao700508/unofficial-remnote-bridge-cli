@@ -22,6 +22,7 @@ export function registerEditTools(server: FastMCP): void {
       '\\n\\n操作指南：' +
       '\\n- changes 对象的键=字段名，值=新值。21 个可写字段：text, backText, type, isDocument, parent, fontSize, highlightColor, isTodo, todoStatus, isCode, isQuote, isListItem, isCardItem, isSlot, isProperty, enablePractice, practiceDirection, tags, sources, positionAmongstSiblings, portalDirectlyIncludedRem' +
       '\\n- RichText 编辑（text/backText）：传完整 RichText 数组，元素为纯字符串或格式化对象如 {"i":"m","text":"...","b":true}。backText 传 null 可清除背面' +
+      '\\n- ⚠️ 完形填空（cloze）：创建填空优先用 edit_tree 的 {{文本}} 语法（SDK 自动生成安全 cId）。edit_rem 仅用于修改已有 cloze（保留原 cId）。如必须新建 cloze，cId 禁止用有语义的命名（如 "cloze1"），必须用随机数字串（如 "7390281645937102"）' +
       '\\n- tags/sources 使用 diff 机制：传入目标 ID 数组，系统自动计算增删差异' +
       '\\n- portalDirectlyIncludedRem：传入目标 ID 数组（仅 type=portal 的 Rem 可修改），系统自动 diff' +
       '\\n- parent + positionAmongstSiblings 联动：通过同一个 SDK 调用写入，可单独或同时修改' +
@@ -87,12 +88,13 @@ export function registerEditTools(server: FastMCP): void {
       '\\n  ⚠️ 有序列表必须用 `1. `（Lazy Numbering）：RemNote 自动编号，不要写 `2. ` `3. ` 等。`2.`~`9.` 会被容错归一化并返回 templateWarnings 警告，`10.` 及以上不识别为列表。' +
       '\\n- 箭头分隔符（闪卡）：→ ← ↔（单行）、↓ ↑ ↕（多行，带 backText 或子节点为答案）' +
       '\\n- 元数据注释（可选）：<!--type:concept--> <!--doc--> <!--tag:Name(id)--> 可组合' +
+      '\\n- 完形填空：{{填空文本}}（SDK 自动生成安全 cId，推荐方式）' +
       '\\n- Portal 创建：<!--portal refs:id1,id2--> 或 <!--portal-->（空 Portal）' +
       '\\n\\n行引用模板 {{remId}}：' +
       '\\n在 oldStr/newStr 中使用 {{remId}} 引用缓存大纲中已有行的完整内容（不含缩进），系统在 str_replace 前自动展开。缩进仍由你控制。' +
       '\\n优势：避免反复抄写行内容（含 remId 和元数据标记），减少 token 开销和复制错误。' +
       '\\n示例 reorder：oldStr="    {{id1}}\\n    {{id2}}"  newStr="    {{id2}}\\n    {{id1}}"' +
-      '\\n规则：只匹配纯字母数字（与 RemNote cloze {{text}} 不冲突）；未找到的 {{xxx}} 原样保留并输出 templateWarnings；新增行不能使用 {{}}；可混用模板和手写内容。' +
+      '\\n规则：只匹配纯字母数字（与 RemNote cloze {{text}} 不冲突）；未找到的 {{xxx}} 原样保留并输出 templateWarnings；新增行不能用 {{remId}} 模板引用，但可以用 {{文本}} 创建填空卡片；可混用模板和手写内容。' +
       '\\n\\n⚠️ 插入位置红线：新行必须插在目标层级所有兄弟的末尾，不能插在父 Rem 和它的 children 之间，否则触发 children_captured 错误。如需"创建新父节点并移入已有 children"，必须分两次 edit_tree 完成。' +
       '\\n\\n六种禁止操作：' +
       '\\n- content_modified：修改已有行内容 → 改用 edit_rem' +

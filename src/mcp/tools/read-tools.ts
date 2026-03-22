@@ -71,7 +71,7 @@ export function registerReadTools(server: FastMCP): void {
       '\\n- full=true 时返回全部 51 个字段，Portal 类型自动简化为 8 个关键字段' +
       '\\n- 关键字段：id, text, backText(null), type(concept/descriptor/default/portal), parent, isDocument(false), tags([]), fontSize(H1/H2/H3/null), highlightColor(Red/.../Pink/null), practiceDirection(forward/backward/both/none), isTodo(false), todoStatus(Finished/Unfinished/null)——括号内为默认值' +
       '\\n- children 字段属于 R-F 层级，默认不输出，需 full=true 或 fields 指定' +
-      '\\n- text/backText 是 RichText JSON 数组，元素为纯字符串或带 i 字段的对象（i:"m" 格式化文本, i:"q" Rem 引用, i:"x" LaTeX, i:"i" 图片, i:"a" 音视频）' +
+      '\\n- text/backText 是 RichText JSON 数组，元素为纯字符串或带 i 字段的对象（i:"m" 格式化文本, i:"q" Rem 引用, i:"x" LaTeX, i:"i" 图片, i:"a" 音视频）。完形填空元素含 cId 字段（如 {"cId":"8291740362058173","i":"m","text":"答案"}）' +
       '\\n- 可能附加 cacheOverridden（覆盖旧缓存时）和 powerupFiltered（过滤统计）元数据' +
       '\\n\\n关键约束：' +
       '\\n- 结果自动写入缓存供 edit_rem 使用。缓存存储完整 RemObject，不受 fields/full 选项影响' +
@@ -129,6 +129,7 @@ export function registerReadTools(server: FastMCP): void {
       '\\n大纲每行格式：{缩进}{Markdown前缀}{内容}{箭头}{backText} <!-- {remId} {元数据标记} -->' +
       '\\n- 缩进：每级 2 空格' +
       '\\n- Markdown 前缀：# ## ### (标题), - [ ] - [x] (待办), ` (代码)' +
+      '\\n- 完形填空：RichText 中带 cId 的元素渲染为 {{文本}}，与 edit_tree 新增行的 {{}} 语法对称' +
       '\\n- 箭头编码 practiceDirection：→←↔（单行闪卡，text→backText）；↓↑↕（多行闪卡，答案在子节点）' +
       '\\n- 元数据标记：type:concept/descriptor/portal, doc, children:N, tag:Name(id), role:card-item, top, refs:id1,id2(Portal引用)' +
       '\\n- 省略占位符：<!--...elided N siblings (parent:id range:x-y total:z)-->（精确）或 >=N nodes（预算耗尽）' +

@@ -1,6 +1,6 @@
 {
   "name": "remnote-bridge",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "RemNote 自动化桥接工具集：CLI + MCP Server + Plugin",
   "type": "module",
   "bin": {

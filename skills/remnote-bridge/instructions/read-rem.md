@@ -182,7 +182,7 @@ RemObject 共 51 个字段，按读写权限分为三类：
 
 | 字段 | 类型 | 权限 | 说明 |
 |------|------|:----:|------|
-| `text` | `RichText` | RW | 正面文本（RichText 数组）。UI：文本内容立即更新显示 |
+| `text` | `RichText` | RW | 正面文本（RichText 数组）。UI：文本内容立即更新显示。⚠️ 若含 cId 元素（完形填空），edit-rem 写回时须原样保留 cId 值 |
 | `backText` | `RichText \| null` | RW | 背面文本。null=无背面；设值即产生闪卡正反面结构。UI：显示为"正面 → 背面"箭头分隔格式 |
 
 ### 类型系统
@@ -487,9 +487,9 @@ RemObject 中的 `text` 和 `backText` 字段使用 RichText 格式——一个 
 | `q` | `true` | 行内代码（红色等宽样式） |
 | `code` | `true` | 代码块（带语言标签和复制按钮） |
 | `language` | `string` | 代码块语言（如 `"javascript"`、`"python"`） |
-| `cId` | `string` | 完形填空 ID |
-| `hiddenCloze` | `true` | 完形填空隐藏状态 |
-| `revealedCloze` | `true` | 完形填空已揭示状态 |
+| `cId` | `string` | 完形填空 ID（由 SDK 自动生成，禁止手动编造——创建填空用 `edit-tree` 的 `{{文本}}` 语法。修改已有 cloze 时必须保留原 cId） |
+| `hiddenCloze` | `true` | 完形填空隐藏状态（只读，RemNote 自动管理，禁止通过 edit-rem 写入） |
+| `revealedCloze` | `true` | 完形填空已揭示状态（只读，RemNote 自动管理，禁止通过 edit-rem 写入） |
 | `iUrl` | `string` | 外部超链接 URL（**注意**：`url` 字段已废弃无效，必须用 `iUrl`） |
 | `qId` | `string` | 行内引用链接的 Rem ID |
 
@@ -532,9 +532,9 @@ RemObject 中的 `text` 和 `backText` 字段使用 RichText 格式——一个 
   "i": "m",
   "text": "重点"
 }
-// 完形填空
+// 完形填空（⚠️ cId 由 SDK 自动生成。创建填空用 edit-tree {{文本}} 语法；edit-rem 仅修改已有 cloze，必须保留原 cId，禁止手动编造）
 {
-  "cId": "cloze1",
+  "cId": "8291740362058173",
   "i": "m",
   "text": "答案内容"
 }

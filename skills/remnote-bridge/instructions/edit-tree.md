@@ -1,6 +1,6 @@
 # edit-tree
 
-> 通过 str_replace 对 Markdown 大纲进行结构编辑（行级增/删/移/重排），禁止修改已有行内容。
+> 通过 str_replace 对 Markdown 大纲进行结构编辑（行级增/删/移/重排），新增行支持 `{{文本}}` 填空语法，禁止修改已有行内容。
 
 ---
 
@@ -9,14 +9,14 @@
 `edit-tree` 基于 `read-tree` 缓存的 Markdown 大纲，使用 str_replace 替换文本片段，解析新旧大纲的结构差异，自动生成并执行原子操作。
 
 核心能力：
-- **新增行**：在大纲中插入无 remId 的新行，支持 Markdown 前缀和箭头分隔符
+- **新增行**：在大纲中插入无 remId 的新行，支持 Markdown 前缀、箭头分隔符、`{{文本}}` 填空语法
 - **删除行**：从大纲中移除带 remId 的行（必须同时删除所有子行）
 - **移动行**：改变行的缩进层级或移到不同父节点下
 - **重排行**：调换同级行的顺序
 - 三道防线保障数据安全（缓存存在性、乐观并发检测、精确匹配）
 - SDK bug 自动修复（practiceDirection 保护）
 
-**核心限制**：仅支持结构操作，**禁止修改已有行的内容**——内容修改走 `edit-rem`。
+**核心限制**：**禁止修改已有行的内容**（内容修改走 `edit-rem`）。新增行的内容格式不受此限，支持 Markdown 前缀、箭头、`{{文本}}` 填空等。
 
 ---
 
@@ -204,7 +204,7 @@ newStr: "  新增行\n  {{idZ}}"
 - `{{remId}}` 展开为**不含缩进**的完整行内容，缩进由你控制
 - 只匹配纯字母数字（`[a-zA-Z0-9]+`），与 RemNote cloze 语法 `{{text}}` 不冲突
 - 匹配到但不在缓存大纲中的 `{{xxx}}` 原样保留（可能是 cloze），并输出 templateWarnings
-- 新增行没有 remId，不能用模板表示
+- 新增行不能用 `{{remId}}` 模板引用（没有 remId），但可以用 `{{文本}}` 创建填空卡片（两者不冲突：模板只匹配纯字母数字）
 
 ### 完整匹配模式（回退）
 
@@ -338,6 +338,22 @@ oldStr: "  子节点 A <!--idA-->"
 newStr: "  <!--portal refs:refId1,refId2-->\n  子节点 A <!--idA-->"
 ```
 
+#### 完形填空新增行
+
+在新增行内容中使用 `{{文本}}` 语法创建填空卡片。SDK 通过 `createSingleRemWithMarkdown` 自动生成唯一 cId，零碰撞风险。**这是创建填空的推荐方式**（优于 edit-rem 手动编造 cId）。
+
+```
+# 模板模式
+oldStr: "  {{idA}}"
+newStr: "  水的化学式是{{H2O}}\n  {{idA}}"
+
+# 完整匹配模式
+oldStr: "  子节点 A <!--idA-->"
+newStr: "  法国的首都是{{巴黎}}\n  子节点 A <!--idA-->"
+```
+
+> 注意：`{{文本}}` 与模板引用 `{{remId}}` 不冲突——模板只匹配纯字母数字（`[a-zA-Z0-9]+`），中文/空格/标点不会被误匹配。
+
 #### 嵌套新增
 
 新增行下面可以再嵌套新增行，通过缩进表示父子关系：
@@ -434,6 +450,8 @@ newStr: "  子节点 C <!--idC-->\n  子节点 A <!--idA-->\n  子节点 B <!--i
 | 删除/修改省略占位符 | `elided_modified` | Cannot delete or modify elided region directly. | 用更大的 depth/maxSiblings 重新 read-tree 展开 |
 | 缩进跳级 | `indent_skip` | 缩进跳级：行 ... 的缩进级别为 N，但找不到上一级的父节点。 | 检查缩进是否正确（每级 2 空格） |
 | 新行劫持已有子节点 | `children_captured` | New line "..." accidentally captured existing children (...). | 把新行插到兄弟末尾，不要插在父 Rem 和 children 之间 |
+
+> ⚠️ "修改已有行内容 → 使用 edit-rem"仅指**修改已存在 Rem 的文本**。创建含 `{{文本}}` 填空的**新行**应使用 edit-tree 的新增行功能，不要走 edit-rem 手动编造 cId。
 
 ---
 
