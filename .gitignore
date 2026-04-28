@@ -19,3 +19,20 @@ remnote-bridge-test-workspace*/
 
 # 其他 AI 工具配置
 .codex/
+
+# 环境变量与密钥（纵深防御）
+.env
+.env.*
+*.env
+*.key
+*.pem
+*.p12
+id_rsa*
+.npmrc
+.netrc
+.pypirc
+*credentials*
+*secret*
+service-account*.json
+.aws/
+*.tfstate
